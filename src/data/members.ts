@@ -4,7 +4,7 @@ import type { Member } from "../lib/types";
 // 出典: 部のNotion「部員一覧」(2026-07-05時点)
 export const MEMBERS: Member[] = [
   { id: "soushi0642", name: "soushi0642" },
-  { id: "R1kU13", name: "R1kU13" },
+  { id: "R1kU169", name: "R1kU169" },
   { id: "blabo", name: "blabo" },
   { id: "iroha_afternoon", name: "iroha_afternoon" },
   { id: "N_ha_1050", name: "N_ha_1050" },
