@@ -122,7 +122,9 @@ export function Home() {
                 </span>
                 <span className="member-meta">
                   <span className="member-name">{m.name}</span>
-                  <span className="muted member-id">@{m.id}</span>
+                  {m.name !== m.id && (
+                    <span className="muted member-id">@{m.id}</span>
+                  )}
                 </span>
                 <span className="member-arrow">→</span>
               </Link>
