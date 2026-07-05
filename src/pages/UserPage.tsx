@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { CSSProperties } from "react";
 import { useParams } from "react-router-dom";
 import { AnimatedNumber } from "../components/AnimatedNumber";
@@ -15,6 +15,7 @@ import {
   tierIndex,
 } from "../lib/colors";
 import { collectIrtItems, estimateTheta, recommend } from "../lib/irt";
+import { getMyId, setMyId } from "../lib/me";
 import { computeStats, todayEpochDay } from "../lib/stats";
 import { useTheme } from "../theme";
 
@@ -22,6 +23,8 @@ export function UserPage() {
   const { userId = "" } = useParams();
   const { resolved } = useTheme();
   const data = useUserData(userId);
+  const [myId, setMyIdState] = useState<string | null>(() => getMyId());
+  const isMine = myId === userId;
 
   useEffect(() => {
     if (userId) localStorage.setItem("shojin:lastUser", userId);
@@ -104,14 +107,32 @@ export function UserPage() {
           </div>
           <div className="user-title">
             <h1>{userId}</h1>
-            <a
-              className="profile-link"
-              href={`https://atcoder.jp/users/${userId}`}
-              target="_blank"
-              rel="noreferrer"
-            >
-              AtCoderプロフィール ↗
-            </a>
+            <div className="user-title-actions">
+              <a
+                className="profile-link"
+                href={`https://atcoder.jp/users/${userId}`}
+                target="_blank"
+                rel="noreferrer"
+              >
+                AtCoderプロフィール ↗
+              </a>
+              <button
+                type="button"
+                className={`mypage-toggle${isMine ? " on" : ""}`}
+                onClick={() => {
+                  setMyId(userId);
+                  setMyIdState(userId);
+                }}
+                disabled={isMine}
+                title={
+                  isMine
+                    ? "このページがあなたのマイページです"
+                    : "このIDをマイページに設定"
+                }
+              >
+                {isMine ? "★ マイページ" : "☆ マイページにする"}
+              </button>
+            </div>
           </div>
           {thetaClip !== null && tierColor && (
             <span className="theta-chip">

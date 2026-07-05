@@ -2,6 +2,7 @@ import { NavLink, Route, Routes } from "react-router-dom";
 import { ClubPage } from "./pages/ClubPage";
 import { Home } from "./pages/Home";
 import { UserPage } from "./pages/UserPage";
+import { MyPage } from "./pages/MyPage";
 import { ThemeProvider, useTheme } from "./theme";
 
 function ThemeToggle() {
@@ -34,9 +35,9 @@ export default function App() {
       <header className="app-header">
         <NavLink to="/" className="brand">
           <span className="flame">🔥</span> 精進ボード
-          <span className="beta">β</span>
         </NavLink>
         <nav>
+          <NavLink to="/me">マイページ</NavLink>
           <NavLink to="/club">クラブ</NavLink>
         </nav>
         <ThemeToggle />
@@ -44,6 +45,7 @@ export default function App() {
       <main className="container">
         <Routes>
           <Route path="/" element={<Home />} />
+          <Route path="/me" element={<MyPage />} />
           <Route path="/u/:userId" element={<UserPage />} />
           <Route path="/club" element={<ClubPage />} />
         </Routes>

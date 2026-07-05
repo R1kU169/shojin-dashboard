@@ -165,17 +165,6 @@ a:hover {
 .brand:hover {
   text-decoration: none;
 }
-.beta {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  font-weight: 700;
-  margin-left: 4px;
-  vertical-align: super;
-  background: linear-gradient(120deg, var(--brand-a), var(--brand-b));
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-}
 .app-header nav {
   display: flex;
   gap: 18px;
@@ -700,6 +689,37 @@ a:hover {
 }
 .profile-link:hover {
   color: var(--accent);
+}
+.user-title-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 3px;
+}
+.mypage-toggle {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-2);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: 999px;
+  padding: 3px 12px;
+  cursor: pointer;
+  transition:
+    color 0.15s,
+    border-color 0.15s,
+    background 0.15s;
+}
+.mypage-toggle:hover:not(:disabled) {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.mypage-toggle.on {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  cursor: default;
 }
 .theta-chip {
   display: inline-flex;
