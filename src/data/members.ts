@@ -18,4 +18,5 @@ export const MEMBERS: Member[] = [
   { id: "lotuss", name: "lotuss" },
   { id: "shainmasukatto", name: "shainmasukatto" },
   { id: "harukoo", name: "harukoo" },
+  { id: "take071", name: "take071" },
 ];

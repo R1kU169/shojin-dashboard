@@ -4,6 +4,7 @@ import {
   fetchProblemModels,
   fetchSubmissionsSince,
 } from "./api";
+import { snapshotModels, snapshotProblems, snapshotSubs } from "./snapshot";
 import type { Submission, Problem, ProblemModels } from "./types";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -46,11 +47,20 @@ async function cachedResource<T>(
   return p;
 }
 
+// まず同一オリジンのスナップショットを読み、無ければ kenkoooo に直接フォールバックする。
 export const getProblems = () =>
-  cachedResource<Problem[]>("res:problems", fetchProblems, DAY_MS);
+  cachedResource<Problem[]>(
+    "res:problems",
+    async () => (await snapshotProblems()) ?? (await fetchProblems()),
+    DAY_MS,
+  );
 
 export const getProblemModels = () =>
-  cachedResource<ProblemModels>("res:models", fetchProblemModels, DAY_MS);
+  cachedResource<ProblemModels>(
+    "res:models",
+    async () => (await snapshotModels()) ?? (await fetchProblemModels()),
+    DAY_MS,
+  );
 
 interface InflightSubs {
   promise: Promise<Submission[]>;
@@ -92,13 +102,38 @@ async function doLoadSubmissions(
   const hit = (await get(key)) as SubsEntry | undefined;
   if (hit && Date.now() - hit.at < SUBS_FRESH_MS) return hit.list;
 
-  const fresh = await fetchSubmissionsSince(
-    user,
-    hit?.watermark ?? 0,
-    onProgress,
-  );
+  // 取得の起点。IndexedDBキャッシュがあればそれ、無ければ同一オリジンの
+  // スナップショットで初回訪問者にも即座に土台データを渡す。
+  let baseList = hit?.list ?? [];
+  let baseWatermark = hit?.watermark ?? 0;
+  if (!hit) {
+    const snap = await snapshotSubs(user);
+    if (snap) {
+      baseList = snap.list;
+      baseWatermark = snap.watermark;
+    }
+  }
+
+  // 差分だけを kenkoooo からライブ取得する。ブロックやレート制限で失敗しても、
+  // 土台データがあれば致命扱いにせずそれを表示する(Failed to fetch対策の要)。
+  let fresh: Submission[];
+  try {
+    fresh = await fetchSubmissionsSince(user, baseWatermark, onProgress);
+  } catch (e) {
+    if (baseList.length > 0) {
+      // 10分間は再取得を試みないようキャッシュしておく(kenkooooへの負荷も下げる)
+      await set(key, {
+        at: Date.now(),
+        watermark: baseWatermark,
+        list: baseList,
+      } satisfies SubsEntry);
+      return baseList;
+    }
+    throw e;
+  }
+
   const byId = new Map<number, Submission>();
-  for (const s of hit?.list ?? []) byId.set(s.id, s);
+  for (const s of baseList) byId.set(s.id, s);
   for (const s of fresh) byId.set(s.id, s);
   const list = [...byId.values()].sort(
     (a, b) => a.epoch_second - b.epoch_second,

@@ -3,6 +3,8 @@ name: Deploy to GitHub Pages
 on:
   push:
     branches: [main]
+  schedule:
+    - cron: "17 */6 * * *" # 6時間ごとにデータを更新して再デプロイ
   workflow_dispatch:
 
 permissions:
@@ -24,6 +26,14 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      # 前回のスナップショットを復元し、各部員は差分だけ取得する(kenkoooo負荷軽減)
+      - uses: actions/cache@v4
+        with:
+          path: public/snapshot
+          key: snapshot-${{ github.run_id }}
+          restore-keys: |
+            snapshot-
+      - run: node scripts/build-snapshot.mjs
       - run: npm run build
       - uses: actions/upload-pages-artifact@v3
         with:

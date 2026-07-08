@@ -12,6 +12,9 @@ dist
 dist-ssr
 *.local
 
+# ビルド時/CIで生成する静的スナップショット(コミットしない)
+public/snapshot
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
