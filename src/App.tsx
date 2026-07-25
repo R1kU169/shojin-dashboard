@@ -38,7 +38,7 @@ export default function App() {
         </NavLink>
         <nav>
           <NavLink to="/me">マイページ</NavLink>
-          <NavLink to="/club">クラブ</NavLink>
+          <NavLink to="/club">クラブ内ランキング</NavLink>
           <a
             className="nav-ext"
             href="https://mocaluna0117.github.io/ds-club-web"
