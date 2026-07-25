@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { StatCard } from "../components/StatCard";
 import { MEMBERS } from "../data/members";
 import { getProblemModels, getRating, loadSubmissions } from "../lib/cache";
-import { TIER_COLORS, tierIndex } from "../lib/colors";
+import { TIER_COLORS, TIER_LABELS, tierIndex } from "../lib/colors";
 import { computeStats, todayEpochDay } from "../lib/stats";
 import type { UserStats } from "../lib/stats";
 import type { Member } from "../lib/types";
@@ -110,6 +111,24 @@ export function ClubPage() {
       <span className="sort-ind">{sortDir === "desc" ? "▼" : "▲"}</span>
     ) : null;
 
+  // 部全体サマリー(読み込み済みの部員から集計。期間トグルに連動)
+  const periodWord =
+    period === "week" ? "今週" : period === "month" ? "今月" : "全期間";
+  const loadedRows = rows.filter((r) => r.status === "done" && r.stats);
+  const periodSum = loadedRows.reduce((s, r) => s + periodAc(r.stats!, period), 0);
+  const activeCount = loadedRows.filter(
+    (r) => periodAc(r.stats!, period) > 0,
+  ).length;
+  const ratedRows = loadedRows.filter((r) => (r.rating ?? 0) > 0);
+  const avgRating = ratedRows.length
+    ? Math.round(
+        ratedRows.reduce((s, r) => s + (r.rating ?? 0), 0) / ratedRows.length,
+      )
+    : null;
+  const tierDist = Array<number>(8).fill(0);
+  for (const r of loadedRows) if (r.rating != null) tierDist[tierIndex(r.rating)]++;
+  const distTotal = tierDist.reduce((a, b) => a + b, 0);
+
   return (
     <div className="page">
       <h1>クラブ内ランキング</h1>
@@ -134,6 +153,61 @@ export function ClubPage() {
           ))}
         </div>
       </div>
+
+      <section className="card">
+        <div className="card-head">
+          <h2 className="card-title">部全体サマリー</h2>
+          <span className="card-sub">
+            読み込み済み {loadedRows.length}/{MEMBERS.length} 人
+          </span>
+        </div>
+        <div className="stat-grid">
+          <StatCard
+            label={`${periodWord}の合計AC`}
+            value={periodSum}
+            unit="問"
+          />
+          <StatCard
+            label="アクティブ"
+            value={activeCount}
+            unit="人"
+            sub={`${periodWord}に1問以上AC`}
+          />
+          <StatCard
+            label="平均レート"
+            value={avgRating ?? "—"}
+            sub="レート保持者の平均"
+          />
+          <StatCard label="部員数" value={MEMBERS.length} unit="人" />
+        </div>
+        {distTotal > 0 && (
+          <div className="tier-dist">
+            <div className="tier-dist-bar">
+              {tierDist.map((c, i) =>
+                c > 0 ? (
+                  <span
+                    key={i}
+                    style={{
+                      flex: c,
+                      background: TIER_COLORS[resolved][i],
+                    }}
+                  />
+                ) : null,
+              )}
+            </div>
+            <div className="tier-dist-legend">
+              {tierDist.map((c, i) =>
+                c > 0 ? (
+                  <span key={i}>
+                    <i style={{ background: TIER_COLORS[resolved][i] }} />
+                    {TIER_LABELS[i]} {c}
+                  </span>
+                ) : null,
+              )}
+            </div>
+          </div>
+        )}
+      </section>
 
       <section className="card">
         <table className="data-table">

@@ -860,6 +860,38 @@ button.member-card {
   font-size: 9px;
   color: var(--accent);
 }
+.tier-dist {
+  margin-top: 18px;
+}
+.tier-dist-bar {
+  display: flex;
+  height: 10px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--grid);
+}
+.tier-dist-bar span {
+  display: block;
+}
+.tier-dist-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--ink-2);
+}
+.tier-dist-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.tier-dist-legend i {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  display: inline-block;
+}
 .data-table {
   width: 100%;
   border-collapse: collapse;
