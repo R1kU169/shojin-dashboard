@@ -72,23 +72,25 @@ export function Home() {
           </form>
           {err && <p className="error-text">{err}</p>}
         </div>
-        <div className="hero-art" aria-hidden="true">
-          <div className="art-card">
-            <div className="art-grid">
-              {ART_PATTERN.map((w, i) => (
-                <span
-                  key={i}
-                  className={`art-cell w${w}`}
-                  style={{ "--i": i } as CSSProperties}
-                />
-              ))}
+        <div className="hero-side">
+          <div className="hero-art" aria-hidden="true">
+            <div className="art-card">
+              <div className="art-grid">
+                {ART_PATTERN.map((w, i) => (
+                  <span
+                    key={i}
+                    className={`art-cell w${w}`}
+                    style={{ "--i": i } as CSSProperties}
+                  />
+                ))}
+              </div>
+              <div className="art-caption">keep the streak burning</div>
             </div>
-            <div className="art-caption">keep the streak burning</div>
+            <span className="art-flame">🔥</span>
           </div>
-          <span className="art-flame">🔥</span>
+          <NextContestBanner />
         </div>
       </section>
-      <NextContestBanner />
       <section className="card">
         <div className="card-head">
           <h2 className="card-title">部員</h2>

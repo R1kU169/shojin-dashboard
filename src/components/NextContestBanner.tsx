@@ -17,10 +17,15 @@ function fmt(start: number): string {
   }).format(new Date(start * 1000));
 }
 
+// abc468 → "ABC 468"(狭いサイドに収まる短い名前)
+function shortName(id: string): string {
+  return `${id.slice(0, 3).toUpperCase()} ${id.slice(3)}`;
+}
+
 /**
- * 「次のABC/ARC/AGC」バナー。番号は日付から計算できないため、スナップショット
- * (upcoming.json)の予定一覧から現在時刻基準で種別ごとの次回を選ぶ。開催が終われば
- * 自動で次回に切り替わる。取得できない場合(dev等)は一覧リンクにフォールバックする。
+ * 「次のABC/ARC/AGC」カード(ホーム右側に配置)。番号は日付から計算できないため、
+ * スナップショット(upcoming.json)の予定一覧から現在時刻基準で種別ごとの次回を選ぶ。
+ * 開催が終われば自動で次回に切り替わる。取得できない場合(dev等)は一覧リンクにする。
  */
 export function NextContestBanner() {
   const [list, setList] = useState<UpcomingContest[]>([]);
@@ -50,53 +55,38 @@ export function NextContestBanner() {
         .sort((a, b) => a.start - b.start)[0],
   ).filter(Boolean) as UpcomingContest[];
 
-  if (next.length > 0) {
-    return (
-      <div className="abc-banners">
-        {next.map((c) => (
+  if (next.length === 0 && !loaded) return null;
+
+  return (
+    <div className="contest-side">
+      <div className="contest-side-head">コンテスト予定</div>
+      {next.length > 0 ? (
+        next.map((c) => (
           <a
             key={c.id}
-            className="abc-banner"
+            className="ct-card"
             href={`https://atcoder.jp/contests/${c.id}`}
             target="_blank"
             rel="noreferrer"
+            title={c.title}
           >
-            <span className="abc-banner-cal">🗓</span>
-            <span className="abc-banner-body">
-              <span className="abc-banner-label">
-                次の{c.id.slice(0, 3).toUpperCase()}
-              </span>
-              <span className="abc-banner-title">{c.title}</span>
-            </span>
-            <span className="abc-banner-when">{fmt(c.start)}</span>
-            <span className="abc-banner-go">参加する →</span>
+            <span className="ct-label">次の{c.id.slice(0, 3).toUpperCase()}</span>
+            <span className="ct-name">{shortName(c.id)}</span>
+            <span className="ct-when">🗓 {fmt(c.start)}</span>
           </a>
-        ))}
-      </div>
-    );
-  }
-
-  if (loaded) {
-    return (
-      <div className="abc-banners">
+        ))
+      ) : (
         <a
-          className="abc-banner"
+          className="ct-card"
           href={CONTESTS_URL}
           target="_blank"
           rel="noreferrer"
         >
-          <span className="abc-banner-cal">🗓</span>
-          <span className="abc-banner-body">
-            <span className="abc-banner-label">次のコンテスト</span>
-            <span className="abc-banner-title">
-              ABCは毎週土曜 21:00 開催
-            </span>
-          </span>
-          <span className="abc-banner-go">コンテスト一覧 →</span>
+          <span className="ct-label">次のコンテスト</span>
+          <span className="ct-name">ABC 毎週土 21:00</span>
+          <span className="ct-when">コンテスト一覧 →</span>
         </a>
-      </div>
-    );
-  }
-
-  return null;
+      )}
+    </div>
+  );
 }
