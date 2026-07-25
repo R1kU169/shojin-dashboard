@@ -15,6 +15,8 @@ export interface EditorLang {
   key: string;
   /** 初期コード */
   template: string;
+  /** Wandboxに渡すスイッチ(カンマ区切り)。未指定はコンパイラのデフォルト */
+  options?: string;
 }
 
 // 各言語のテンプレートはA+B問題の解答例。全言語とも実際にWandboxで
@@ -25,7 +27,9 @@ export const EDITOR_LANGS: EditorLang[] = [
     key: "cpp",
     label: "C++ (GCC 13)",
     compiler: "gcc-13.2.0",
-    version: "C++17",
+    version: "C++23",
+    // オプション未指定だとgccデフォルト(gnu++17)になるため、gnu++2b(=C++23)を明示
+    options: "warning,gnu++2b",
     template: `#include <bits/stdc++.h>
 using namespace std;
 
@@ -257,12 +261,13 @@ export async function runCode(
   compiler: string,
   code: string,
   stdin: string,
+  options?: string,
   signal?: AbortSignal,
 ): Promise<RunResult> {
   const res = await fetch(`${API}/compile.json`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ compiler, code, stdin }),
+    body: JSON.stringify({ compiler, code, stdin, ...(options ? { options } : {}) }),
     signal,
   });
   if (!res.ok) throw new Error(`実行APIエラー (HTTP ${res.status})`);

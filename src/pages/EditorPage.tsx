@@ -179,7 +179,7 @@ export function EditorPage() {
     const ac = new AbortController();
     abortRef.current = ac;
     try {
-      const r = await runCode(lang.compiler, code, stdin, ac.signal);
+      const r = await runCode(lang.compiler, code, stdin, lang.options, ac.signal);
       setResult(r);
     } catch (e) {
       if ((e as Error).name === "AbortError") setError("中断しました");
