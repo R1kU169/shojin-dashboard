@@ -3,7 +3,13 @@ import type { Submission, Problem, ProblemModels } from "./types";
 // kenkoooo.com は gzip 非対応クライアントを 403 で弾く(転送量対策)。
 // ブラウザの fetch は常に Accept-Encoding: gzip を送るので問題ないが、
 // Node や curl からこの API を叩くときは gzip を明示しないと 403 になる。
-const BASE = "https://kenkoooo.com/atcoder";
+//
+// 開発時(vite dev)はブラウザから kenkoooo を直接叩くと CORS で弾かれるため、
+// devサーバーの同一オリジンプロキシ(vite.config.ts の /kenkoooo)経由で読む。
+// 本番ビルドでは絶対URLに戻す(スナップショットが主・直接アクセスは許容フォールバック)。
+const BASE = import.meta.env.DEV
+  ? "/kenkoooo/atcoder"
+  : "https://kenkoooo.com/atcoder";
 
 // API 利用規約: アクセス間隔は 1 秒以上あける
 const PAGE_INTERVAL_MS = 1100;
