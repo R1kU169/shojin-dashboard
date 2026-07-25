@@ -6,6 +6,7 @@ import { DifficultyBars } from "../components/DifficultyBars";
 import { Heatmap } from "../components/Heatmap";
 import { PaceChart } from "../components/PaceChart";
 import { RatingChart } from "../components/RatingChart";
+import { RecentList } from "../components/RecentList";
 import { RecommendList } from "../components/RecommendList";
 import { StatCard } from "../components/StatCard";
 import { useUserData } from "../hooks/useUserData";
@@ -78,6 +79,30 @@ export function UserPage() {
         : [],
     [stats, theta, data.problems, data.models],
   );
+  // 初めてACした日の新しい順(最大20問)。subsはepoch昇順なので初出=初AC。
+  const recentSolved = useMemo(() => {
+    if (!data.subs) return [];
+    const seen = new Map<string, { contestId: string; second: number }>();
+    for (const s of data.subs) {
+      if (s.result !== "AC" || seen.has(s.problem_id)) continue;
+      seen.set(s.problem_id, {
+        contestId: s.contest_id,
+        second: s.epoch_second,
+      });
+    }
+    const pmap = new Map((data.problems ?? []).map((p) => [p.id, p]));
+    return [...seen.entries()]
+      .sort((a, b) => b[1].second - a[1].second)
+      .slice(0, 20)
+      .map(([id, { contestId, second }]) => ({
+        id,
+        title: pmap.get(id)?.title ?? id,
+        contestId,
+        url: `https://atcoder.jp/contests/${contestId}/tasks/${id}`,
+        difficulty: data.models?.[id]?.difficulty,
+        second,
+      }));
+  }, [data.subs, data.problems, data.models]);
 
   if (data.phase === "error") {
     return (
@@ -260,6 +285,14 @@ export function UserPage() {
           <PaceChart cumulative={stats.cumulative} />
         </section>
       </div>
+
+      <section className="card">
+        <div className="card-head">
+          <h2 className="card-title">最近解いた問題</h2>
+          <span className="card-sub">初めてACした日の新しい順・最大20問</span>
+        </div>
+        <RecentList items={recentSolved} />
+      </section>
 
       <section className="card">
         <div className="card-head">
