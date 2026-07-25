@@ -358,10 +358,8 @@ export function EditorPage() {
           {running ? "中断" : "実行 ▶"}
         </button>
         <span className="muted editor-hint">Ctrl+Enterでも実行</span>
-      </div>
-
-      <div className="editor-problem">
-        {problem ? (
+        <div className="editor-problem">
+          {problem ? (
           <>
             <span className="ep-label">問題</span>
             <a
@@ -398,7 +396,8 @@ export function EditorPage() {
             <button type="submit">連携</button>
           </form>
         )}
-        {problemErr && <span className="error-text">{problemErr}</span>}
+          {problemErr && <span className="error-text">{problemErr}</span>}
+        </div>
       </div>
 
       <section className="card editor-card">

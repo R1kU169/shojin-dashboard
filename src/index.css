@@ -778,12 +778,13 @@ button.member-card {
 .editor-hint {
   font-size: 12px;
 }
+/* 問題連携はツールバー右端に置く(独立行にしない) */
 .editor-problem {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   flex-wrap: wrap;
-  margin: -4px 0 14px;
+  margin-left: auto;
   font-size: 13px;
 }
 .ep-label {
@@ -810,11 +811,9 @@ button.member-card {
 .ep-form {
   display: flex;
   gap: 8px;
-  flex: 1;
-  max-width: 520px;
 }
 .ep-form input {
-  flex: 1;
+  width: 250px;
   font: inherit;
   font-size: 13px;
   color: var(--ink);
