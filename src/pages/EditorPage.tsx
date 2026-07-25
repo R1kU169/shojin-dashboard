@@ -9,6 +9,17 @@ const STDIN_KEY = "shojin:editor:stdin";
 const LANG_KEY = "shojin:editor:lang";
 const PROBLEM_KEY = "shojin:editor:problem";
 
+// エディター入力支援: インデント幅と自動補完する括弧/クォートのペア
+const INDENT = "    ";
+const PAIRS: Record<string, string> = {
+  "(": ")",
+  "[": "]",
+  "{": "}",
+  '"': '"',
+  "'": "'",
+};
+const CLOSERS = new Set(Object.values(PAIRS));
+
 /** エディターに連携中のAtCoder問題 */
 interface LinkedProblem {
   contest: string;
@@ -132,21 +143,115 @@ export function EditorPage() {
     }
   };
 
-  // Tabキーでインデント(フォーカスを奪わない)・Ctrl/Cmd+Enterで実行
-  const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Tab") {
-      e.preventDefault();
-      const el = e.currentTarget;
-      const { selectionStart: s, selectionEnd: t } = el;
-      const next = `${code.slice(0, s)}    ${code.slice(t)}`;
-      setCode(next);
-      requestAnimationFrame(() => {
-        el.selectionStart = el.selectionEnd = s + 4;
-      });
+  /**
+   * [from,to) を text に置き換えて選択を張り直す。まず execCommand を使い、
+   * ブラウザのundo履歴(Cmd+Z)を保つ。使えない環境ではsetStateにフォールバック。
+   */
+  const edit = (
+    el: HTMLTextAreaElement,
+    from: number,
+    to: number,
+    text: string,
+    selFrom: number,
+    selTo: number,
+  ) => {
+    el.setSelectionRange(from, to);
+    const ok =
+      text === ""
+        ? document.execCommand("delete")
+        : document.execCommand("insertText", false, text);
+    if (ok) {
+      el.setSelectionRange(selFrom, selTo);
+    } else {
+      const v = el.value;
+      setCode(v.slice(0, from) + text + v.slice(to));
+      requestAnimationFrame(() => el.setSelectionRange(selFrom, selTo));
     }
+  };
+
+  // エディターの入力支援: 改行の自動インデント・括弧/クォート補完・
+  // Tab/Shift+Tabのブロックインデント・Ctrl/Cmd+Enterで実行
+  const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    const el = e.currentTarget;
+    const v = el.value;
+    const s = el.selectionStart;
+    const t = el.selectionEnd;
+
     if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
       e.preventDefault();
       void run();
+      return;
+    }
+    // 他のショートカット(コピー・undo等)は邪魔しない
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+
+    if (e.key === "Tab") {
+      e.preventDefault();
+      if (e.shiftKey || v.slice(s, t).includes("\n")) {
+        // 選択行ブロックをまとめてインデント/デデント
+        const blockStart = v.lastIndexOf("\n", s - 1) + 1;
+        let blockEnd = v.indexOf("\n", Math.max(s, t - 1));
+        if (blockEnd === -1) blockEnd = v.length;
+        const lines = v.slice(blockStart, blockEnd).split("\n");
+        const newBlock = e.shiftKey
+          ? lines.map((l) => l.replace(/^ {1,4}/, "")).join("\n")
+          : lines.map((l) => INDENT + l).join("\n");
+        edit(el, blockStart, blockEnd, newBlock, blockStart, blockStart + newBlock.length);
+      } else {
+        edit(el, s, t, INDENT, s + INDENT.length, s + INDENT.length);
+      }
+      return;
+    }
+
+    if (e.key === "Enter") {
+      e.preventDefault();
+      const lineStart = v.lastIndexOf("\n", s - 1) + 1;
+      const line = v.slice(lineStart, s);
+      const indent = /^[ \t]*/.exec(line)?.[0] ?? "";
+      const prev = v[s - 1] ?? "";
+      const next = v[t] ?? "";
+      // { や ( [ の直後、Pythonの行末: では1段深く
+      const opens = (prev !== "" && "{([".includes(prev)) || /:\s*$/.test(line);
+      if (PAIRS[prev] && PAIRS[prev] === next) {
+        // 括弧の間で改行: 中に1段インデントした行を作り、閉じ括弧を揃えて次行へ
+        const mid = s + 1 + indent.length + INDENT.length;
+        edit(el, s, t, `\n${indent}${INDENT}\n${indent}`, mid, mid);
+      } else {
+        const ins = `\n${indent}${opens ? INDENT : ""}`;
+        edit(el, s, t, ins, s + ins.length, s + ins.length);
+      }
+      return;
+    }
+
+    // 閉じ括弧/クォートの直前で同じ文字を打ったらスキップ(重複させない)
+    if (s === t && CLOSERS.has(e.key) && v[s] === e.key) {
+      e.preventDefault();
+      el.setSelectionRange(s + 1, s + 1);
+      return;
+    }
+
+    if (PAIRS[e.key]) {
+      const isQuote = e.key === '"' || e.key === "'";
+      // 単語の直後のクォートは補完しない(英語コメントのdon't等)
+      if (isQuote && s === t && /[A-Za-z0-9_]/.test(v[s - 1] ?? "")) return;
+      e.preventDefault();
+      if (s !== t) {
+        // 選択範囲を括弧/クォートで囲む
+        const inner = v.slice(s, t);
+        edit(el, s, t, e.key + inner + PAIRS[e.key], s + 1, s + 1 + inner.length);
+      } else {
+        edit(el, s, t, e.key + PAIRS[e.key], s + 1, s + 1);
+      }
+      return;
+    }
+
+    // 空のペア()[]{}""'' の中でBackspace → 両方消す
+    if (e.key === "Backspace" && s === t && s > 0) {
+      const close = PAIRS[v[s - 1]];
+      if (close && v[s] === close) {
+        e.preventDefault();
+        edit(el, s - 1, s + 1, "", s - 1, s - 1);
+      }
     }
   };
 
