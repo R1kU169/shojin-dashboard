@@ -456,7 +456,7 @@ export function EditorPage() {
               <pre className="io-out">{result.stdout || "(出力なし)"}</pre>
               {result.compilerError && (
                 <>
-                  <div className="io-label">コンパイルエラー</div>
+                  <div className="io-label">コンパイラメッセージ</div>
                   <pre className="io-out io-err">{result.compilerError}</pre>
                 </>
               )}
