@@ -186,6 +186,14 @@ a:hover {
   text-underline-offset: 7px;
   text-decoration-thickness: 2px;
 }
+/* 外部サイト(DS倶楽部HP)は内部タブと区別して右端に控えめに置く */
+.app-header nav a.nav-ext {
+  margin-left: auto;
+  color: var(--muted);
+}
+.app-header nav a.nav-ext:hover {
+  color: var(--accent);
+}
 .theme-toggle {
   width: 34px;
   height: 34px;
@@ -445,13 +453,6 @@ a:hover {
 }
 .hero .error-text {
   margin-top: 10px;
-}
-.last-user {
-  margin-top: 12px;
-  font-size: 13px;
-}
-.last-user a {
-  font-family: var(--font-mono);
 }
 
 .id-form {

@@ -20,7 +20,6 @@ export function Home() {
   const [input, setInput] = useState("");
   const [err, setErr] = useState("");
   const nav = useNavigate();
-  const last = localStorage.getItem("shojin:lastUser");
   const { resolved } = useTheme();
   // 各部員のアバター色をAtCoderレート帯の色に合わせる(未算出のうちは中立色)。
   const tiers = useMemberTiers();
@@ -71,11 +70,6 @@ export function Home() {
             </div>
           </form>
           {err && <p className="error-text">{err}</p>}
-          {last && (
-            <p className="muted last-user">
-              前回: <Link to={`/u/${last}`}>@{last}</Link>
-            </p>
-          )}
         </div>
         <div className="hero-art" aria-hidden="true">
           <div className="art-card">
