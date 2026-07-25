@@ -46,6 +46,23 @@ function loadProblem(): LinkedProblem | null {
   }
 }
 
+// テンプレート(wandbox.ts)が書かれているインデント幅
+const TEMPLATE_WIDTH = 4;
+
+/** 各行の先頭インデントを oldW → newW のレベルに変換する(端数スペースは維持)。 */
+function reindent(code: string, oldW: number, newW: number): string {
+  if (oldW === newW) return code;
+  return code
+    .split("\n")
+    .map((line) => {
+      const m = /^ +/.exec(line);
+      if (!m) return line;
+      const n = m[0].length;
+      return " ".repeat(Math.floor(n / oldW) * newW + (n % oldW)) + line.slice(n);
+    })
+    .join("\n");
+}
+
 export function EditorPage() {
   const [params, setParams] = useSearchParams();
   const [langKey, setLangKey] = useState(
@@ -53,8 +70,16 @@ export function EditorPage() {
   );
   const lang =
     EDITOR_LANGS.find((l) => l.key === langKey) ?? EDITOR_LANGS[0];
+  // インデント幅(スペース数)。入力支援(Enter/Tab)とtab-size表示・テンプレ変換に効く
+  const [indentWidth, setIndentWidth] = useState(() => {
+    const n = Number(localStorage.getItem(INDENT_KEY));
+    return INDENT_WIDTHS.includes(n) ? n : 2;
+  });
+  const INDENT = " ".repeat(indentWidth);
   const [code, setCode] = useState(
-    () => localStorage.getItem(CODE_KEY(langKey)) ?? lang.template,
+    () =>
+      localStorage.getItem(CODE_KEY(langKey)) ??
+      reindent(lang.template, TEMPLATE_WIDTH, indentWidth),
   );
   const [stdin, setStdin] = useState(
     () => localStorage.getItem(STDIN_KEY) ?? "",
@@ -65,14 +90,9 @@ export function EditorPage() {
   const [problem, setProblem] = useState<LinkedProblem | null>(loadProblem);
   const [problemInput, setProblemInput] = useState("");
   const [problemErr, setProblemErr] = useState("");
-  // インデント幅(スペース数)。入力支援(Enter/Tab)とtab-size表示に効く
-  const [indentWidth, setIndentWidth] = useState(() => {
-    const n = Number(localStorage.getItem(INDENT_KEY));
-    return INDENT_WIDTHS.includes(n) ? n : 4;
-  });
-  const INDENT = " ".repeat(indentWidth);
   const abortRef = useRef<AbortController | null>(null);
   const linesRef = useRef<HTMLDivElement>(null);
+  const codeRef = useRef<HTMLTextAreaElement>(null);
 
   // 「次に解く問題」等からの遷移(?contest=&task=&title=)で問題を連携する
   useEffect(() => {
@@ -112,8 +132,27 @@ export function EditorPage() {
     localStorage.setItem(CODE_KEY(langKey), code);
     const next = EDITOR_LANGS.find((l) => l.key === key) ?? EDITOR_LANGS[0];
     setLangKey(key);
-    setCode(localStorage.getItem(CODE_KEY(key)) ?? next.template);
+    setCode(
+      localStorage.getItem(CODE_KEY(key)) ??
+        reindent(next.template, TEMPLATE_WIDTH, indentWidth),
+    );
     localStorage.setItem(LANG_KEY, key);
+  };
+
+  // インデント幅変更: 既存コードの先頭インデントも新しい幅に変換する
+  const changeIndent = (n: number) => {
+    const newCode = reindent(code, indentWidth, n);
+    setIndentWidth(n);
+    localStorage.setItem(INDENT_KEY, String(n));
+    if (newCode === code) return;
+    const el = codeRef.current;
+    if (el) {
+      // execCommand経由でundo履歴を保って全置換
+      const pos = Math.min(el.selectionStart, newCode.length);
+      edit(el, 0, el.value.length, newCode, pos, pos);
+    } else {
+      setCode(newCode);
+    }
   };
 
   // コード/入力は自動保存(リロードしても消えない)
@@ -303,11 +342,9 @@ export function EditorPage() {
           インデント
           <select
             value={indentWidth}
-            onChange={(e: ChangeEvent<HTMLSelectElement>) => {
-              const n = Number(e.target.value);
-              setIndentWidth(n);
-              localStorage.setItem(INDENT_KEY, String(n));
-            }}
+            onChange={(e: ChangeEvent<HTMLSelectElement>) =>
+              changeIndent(Number(e.target.value))
+            }
             aria-label="インデント幅"
           >
             {INDENT_WIDTHS.map((n) => (
@@ -376,6 +413,7 @@ export function EditorPage() {
             ))}
           </div>
           <textarea
+            ref={codeRef}
             className="editor-code"
             style={{ tabSize: indentWidth }}
             value={code}
