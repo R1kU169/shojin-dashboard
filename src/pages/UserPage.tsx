@@ -288,14 +288,6 @@ export function UserPage() {
 
       <section className="card">
         <div className="card-head">
-          <h2 className="card-title">最近解いた問題</h2>
-          <span className="card-sub">初めてACした日の新しい順・最大20問</span>
-        </div>
-        <RecentList items={recentSolved} />
-      </section>
-
-      <section className="card">
-        <div className="card-head">
           <h2 className="card-title">次に解く問題</h2>
           <span className="card-sub">
             あなたの実力を推定し、AC確率40〜75%の未ACを60%に近い順に表示
@@ -306,6 +298,14 @@ export function UserPage() {
         ) : (
           <p className="muted">AC実績がまだないため推定できません。</p>
         )}
+      </section>
+
+      <section className="card">
+        <div className="card-head">
+          <h2 className="card-title">最近解いた問題</h2>
+          <span className="card-sub">初めてACした日の新しい順・最大20問</span>
+        </div>
+        <RecentList items={recentSolved} />
       </section>
     </div>
   );
