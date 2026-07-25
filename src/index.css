@@ -732,6 +732,150 @@ button.member-card {
   color: var(--accent);
 }
 
+/* ---------- エディター(コードテスト) ---------- */
+
+.editor-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 2px 0 14px;
+}
+.editor-lang {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--ink-2);
+}
+.editor-lang select {
+  font: inherit;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 5px 10px;
+}
+.editor-version {
+  font-size: 12px;
+}
+.run-btn {
+  font: inherit;
+  font-weight: 700;
+  font-size: 14px;
+  color: #fff;
+  background: var(--accent);
+  border: none;
+  border-radius: 999px;
+  padding: 7px 22px;
+  cursor: pointer;
+  transition: filter 0.15s, transform 0.15s;
+}
+.run-btn:hover {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+}
+.editor-hint {
+  font-size: 12px;
+}
+.editor-card {
+  padding: 0;
+  overflow: hidden;
+}
+.editor-wrap {
+  display: flex;
+  height: 380px;
+}
+.editor-lines {
+  flex: none;
+  width: 46px;
+  padding: 14px 8px 14px 0;
+  text-align: right;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--muted);
+  background: color-mix(in srgb, var(--ink) 3%, transparent);
+  border-right: 1px solid var(--border);
+  overflow: hidden;
+  user-select: none;
+}
+.editor-code {
+  flex: 1;
+  padding: 14px;
+  border: none;
+  outline: none;
+  resize: none;
+  background: transparent;
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.55;
+  white-space: pre;
+  overflow: auto;
+  tab-size: 4;
+}
+.editor-io .io-area {
+  width: 100%;
+  min-height: 140px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--ink) 2%, transparent);
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.55;
+  padding: 10px 12px;
+  resize: vertical;
+}
+.io-out {
+  margin: 0;
+  min-height: 44px;
+  max-height: 300px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--ink) 2%, transparent);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.55;
+  padding: 10px 12px;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.io-err {
+  color: #e34948;
+  margin-top: 6px;
+}
+.io-label {
+  margin-top: 12px;
+  margin-bottom: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+  letter-spacing: 0.04em;
+}
+.exit-chip {
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 2px 10px;
+}
+.exit-chip.ok {
+  color: #1a7f37;
+  background: color-mix(in srgb, #1baf7a 15%, transparent);
+}
+.exit-chip.ng {
+  color: #c93534;
+  background: color-mix(in srgb, #e34948 14%, transparent);
+}
+:root[data-theme="dark"] .exit-chip.ok {
+  color: #4ad395;
+}
+:root[data-theme="dark"] .exit-chip.ng {
+  color: #ff7a79;
+}
+
 /* ---------- ユーザーページ ---------- */
 
 .user-head {

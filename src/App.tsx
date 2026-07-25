@@ -1,5 +1,6 @@
 import { NavLink, Route, Routes } from "react-router-dom";
 import { ClubPage } from "./pages/ClubPage";
+import { EditorPage } from "./pages/EditorPage";
 import { Home } from "./pages/Home";
 import { UserPage } from "./pages/UserPage";
 import { MyPage } from "./pages/MyPage";
@@ -39,6 +40,7 @@ export default function App() {
         <nav>
           <NavLink to="/me">マイページ</NavLink>
           <NavLink to="/club">クラブ内ランキング</NavLink>
+          <NavLink to="/editor">エディター</NavLink>
           <a
             className="nav-ext"
             href="https://mocaluna0117.github.io/ds-club-web"
@@ -56,6 +58,7 @@ export default function App() {
           <Route path="/me" element={<MyPage />} />
           <Route path="/u/:userId" element={<UserPage />} />
           <Route path="/club" element={<ClubPage />} />
+          <Route path="/editor" element={<EditorPage />} />
         </Routes>
       </main>
       <footer className="app-footer">
