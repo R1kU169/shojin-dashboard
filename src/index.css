@@ -848,7 +848,12 @@ button.member-card {
 }
 .editor-wrap {
   display: flex;
-  height: 380px;
+  /* 画面の高さに応じて広く使う(小さい画面でも380pxは確保) */
+  height: clamp(380px, 58vh, 800px);
+}
+.editor-note {
+  font-size: 12px;
+  margin: 4px 0 0;
 }
 .editor-lines {
   flex: none;

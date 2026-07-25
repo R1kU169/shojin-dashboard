@@ -312,15 +312,6 @@ export function EditorPage() {
 
   return (
     <div className="page">
-      <h1>コードテスト</h1>
-      <p className="muted">
-        コードと標準入力を書いて実行できます。実行は{" "}
-        <a href="https://wandbox.org" target="_blank" rel="noreferrer">
-          Wandbox
-        </a>{" "}
-        上で行われます(コードは外部サービスに送信されます)。
-      </p>
-
       <div className="editor-toolbar">
         <label className="editor-lang">
           言語
@@ -477,6 +468,14 @@ export function EditorPage() {
           )}
         </section>
       </div>
+
+      <p className="muted editor-note">
+        実行は{" "}
+        <a href="https://wandbox.org" target="_blank" rel="noreferrer">
+          Wandbox
+        </a>{" "}
+        上で行われます(コードは外部サービスに送信されます)。
+      </p>
     </div>
   );
 }
