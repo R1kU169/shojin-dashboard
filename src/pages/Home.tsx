@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { CSSProperties, FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { NextAbcBanner } from "../components/NextAbcBanner";
 import { MEMBERS } from "../data/members";
 import { useMemberTiers } from "../hooks/useMemberTiers";
 import { isValidAtcoderId } from "../lib/api";
@@ -87,6 +88,7 @@ export function Home() {
           <span className="art-flame">🔥</span>
         </div>
       </section>
+      <NextAbcBanner />
       <section className="card">
         <div className="card-head">
           <h2 className="card-title">部員</h2>

@@ -155,6 +155,41 @@ async function main() {
   );
   console.log(`[snapshot] ratings: ${Object.keys(ratings).length}人ぶん`);
 
+  // 予定されているABCを atcoder.jp/contests/ の Upcoming テーブルから取得して書き出す。
+  // ホームの「次のABC」リンクに使う(番号は日付から計算できないので実データを見る)。
+  try {
+    const res = await fetch("https://atcoder.jp/contests/", {
+      headers: { "User-Agent": UA },
+    });
+    const html = await res.text();
+    const i = html.indexOf("contest-table-upcoming");
+    let seg = i >= 0 ? html.slice(i) : "";
+    const end = seg.indexOf("</table>");
+    if (end >= 0) seg = seg.slice(0, end);
+    const upcoming = [];
+    for (const row of seg.split("<tr>").slice(1)) {
+      const tm = row.match(
+        /fixtime-full[\x27">]+(\d{4}-\d{2}-\d{2} [\d:+]+)</,
+      );
+      const lm = row.match(/\/contests\/(abc\d+)"[^>]*>([^<]+)</);
+      if (!tm || !lm) continue;
+      const iso = tm[1].replace(" ", "T").replace(/([+-]\d{2})(\d{2})$/, "$1:$2");
+      upcoming.push({
+        id: lm[1],
+        title: lm[2],
+        start: Math.floor(new Date(iso).getTime() / 1000),
+      });
+    }
+    upcoming.sort((a, b) => a.start - b.start);
+    await writeFile(
+      path.join(OUT, "upcoming-abc.json"),
+      JSON.stringify(upcoming),
+    );
+    console.log(`[snapshot] upcoming ABC: ${upcoming.length}件`);
+  } catch (e) {
+    console.warn(`[snapshot] 予定ABCの取得失敗、スキップ (${e})`);
+  }
+
   await writeFile(path.join(OUT, "index.json"), JSON.stringify(index));
   const ok = index.members.filter((x) => x.ok).length;
   console.log(`[snapshot] 完了: ${ok}/${index.members.length} 人ぶんを書き出し`);

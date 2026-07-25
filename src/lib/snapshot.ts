@@ -1,4 +1,10 @@
-import type { Problem, ProblemModels, RatePoint, Submission } from "./types";
+import type {
+  Problem,
+  ProblemModels,
+  RatePoint,
+  Submission,
+  UpcomingContest,
+} from "./types";
 
 // scripts/build-snapshot.mjs が public/snapshot/ に書き出す静的データを、
 // 同一オリジンから読む。base は相対(vite.config: base "./")なので、
@@ -28,6 +34,10 @@ export const snapshotRatings = () =>
 /** 部員の公式レーティング推移: { id(小文字): RatePoint[] }。個人ページの推移グラフに使う。 */
 export const snapshotRatingHistories = () =>
   snapJson<Record<string, RatePoint[]>>("rating-history.json");
+
+/** 予定されているABC(開始昇順)。ホームの「次のABC」リンクに使う。 */
+export const snapshotUpcomingAbc = () =>
+  snapJson<UpcomingContest[]>("upcoming-abc.json");
 
 export interface SubsSnapshot {
   at: number;

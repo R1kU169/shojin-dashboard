@@ -592,6 +592,60 @@ a:hover {
   transform: scale(0.97);
 }
 
+.abc-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 12px 18px;
+  margin: 0 0 20px;
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface));
+  color: var(--ink);
+  transition:
+    border-color 0.15s,
+    transform 0.15s,
+    box-shadow 0.15s;
+}
+.abc-banner:hover {
+  border-color: var(--accent);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-card);
+  text-decoration: none;
+}
+.abc-banner-cal {
+  font-size: 20px;
+}
+.abc-banner-body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.abc-banner-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--accent);
+}
+.abc-banner-title {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.abc-banner-when {
+  margin-left: auto;
+  font-size: 13px;
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+.abc-banner-go {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--accent);
+  white-space: nowrap;
+}
 .member-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));

@@ -45,3 +45,13 @@ export interface RatePoint {
   /** その時点の NewRating */
   r: number;
 }
+
+/** 予定されているコンテスト(ホームの「次のABC」表示用) */
+export interface UpcomingContest {
+  /** コンテストID(例: abc468) */
+  id: string;
+  /** コンテスト名 */
+  title: string;
+  /** 開始時刻(epoch秒) */
+  start: number;
+}
