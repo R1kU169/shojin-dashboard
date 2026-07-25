@@ -9,8 +9,9 @@ const STDIN_KEY = "shojin:editor:stdin";
 const LANG_KEY = "shojin:editor:lang";
 const PROBLEM_KEY = "shojin:editor:problem";
 
-// エディター入力支援: インデント幅と自動補完する括弧/クォートのペア
-const INDENT = "    ";
+// エディター入力支援: 自動補完する括弧/クォートのペア
+const INDENT_KEY = "shojin:editor:indent";
+const INDENT_WIDTHS = [2, 4, 8];
 const PAIRS: Record<string, string> = {
   "(": ")",
   "[": "]",
@@ -64,6 +65,12 @@ export function EditorPage() {
   const [problem, setProblem] = useState<LinkedProblem | null>(loadProblem);
   const [problemInput, setProblemInput] = useState("");
   const [problemErr, setProblemErr] = useState("");
+  // インデント幅(スペース数)。入力支援(Enter/Tab)とtab-size表示に効く
+  const [indentWidth, setIndentWidth] = useState(() => {
+    const n = Number(localStorage.getItem(INDENT_KEY));
+    return INDENT_WIDTHS.includes(n) ? n : 4;
+  });
+  const INDENT = " ".repeat(indentWidth);
   const abortRef = useRef<AbortController | null>(null);
   const linesRef = useRef<HTMLDivElement>(null);
 
@@ -193,8 +200,9 @@ export function EditorPage() {
         let blockEnd = v.indexOf("\n", Math.max(s, t - 1));
         if (blockEnd === -1) blockEnd = v.length;
         const lines = v.slice(blockStart, blockEnd).split("\n");
+        const dedent = new RegExp(`^ {1,${indentWidth}}`);
         const newBlock = e.shiftKey
-          ? lines.map((l) => l.replace(/^ {1,4}/, "")).join("\n")
+          ? lines.map((l) => l.replace(dedent, "")).join("\n")
           : lines.map((l) => INDENT + l).join("\n");
         edit(el, blockStart, blockEnd, newBlock, blockStart, blockStart + newBlock.length);
       } else {
@@ -291,6 +299,24 @@ export function EditorPage() {
           </select>
         </label>
         <span className="muted editor-version">{lang.version}</span>
+        <label className="editor-lang">
+          インデント
+          <select
+            value={indentWidth}
+            onChange={(e: ChangeEvent<HTMLSelectElement>) => {
+              const n = Number(e.target.value);
+              setIndentWidth(n);
+              localStorage.setItem(INDENT_KEY, String(n));
+            }}
+            aria-label="インデント幅"
+          >
+            {INDENT_WIDTHS.map((n) => (
+              <option key={n} value={n}>
+                {n}
+              </option>
+            ))}
+          </select>
+        </label>
         <button
           type="button"
           className="run-btn"
@@ -351,6 +377,7 @@ export function EditorPage() {
           </div>
           <textarea
             className="editor-code"
+            style={{ tabSize: indentWidth }}
             value={code}
             onChange={(e) => setCode(e.target.value)}
             onKeyDown={onKeyDown}
