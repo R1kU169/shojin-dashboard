@@ -778,6 +778,70 @@ button.member-card {
 .editor-hint {
   font-size: 12px;
 }
+.editor-problem {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: -4px 0 14px;
+  font-size: 13px;
+}
+.ep-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--accent);
+}
+.ep-title {
+  font-weight: 600;
+}
+.ep-submit {
+  font-weight: 700;
+  color: #fff;
+  background: var(--accent);
+  border-radius: 999px;
+  padding: 4px 14px;
+  transition: filter 0.15s;
+}
+.ep-submit:hover {
+  filter: brightness(1.08);
+  text-decoration: none;
+}
+.ep-form {
+  display: flex;
+  gap: 8px;
+  flex: 1;
+  max-width: 520px;
+}
+.ep-form input {
+  flex: 1;
+  font: inherit;
+  font-size: 13px;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 5px 10px;
+}
+.ep-form button {
+  font: inherit;
+  font-size: 13px;
+  color: var(--ink-2);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 5px 14px;
+  cursor: pointer;
+}
+.ep-form button:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.to-editor {
+  margin-left: 10px;
+  font-size: 12px;
+  white-space: nowrap;
+}
 .editor-card {
   padding: 0;
   overflow: hidden;

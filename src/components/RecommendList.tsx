@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { TIER_COLORS, tierIndex } from "../lib/colors";
 import type { Recommendation } from "../lib/irt";
 import { useTheme } from "../theme";
@@ -32,6 +33,13 @@ export function RecommendList({ recs }: { recs: Recommendation[] }) {
               </a>
               {i === 0 && <span className="best-chip">⭐ ベストマッチ</span>}
               <span className="muted contest-id">{r.problem.contest_id}</span>
+              <Link
+                className="to-editor"
+                to={`/editor?contest=${encodeURIComponent(r.problem.contest_id)}&task=${encodeURIComponent(r.problem.id)}&title=${encodeURIComponent(r.problem.title)}`}
+                title="エディターで解いてAtCoderに提出する"
+              >
+                ✎ エディターで解く
+              </Link>
             </td>
             <td className="num">{r.clippedDifficulty}</td>
             <td className="num prob-cell">
