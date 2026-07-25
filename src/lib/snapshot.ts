@@ -1,4 +1,4 @@
-import type { Problem, ProblemModels, Submission } from "./types";
+import type { Problem, ProblemModels, RatePoint, Submission } from "./types";
 
 // scripts/build-snapshot.mjs が public/snapshot/ に書き出す静的データを、
 // 同一オリジンから読む。base は相対(vite.config: base "./")なので、
@@ -24,6 +24,10 @@ export const snapshotModels = () => snapJson<ProblemModels>("problem-models.json
 /** 部員の公式レーティング: { id(小文字): rating }。ホームのアバター色に使う。 */
 export const snapshotRatings = () =>
   snapJson<Record<string, number>>("ratings.json");
+
+/** 部員の公式レーティング推移: { id(小文字): RatePoint[] }。個人ページの推移グラフに使う。 */
+export const snapshotRatingHistories = () =>
+  snapJson<Record<string, RatePoint[]>>("rating-history.json");
 
 export interface SubsSnapshot {
   at: number;

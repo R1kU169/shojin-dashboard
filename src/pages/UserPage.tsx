@@ -5,14 +5,16 @@ import { AnimatedNumber } from "../components/AnimatedNumber";
 import { DifficultyBars } from "../components/DifficultyBars";
 import { Heatmap } from "../components/Heatmap";
 import { PaceChart } from "../components/PaceChart";
+import { RatingChart } from "../components/RatingChart";
 import { RecommendList } from "../components/RecommendList";
 import { StatCard } from "../components/StatCard";
 import { useUserData } from "../hooks/useUserData";
-import { getRating } from "../lib/cache";
+import { getRating, getRatingHistory } from "../lib/cache";
 import { TIER_COLORS, TIER_LABELS, tierIndex } from "../lib/colors";
 import { collectIrtItems, estimateTheta, recommend } from "../lib/irt";
 import { getMyId, setMyId } from "../lib/me";
 import { computeStats, todayEpochDay } from "../lib/stats";
+import type { RatePoint } from "../lib/types";
 import { useTheme } from "../theme";
 
 export function UserPage() {
@@ -24,6 +26,7 @@ export function UserPage() {
   const isMine = myId === userId;
   // 公式レーティング(プロフィールのユーザー名の色)。アバター・色味・レート表示に使う。
   const [rating, setRating] = useState<number | null>(null);
+  const [history, setHistory] = useState<RatePoint[]>([]);
 
   useEffect(() => {
     if (userId) localStorage.setItem("shojin:lastUser", userId);
@@ -32,12 +35,20 @@ export function UserPage() {
   useEffect(() => {
     let cancel = false;
     setRating(null);
+    setHistory([]);
     getRating(userId)
       .then((r) => {
         if (!cancel) setRating(r);
       })
       .catch(() => {
         if (!cancel) setRating(null);
+      });
+    getRatingHistory(userId)
+      .then((h) => {
+        if (!cancel) setHistory(h);
+      })
+      .catch(() => {
+        if (!cancel) setHistory([]);
       });
     return () => {
       cancel = true;
@@ -211,6 +222,16 @@ export function UserPage() {
         />
         <StatCard label="最長ストリーク" value={stats.longestStreak} unit="日" />
       </div>
+
+      {history.length >= 2 && (
+        <section className="card">
+          <div className="card-head">
+            <h2 className="card-title">レーティング推移</h2>
+            <span className="card-sub">レート付きコンテストの結果</span>
+          </div>
+          <RatingChart history={history} color={tierColor ?? undefined} />
+        </section>
+      )}
 
       <section className="card">
         <div className="card-head">

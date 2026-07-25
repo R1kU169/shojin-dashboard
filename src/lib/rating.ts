@@ -5,11 +5,22 @@
 // スナップショットが無い場合(dev等)のフォールバックとして atcoder.jp を叩く。
 // ブラウザから atcoder.jp を直接叩くと CORS で弾かれるため、dev では
 // devサーバーの同一オリジンプロキシ(vite.config.ts の /atcoder)経由にする。
+import type { RatePoint } from "./types";
+
 const ATCODER = import.meta.env.DEV ? "/atcoder" : "https://atcoder.jp";
 
 interface HistoryEntry {
   IsRated: boolean;
   NewRating: number;
+  EndTime: string;
+}
+
+async function fetchHistory(user: string): Promise<HistoryEntry[]> {
+  const res = await fetch(
+    `${ATCODER}/users/${encodeURIComponent(user)}/history/json`,
+  );
+  if (!res.ok) throw new Error(`rating API error ${res.status}: ${user}`);
+  return (await res.json()) as HistoryEntry[];
 }
 
 /**
@@ -17,12 +28,19 @@ interface HistoryEntry {
  * レート付き参加が無い(未レート)場合は 0 を返す(= 灰)。
  */
 export async function fetchAtcoderRating(user: string): Promise<number> {
-  const res = await fetch(
-    `${ATCODER}/users/${encodeURIComponent(user)}/history/json`,
-  );
-  if (!res.ok) throw new Error(`rating API error ${res.status}: ${user}`);
-  const hist = (await res.json()) as HistoryEntry[];
+  const hist = await fetchHistory(user);
   let rating = 0;
   for (const h of hist) if (h.IsRated) rating = h.NewRating;
   return rating;
+}
+
+/** 公式レーティングの推移(レート付きコンテストのみ、時系列昇順)。 */
+export async function fetchRatingHistory(user: string): Promise<RatePoint[]> {
+  const hist = await fetchHistory(user);
+  const pts: RatePoint[] = [];
+  for (const h of hist) {
+    if (!h.IsRated) continue;
+    pts.push({ t: Math.floor(new Date(h.EndTime).getTime() / 1000), r: h.NewRating });
+  }
+  return pts;
 }

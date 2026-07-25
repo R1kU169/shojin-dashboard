@@ -118,7 +118,9 @@ async function main() {
   // ホームのアバター色をこの色に合わせる(useMemberTiers.ts / rating.ts 参照)。
   // 未レートは 0(=灰)。一時的な失敗は前回分を維持する。
   const prevRatings = (await readJson("ratings.json")) ?? {};
+  const prevHist = (await readJson("rating-history.json")) ?? {};
   const ratings = {};
+  const histories = {};
   console.log("[snapshot] 公式レーティングを取得中…");
   for (const m of targets) {
     const key = m.id.toLowerCase();
@@ -127,11 +129,18 @@ async function main() {
         `https://atcoder.jp/users/${encodeURIComponent(m.id)}/history/json`,
       );
       let r = 0;
-      for (const h of hist) if (h.IsRated) r = h.NewRating;
+      const pts = [];
+      for (const h of hist) {
+        if (!h.IsRated) continue;
+        r = h.NewRating;
+        pts.push({ t: Math.floor(new Date(h.EndTime).getTime() / 1000), r: h.NewRating });
+      }
       ratings[key] = r;
+      histories[key] = pts;
     } catch (e) {
       if (prevRatings[key] != null) {
         ratings[key] = prevRatings[key];
+        if (prevHist[key]) histories[key] = prevHist[key];
         console.warn(`[snapshot] ${m.id}: レート取得失敗、前回分を維持 (${e})`);
       } else {
         console.warn(`[snapshot] ${m.id}: レート取得失敗、スキップ (${e})`);
@@ -140,6 +149,10 @@ async function main() {
     await sleep(MEMBER_INTERVAL_MS);
   }
   await writeFile(path.join(OUT, "ratings.json"), JSON.stringify(ratings));
+  await writeFile(
+    path.join(OUT, "rating-history.json"),
+    JSON.stringify(histories),
+  );
   console.log(`[snapshot] ratings: ${Object.keys(ratings).length}人ぶん`);
 
   await writeFile(path.join(OUT, "index.json"), JSON.stringify(index));

@@ -4,14 +4,20 @@ import {
   fetchProblemModels,
   fetchSubmissionsSince,
 } from "./api";
-import { fetchAtcoderRating } from "./rating";
+import { fetchAtcoderRating, fetchRatingHistory } from "./rating";
 import {
   snapshotModels,
   snapshotProblems,
+  snapshotRatingHistories,
   snapshotRatings,
   snapshotSubs,
 } from "./snapshot";
-import type { Submission, Problem, ProblemModels } from "./types";
+import type {
+  Submission,
+  Problem,
+  ProblemModels,
+  RatePoint,
+} from "./types";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const SUBS_FRESH_MS = 10 * 60 * 1000; // 10分以内の再訪はAPIを叩かない
@@ -91,6 +97,29 @@ export const getRating = (user: string): Promise<number> =>
       );
       if (map[key] != null) return map[key];
       return fetchAtcoderRating(user);
+    },
+    DAY_MS,
+  );
+
+// 公式レーティング推移。snapshot(rating-history.json)を土台に、無ければatcoder.jpへ。
+const ratingHistories = () =>
+  cachedResource<Record<string, RatePoint[]>>(
+    "res:rating-hist",
+    async () => (await snapshotRatingHistories()) ?? {},
+    DAY_MS,
+  );
+
+/** ユーザーの公式レーティング推移(時系列)。取得不可時は例外(呼び出し側で .catch)。 */
+export const getRatingHistory = (user: string): Promise<RatePoint[]> =>
+  cachedResource<RatePoint[]>(
+    `res:rhist:${user.toLowerCase()}`,
+    async () => {
+      const key = user.toLowerCase();
+      const map = await ratingHistories().catch(
+        () => ({}) as Record<string, RatePoint[]>,
+      );
+      if (map[key]) return map[key];
+      return fetchRatingHistory(user);
     },
     DAY_MS,
   );

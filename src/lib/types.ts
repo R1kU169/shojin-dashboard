@@ -37,3 +37,11 @@ export interface Member {
   id: string;
   name: string;
 }
+
+/** 公式レーティング履歴の1点(レート付きコンテスト) */
+export interface RatePoint {
+  /** コンテスト終了時刻(epoch秒) */
+  t: number;
+  /** その時点の NewRating */
+  r: number;
+}
