@@ -114,6 +114,34 @@ async function main() {
     await sleep(MEMBER_INTERVAL_MS);
   }
 
+  // 公式レーティング(プロフィールのユーザー名の色)を取得し ratings.json に書き出す。
+  // ホームのアバター色をこの色に合わせる(useMemberTiers.ts / rating.ts 参照)。
+  // 未レートは 0(=灰)。一時的な失敗は前回分を維持する。
+  const prevRatings = (await readJson("ratings.json")) ?? {};
+  const ratings = {};
+  console.log("[snapshot] 公式レーティングを取得中…");
+  for (const m of targets) {
+    const key = m.id.toLowerCase();
+    try {
+      const hist = await getJson(
+        `https://atcoder.jp/users/${encodeURIComponent(m.id)}/history/json`,
+      );
+      let r = 0;
+      for (const h of hist) if (h.IsRated) r = h.NewRating;
+      ratings[key] = r;
+    } catch (e) {
+      if (prevRatings[key] != null) {
+        ratings[key] = prevRatings[key];
+        console.warn(`[snapshot] ${m.id}: レート取得失敗、前回分を維持 (${e})`);
+      } else {
+        console.warn(`[snapshot] ${m.id}: レート取得失敗、スキップ (${e})`);
+      }
+    }
+    await sleep(MEMBER_INTERVAL_MS);
+  }
+  await writeFile(path.join(OUT, "ratings.json"), JSON.stringify(ratings));
+  console.log(`[snapshot] ratings: ${Object.keys(ratings).length}人ぶん`);
+
   await writeFile(path.join(OUT, "index.json"), JSON.stringify(index));
   const ok = index.members.filter((x) => x.ok).length;
   console.log(`[snapshot] 完了: ${ok}/${index.members.length} 人ぶんを書き出し`);

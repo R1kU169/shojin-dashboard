@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { CSSProperties } from "react";
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { AnimatedNumber } from "../components/AnimatedNumber";
 import { DifficultyBars } from "../components/DifficultyBars";
 import { Heatmap } from "../components/Heatmap";
@@ -8,12 +8,8 @@ import { PaceChart } from "../components/PaceChart";
 import { RecommendList } from "../components/RecommendList";
 import { StatCard } from "../components/StatCard";
 import { useUserData } from "../hooks/useUserData";
-import {
-  TIER_COLORS,
-  TIER_LABELS,
-  clipDifficulty,
-  tierIndex,
-} from "../lib/colors";
+import { getRating } from "../lib/cache";
+import { TIER_COLORS, TIER_LABELS, tierIndex } from "../lib/colors";
 import { collectIrtItems, estimateTheta, recommend } from "../lib/irt";
 import { getMyId, setMyId } from "../lib/me";
 import { computeStats, todayEpochDay } from "../lib/stats";
@@ -21,13 +17,31 @@ import { useTheme } from "../theme";
 
 export function UserPage() {
   const { userId = "" } = useParams();
+  const nav = useNavigate();
   const { resolved } = useTheme();
   const data = useUserData(userId);
   const [myId, setMyIdState] = useState<string | null>(() => getMyId());
   const isMine = myId === userId;
+  // 公式レーティング(プロフィールのユーザー名の色)。アバター・色味・レート表示に使う。
+  const [rating, setRating] = useState<number | null>(null);
 
   useEffect(() => {
     if (userId) localStorage.setItem("shojin:lastUser", userId);
+  }, [userId]);
+
+  useEffect(() => {
+    let cancel = false;
+    setRating(null);
+    getRating(userId)
+      .then((r) => {
+        if (!cancel) setRating(r);
+      })
+      .catch(() => {
+        if (!cancel) setRating(null);
+      });
+    return () => {
+      cancel = true;
+    };
   }, [userId]);
 
   const stats = useMemo(
@@ -78,8 +92,7 @@ export function UserPage() {
     );
   }
 
-  const thetaClip = theta !== null ? clipDifficulty(theta) : null;
-  const tier = thetaClip !== null ? tierIndex(thetaClip) : null;
+  const tier = rating != null ? tierIndex(rating) : null;
   const tierColor = tier !== null ? TIER_COLORS[resolved][tier] : null;
   const nextColor =
     tier !== null && tier < 7 ? TIER_COLORS[resolved][tier + 1] : null;
@@ -116,50 +129,64 @@ export function UserPage() {
               >
                 AtCoderプロフィール ↗
               </a>
-              <button
-                type="button"
-                className={`mypage-toggle${isMine ? " on" : ""}`}
-                onClick={() => {
-                  setMyId(userId);
-                  setMyIdState(userId);
-                }}
-                disabled={isMine}
-                title={
-                  isMine
-                    ? "このページがあなたのマイページです"
-                    : "このIDをマイページに設定"
-                }
-              >
-                {isMine ? "★ マイページ" : "☆ マイページにする"}
-              </button>
+              {isMine ? (
+                <>
+                  <span
+                    className="mypage-toggle on"
+                    title="このページがあなたのマイページです"
+                  >
+                    ★ マイページ
+                  </span>
+                  <button
+                    type="button"
+                    className="mypage-toggle"
+                    onClick={() => nav("/me?change=1")}
+                    title="マイページを別の人に変更する"
+                  >
+                    変更
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  className="mypage-toggle"
+                  onClick={() => {
+                    setMyId(userId);
+                    setMyIdState(userId);
+                  }}
+                  title="このIDをマイページに設定"
+                >
+                  ☆ マイページにする
+                </button>
+              )}
             </div>
           </div>
-          {thetaClip !== null && tierColor && (
+          {rating != null && tierColor && (
             <span className="theta-chip">
               <span className="tier-dot" style={{ background: tierColor }} />
-              推定内部レート
+              レート
               <strong>
-                <AnimatedNumber n={thetaClip} />
+                {rating > 0 ? <AnimatedNumber n={rating} /> : "未レート"}
               </strong>
             </span>
           )}
         </div>
-        {thetaClip !== null && tier !== null && tier < 7 && nextColor && (
+        {rating != null && rating > 0 && tier !== null && tier < 7 && nextColor && (
           <div className="tier-progress">
             <div className="tier-progress-head">
               <span>
                 {TIER_LABELS[tier + 1]}色まで あと
-                <strong>{(tier + 1) * 400 - thetaClip}</strong>
+                <strong>{(tier + 1) * 400 - rating}</strong>
               </span>
               <span className="muted">
-                {thetaClip} / {(tier + 1) * 400}
+                {rating} / {(tier + 1) * 400}
               </span>
             </div>
             <div className="meter">
               <div
                 className="meter-fill"
                 style={{
-                  width: `${((thetaClip - tier * 400) / 400) * 100}%`,
+                  width: `${((rating - tier * 400) / 400) * 100}%`,
                   background: `linear-gradient(90deg, ${tierColor}, ${nextColor})`,
                 }}
               />
@@ -217,7 +244,7 @@ export function UserPage() {
         <div className="card-head">
           <h2 className="card-title">次に解く問題</h2>
           <span className="card-sub">
-            2PL-IRTで実力θを推定し、AC確率40〜75%の未ACを60%に近い順に表示
+            あなたの実力を推定し、AC確率40〜75%の未ACを60%に近い順に表示
           </span>
         </div>
         {theta !== null ? (

@@ -4,7 +4,13 @@ import {
   fetchProblemModels,
   fetchSubmissionsSince,
 } from "./api";
-import { snapshotModels, snapshotProblems, snapshotSubs } from "./snapshot";
+import { fetchAtcoderRating } from "./rating";
+import {
+  snapshotModels,
+  snapshotProblems,
+  snapshotRatings,
+  snapshotSubs,
+} from "./snapshot";
 import type { Submission, Problem, ProblemModels } from "./types";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -59,6 +65,33 @@ export const getProblemModels = () =>
   cachedResource<ProblemModels>(
     "res:models",
     async () => (await snapshotModels()) ?? (await fetchProblemModels()),
+    DAY_MS,
+  );
+
+// 全部員の公式レーティング表(snapshot ratings.json)。無ければ空表(devや未生成時)。
+const ratingsMap = () =>
+  cachedResource<Record<string, number>>(
+    "res:ratings",
+    async () => (await snapshotRatings()) ?? {},
+    DAY_MS,
+  );
+
+/**
+ * ユーザーの公式レーティング(未レートは0)。まず同一オリジンのsnapshot表を引き、
+ * 無ければ(部員以外・snapshot未生成)atcoder.jpへフォールバックする。
+ * 取得失敗時は例外を投げる(呼び出し側で .catch(() => null) して中立色にする)。
+ */
+export const getRating = (user: string): Promise<number> =>
+  cachedResource<number>(
+    `res:rating:${user.toLowerCase()}`,
+    async () => {
+      const key = user.toLowerCase();
+      const map = await ratingsMap().catch(
+        () => ({}) as Record<string, number>,
+      );
+      if (map[key] != null) return map[key];
+      return fetchAtcoderRating(user);
+    },
     DAY_MS,
   );
 

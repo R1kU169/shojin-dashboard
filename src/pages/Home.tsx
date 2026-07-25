@@ -2,7 +2,10 @@ import { useState } from "react";
 import type { CSSProperties, FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { MEMBERS } from "../data/members";
+import { useMemberTiers } from "../hooks/useMemberTiers";
 import { isValidAtcoderId } from "../lib/api";
+import { CHART_CHROME, TIER_COLORS } from "../lib/colors";
+import { useTheme } from "../theme";
 
 // アートカードの炎パターン(7x5、0=空き 4=一番熱い)
 const ART_PATTERN = [
@@ -13,25 +16,14 @@ const ART_PATTERN = [
   0, 1, 2, 3, 2, 1, 0,
 ];
 
-// アバターはIDから決まる色で塗り分けて画一感をなくす
-const AVATAR_HUES = [
-  "#2a78d6",
-  "#1baf7a",
-  "#eb6834",
-  "#e34948",
-  "#eda100",
-  "#00a0a0",
-];
-const hueFor = (id: string) =>
-  AVATAR_HUES[
-    [...id].reduce((acc, ch) => acc + ch.charCodeAt(0), 0) % AVATAR_HUES.length
-  ];
-
 export function Home() {
   const [input, setInput] = useState("");
   const [err, setErr] = useState("");
   const nav = useNavigate();
   const last = localStorage.getItem("shojin:lastUser");
+  const { resolved } = useTheme();
+  // 各部員のアバター色をAtCoderレート帯の色に合わせる(未算出のうちは中立色)。
+  const tiers = useMemberTiers();
 
   const go = (e: FormEvent) => {
     e.preventDefault();
@@ -104,11 +96,14 @@ export function Home() {
       <section className="card">
         <div className="card-head">
           <h2 className="card-title">部員</h2>
-          <span className="card-sub">追加は src/data/members.ts</span>
         </div>
         <div className="member-grid">
           {MEMBERS.map((m) => {
-            const hue = hueFor(m.id);
+            const tier = tiers[m.id];
+            const hue =
+              tier != null
+                ? TIER_COLORS[resolved][tier]
+                : CHART_CHROME[resolved].muted;
             return (
               <Link key={m.id} className="member-card" to={`/u/${m.id}`}>
                 <span

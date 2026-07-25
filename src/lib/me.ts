@@ -8,3 +8,7 @@ export function getMyId(): string | null {
 export function setMyId(id: string): void {
   localStorage.setItem(KEY, id);
 }
+
+export function clearMyId(): void {
+  localStorage.removeItem(KEY);
+}

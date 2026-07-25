@@ -1,9 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { MEMBERS } from "../data/members";
-import { getProblemModels, loadSubmissions } from "../lib/cache";
-import { TIER_COLORS, clipDifficulty, tierIndex } from "../lib/colors";
-import { collectIrtItems, estimateTheta } from "../lib/irt";
+import { getProblemModels, getRating, loadSubmissions } from "../lib/cache";
+import { TIER_COLORS, tierIndex } from "../lib/colors";
 import { computeStats } from "../lib/stats";
 import type { UserStats } from "../lib/stats";
 import type { Member } from "../lib/types";
@@ -14,7 +13,7 @@ interface Row {
   status: "pending" | "loading" | "done" | "error";
   progress: number;
   stats?: UserStats;
-  thetaClip?: number | null;
+  rating?: number | null;
 }
 
 const RANK_BADGES = ["🥇", "🥈", "🥉"];
@@ -43,15 +42,9 @@ export function ClubPage() {
             if (!cancel) update(m.id, { progress: n });
           });
           const stats = computeStats(subs, models);
-          const theta = estimateTheta(
-            collectIrtItems(models, stats.solved, stats.attemptedNoAc),
-          );
+          const rating = await getRating(m.id).catch(() => null);
           if (!cancel) {
-            update(m.id, {
-              status: "done",
-              stats,
-              thetaClip: theta === null ? null : clipDifficulty(theta),
-            });
+            update(m.id, { status: "done", stats, rating });
           }
         } catch {
           if (!cancel) update(m.id, { status: "error" });
@@ -84,7 +77,7 @@ export function ClubPage() {
               <th className="num">今週AC</th>
               <th className="num">累計AC</th>
               <th className="num">ストリーク</th>
-              <th className="num">推定内部レート</th>
+              <th className="num">レート</th>
             </tr>
           </thead>
           <tbody>
@@ -123,16 +116,15 @@ export function ClubPage() {
                   {r.stats ? `${r.stats.currentStreak}日` : ""}
                 </td>
                 <td className="num">
-                  {r.thetaClip != null && (
+                  {r.rating != null && (
                     <>
                       <span
                         className="tier-dot"
                         style={{
-                          background:
-                            TIER_COLORS[resolved][tierIndex(r.thetaClip)],
+                          background: TIER_COLORS[resolved][tierIndex(r.rating)],
                         }}
                       />
-                      {r.thetaClip}
+                      {r.rating > 0 ? r.rating : "未レート"}
                     </>
                   )}
                 </td>

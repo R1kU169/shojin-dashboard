@@ -721,6 +721,24 @@ a:hover {
   background: color-mix(in srgb, var(--accent) 12%, transparent);
   cursor: default;
 }
+.mypage-links {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.linklike {
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: var(--muted);
+  cursor: pointer;
+  text-decoration: underline;
+}
+.linklike:hover {
+  color: var(--accent);
+}
 .theta-chip {
   display: inline-flex;
   align-items: center;

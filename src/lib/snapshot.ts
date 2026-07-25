@@ -21,6 +21,10 @@ export const snapshotProblems = () => snapJson<Problem[]>("problems.json");
 
 export const snapshotModels = () => snapJson<ProblemModels>("problem-models.json");
 
+/** 部員の公式レーティング: { id(小文字): rating }。ホームのアバター色に使う。 */
+export const snapshotRatings = () =>
+  snapJson<Record<string, number>>("ratings.json");
+
 export interface SubsSnapshot {
   at: number;
   watermark: number;

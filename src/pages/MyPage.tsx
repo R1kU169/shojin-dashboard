@@ -1,19 +1,23 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
-import { Navigate, useNavigate } from "react-router-dom";
+import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { isValidAtcoderId } from "../lib/api";
-import { getMyId, setMyId } from "../lib/me";
+import { clearMyId, getMyId, setMyId } from "../lib/me";
 
 export function MyPage() {
-  // 前回見たIDがあれば初期値に(自分のページを見た直後の登録がラク)
-  const [input, setInput] = useState(
-    () => localStorage.getItem("shojin:lastUser") ?? "",
+  const nav = useNavigate();
+  const [params] = useSearchParams();
+  const changing = params.get("change") === "1";
+  const myId = getMyId();
+  // 変更時は空から入力、初回設定時は前回見たIDを初期値に
+  const [input, setInput] = useState(() =>
+    myId ? "" : (localStorage.getItem("shojin:lastUser") ?? ""),
   );
   const [err, setErr] = useState("");
-  const nav = useNavigate();
 
-  const myId = getMyId();
-  if (myId) return <Navigate to={`/u/${myId}`} replace />;
+  // 設定済みなら通常は自分のページへ即移動(ショートカット)。
+  // 「変更」から来たとき(change=1)だけフォームを出して別IDに切り替えられるようにする。
+  if (myId && !changing) return <Navigate to={`/u/${myId}`} replace />;
 
   const save = (e: FormEvent) => {
     e.preventDefault();
@@ -30,9 +34,13 @@ export function MyPage() {
     <div className="page">
       <section className="card mypage-setup">
         <div className="card-head">
-          <h2 className="card-title">マイページを設定</h2>
+          <h2 className="card-title">
+            {myId ? "マイページを変更" : "マイページを設定"}
+          </h2>
           <span className="card-sub">
-            自分のAtCoder IDを登録すると、次回からこのタブで自分の精進がすぐ見られます(このブラウザにのみ保存)
+            {myId
+              ? `現在は @${myId}。別のAtCoder IDを登録すると切り替わります(このブラウザにのみ保存)`
+              : "自分のAtCoder IDを登録すると、次回からこのタブで自分の精進がすぐ見られます(このブラウザにのみ保存)"}
           </span>
         </div>
         <form onSubmit={save} className="id-form">
@@ -48,14 +56,31 @@ export function MyPage() {
               aria-label="自分のAtCoder ID"
             />
             <button type="submit">
-              登録 <span className="arr">→</span>
+              {myId ? "変更" : "登録"} <span className="arr">→</span>
             </button>
           </div>
         </form>
         {err && <p className="error-text">{err}</p>}
-        <p className="muted">
-          あとから変更したいときは、そのユーザーページの「☆ マイページにする」から設定し直せます。
-        </p>
+        {myId ? (
+          <p className="muted mypage-links">
+            <Link to={`/u/${myId}`}>@{myId} のページを見る →</Link>
+            <button
+              type="button"
+              className="linklike"
+              onClick={() => {
+                clearMyId();
+                nav("/me");
+              }}
+            >
+              マイページ設定を解除する
+            </button>
+          </p>
+        ) : (
+          <p className="muted">
+            あとから変更したいときは、そのユーザーページの「☆
+            マイページにする」からでも設定し直せます。
+          </p>
+        )}
       </section>
     </div>
   );
