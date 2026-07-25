@@ -201,16 +201,21 @@ export function EditorPage() {
     selFrom: number,
     selTo: number,
   ) => {
+    // execCommandは「フォーカス中の編集可能要素」に効く。インデントのセレクト
+    // 操作直後などフォーカスが外れたままだと選択置換にならず重複挿入されるため、
+    // 必ず先にtextareaへフォーカスして選択を張る
+    el.focus();
     el.setSelectionRange(from, to);
+    const expected = el.value.slice(0, from) + text + el.value.slice(to);
     const ok =
       text === ""
         ? document.execCommand("delete")
         : document.execCommand("insertText", false, text);
-    if (ok) {
+    if (ok && el.value === expected) {
       el.setSelectionRange(selFrom, selTo);
     } else {
-      const v = el.value;
-      setCode(v.slice(0, from) + text + v.slice(to));
+      // 失敗や環境差での不整合は、期待する内容へsetStateで強制的に揃える
+      setCode(expected);
       requestAnimationFrame(() => el.setSelectionRange(selFrom, selTo));
     }
   };
