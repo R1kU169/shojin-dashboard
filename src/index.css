@@ -592,13 +592,18 @@ a:hover {
   transform: scale(0.97);
 }
 
+.abc-banners {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0 0 20px;
+}
 .abc-banner {
   display: flex;
   align-items: center;
   gap: 12px;
   flex-wrap: wrap;
   padding: 12px 18px;
-  margin: 0 0 20px;
   border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
   border-radius: 14px;
   background: color-mix(in srgb, var(--accent) 8%, var(--surface));

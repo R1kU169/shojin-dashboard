@@ -155,8 +155,8 @@ async function main() {
   );
   console.log(`[snapshot] ratings: ${Object.keys(ratings).length}人ぶん`);
 
-  // 予定されているABCを atcoder.jp/contests/ の Upcoming テーブルから取得して書き出す。
-  // ホームの「次のABC」リンクに使う(番号は日付から計算できないので実データを見る)。
+  // 予定されているABC/ARC/AGCを atcoder.jp/contests/ の Upcoming テーブルから取得。
+  // ホームの「次のABC/ARC/AGC」リンクに使う(番号は日付から計算できないので実データを見る)。
   try {
     const res = await fetch("https://atcoder.jp/contests/", {
       headers: { "User-Agent": UA },
@@ -171,7 +171,7 @@ async function main() {
       const tm = row.match(
         /fixtime-full[\x27">]+(\d{4}-\d{2}-\d{2} [\d:+]+)</,
       );
-      const lm = row.match(/\/contests\/(abc\d+)"[^>]*>([^<]+)</);
+      const lm = row.match(/\/contests\/((?:abc|arc|agc)\d+)"[^>]*>([^<]+)</);
       if (!tm || !lm) continue;
       const iso = tm[1].replace(" ", "T").replace(/([+-]\d{2})(\d{2})$/, "$1:$2");
       upcoming.push({
@@ -181,13 +181,10 @@ async function main() {
       });
     }
     upcoming.sort((a, b) => a.start - b.start);
-    await writeFile(
-      path.join(OUT, "upcoming-abc.json"),
-      JSON.stringify(upcoming),
-    );
-    console.log(`[snapshot] upcoming ABC: ${upcoming.length}件`);
+    await writeFile(path.join(OUT, "upcoming.json"), JSON.stringify(upcoming));
+    console.log(`[snapshot] upcoming ABC/ARC/AGC: ${upcoming.length}件`);
   } catch (e) {
-    console.warn(`[snapshot] 予定ABCの取得失敗、スキップ (${e})`);
+    console.warn(`[snapshot] 予定コンテストの取得失敗、スキップ (${e})`);
   }
 
   await writeFile(path.join(OUT, "index.json"), JSON.stringify(index));

@@ -35,9 +35,9 @@ export const snapshotRatings = () =>
 export const snapshotRatingHistories = () =>
   snapJson<Record<string, RatePoint[]>>("rating-history.json");
 
-/** 予定されているABC(開始昇順)。ホームの「次のABC」リンクに使う。 */
-export const snapshotUpcomingAbc = () =>
-  snapJson<UpcomingContest[]>("upcoming-abc.json");
+/** 予定されているABC/ARC/AGC(開始昇順)。ホームの「次のコンテスト」リンクに使う。 */
+export const snapshotUpcoming = () =>
+  snapJson<UpcomingContest[]>("upcoming.json");
 
 export interface SubsSnapshot {
   at: number;
