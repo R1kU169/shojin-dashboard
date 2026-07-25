@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { MEMBERS } from "../data/members";
 import { getProblemModels, getRating, loadSubmissions } from "../lib/cache";
 import { TIER_COLORS, tierIndex } from "../lib/colors";
-import { computeStats } from "../lib/stats";
+import { computeStats, todayEpochDay } from "../lib/stats";
 import type { UserStats } from "../lib/stats";
 import type { Member } from "../lib/types";
 import { useTheme } from "../theme";
@@ -16,13 +16,34 @@ interface Row {
   rating?: number | null;
 }
 
+type Period = "week" | "month" | "all";
+type SortKey = "ac" | "streak" | "rating";
+
 const RANK_BADGES = ["🥇", "🥈", "🥉"];
+const PERIODS: { key: Period; label: string; days: number }[] = [
+  { key: "week", label: "今週", days: 7 },
+  { key: "month", label: "今月", days: 30 },
+  { key: "all", label: "全期間", days: 0 },
+];
+
+// 期間内の新規AC数(週=7日/月=30日/全期間=累計)。dailyNewAc から集計する。
+function periodAc(stats: UserStats, period: Period): number {
+  if (period === "all") return stats.totalAc;
+  const days = period === "week" ? 7 : 30;
+  const from = todayEpochDay() - (days - 1);
+  let sum = 0;
+  for (const [day, n] of stats.dailyNewAc) if (day >= from) sum += n;
+  return sum;
+}
 
 export function ClubPage() {
   const { resolved } = useTheme();
   const [rows, setRows] = useState<Row[]>(
     MEMBERS.map((m) => ({ member: m, status: "pending", progress: 0 })),
   );
+  const [period, setPeriod] = useState<Period>("week");
+  const [sortKey, setSortKey] = useState<SortKey>("ac");
+  const [sortDir, setSortDir] = useState<"desc" | "asc">("desc");
 
   useEffect(() => {
     let cancel = false;
@@ -56,79 +77,141 @@ export function ClubPage() {
     };
   }, []);
 
+  const acLabel =
+    period === "week" ? "今週AC" : period === "month" ? "今月AC" : "累計AC";
+
+  const metric = (r: Row): number => {
+    if (!r.stats) return -1;
+    if (sortKey === "ac") return periodAc(r.stats, period);
+    if (sortKey === "streak") return r.stats.currentStreak;
+    return r.rating ?? -1; // rating(未取得はnull)は最下位へ
+  };
+
   const done = rows
     .filter((r) => r.status === "done")
-    .sort((a, b) => (b.stats?.weeklyAc ?? 0) - (a.stats?.weeklyAc ?? 0));
+    .sort((a, b) => {
+      const d = metric(b) - metric(a);
+      return sortDir === "desc" ? d : -d;
+    });
   const rest = rows.filter((r) => r.status !== "done");
   const ordered = [...done, ...rest];
 
+  const sortBy = (key: SortKey) => {
+    if (key === sortKey) {
+      setSortDir((d) => (d === "desc" ? "asc" : "desc"));
+    } else {
+      setSortKey(key);
+      setSortDir("desc");
+    }
+  };
+
+  const ind = (key: SortKey) =>
+    sortKey === key ? (
+      <span className="sort-ind">{sortDir === "desc" ? "▼" : "▲"}</span>
+    ) : null;
+
   return (
     <div className="page">
-      <h1>クラブランキング</h1>
-      <p className="muted">
-        今週(直近7日)の新規AC数順。名前をタップすると個人ページへ。
-      </p>
+      <h1>クラブ内ランキング</h1>
+      <p className="muted">名前をタップで個人ページへ。列見出しで並び替え。</p>
+
+      <div className="rank-toolbar">
+        <span className="muted rank-toolbar-label">期間</span>
+        <div className="seg">
+          {PERIODS.map((p) => (
+            <button
+              key={p.key}
+              type="button"
+              className={period === p.key ? "on" : undefined}
+              onClick={() => {
+                setPeriod(p.key);
+                setSortKey("ac");
+                setSortDir("desc");
+              }}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <section className="card">
         <table className="data-table">
           <thead>
             <tr>
               <th className="num">#</th>
               <th>部員</th>
-              <th className="num">今週AC</th>
-              <th className="num">累計AC</th>
-              <th className="num">ストリーク</th>
-              <th className="num">レート</th>
+              <th className="num sortable" onClick={() => sortBy("ac")}>
+                {acLabel}
+                {ind("ac")}
+              </th>
+              <th className="num sortable" onClick={() => sortBy("streak")}>
+                ストリーク
+                {ind("streak")}
+              </th>
+              <th className="num sortable" onClick={() => sortBy("rating")}>
+                レート
+                {ind("rating")}
+              </th>
             </tr>
           </thead>
           <tbody>
             {ordered.map((r, i) => {
-              const isMvp =
-                r.status === "done" && i === 0 && (r.stats?.weeklyAc ?? 0) > 0;
+              const isTop =
+                r.status === "done" &&
+                i === 0 &&
+                sortKey === "ac" &&
+                period !== "all" &&
+                metric(r) > 0;
               return (
-              <tr
-                key={r.member.id}
-                className={isMvp ? "first-place" : undefined}
-              >
-                <td className="num rank-cell">
-                  {r.status === "done" ? (RANK_BADGES[i] ?? i + 1) : "—"}
-                </td>
-                <td>
-                  <Link to={`/u/${r.member.id}`}>{r.member.name}</Link>
-                  {isMvp && <span className="best-chip">👑 今週のMVP</span>}
-                  {r.status === "loading" && (
-                    <span className="muted">
-                      {" "}
-                      取得中…
-                      {r.progress > 0
-                        ? `${r.progress.toLocaleString()}件`
-                        : ""}
-                    </span>
-                  )}
-                  {r.status === "error" && (
-                    <span className="error-text"> 取得失敗</span>
-                  )}
-                </td>
-                <td className="num">{r.stats?.weeklyAc ?? ""}</td>
-                <td className="num">
-                  {r.stats ? r.stats.totalAc.toLocaleString() : ""}
-                </td>
-                <td className="num">
-                  {r.stats ? `${r.stats.currentStreak}日` : ""}
-                </td>
-                <td className="num">
-                  {r.rating != null && (
-                    <>
-                      <span
-                        className="tier-dot"
-                        style={{
-                          background: TIER_COLORS[resolved][tierIndex(r.rating)],
-                        }}
-                      />
-                      {r.rating > 0 ? r.rating : "未レート"}
-                    </>
-                  )}
-                </td>
-              </tr>
+                <tr
+                  key={r.member.id}
+                  className={isTop ? "first-place" : undefined}
+                >
+                  <td className="num rank-cell">
+                    {r.status === "done" ? (RANK_BADGES[i] ?? i + 1) : "—"}
+                  </td>
+                  <td>
+                    <Link to={`/u/${r.member.id}`}>{r.member.name}</Link>
+                    {isTop && (
+                      <span className="best-chip">
+                        👑 {period === "month" ? "今月" : "今週"}のMVP
+                      </span>
+                    )}
+                    {r.status === "loading" && (
+                      <span className="muted">
+                        {" "}
+                        取得中…
+                        {r.progress > 0
+                          ? `${r.progress.toLocaleString()}件`
+                          : ""}
+                      </span>
+                    )}
+                    {r.status === "error" && (
+                      <span className="error-text"> 取得失敗</span>
+                    )}
+                  </td>
+                  <td className="num">
+                    {r.stats ? periodAc(r.stats, period).toLocaleString() : ""}
+                  </td>
+                  <td className="num">
+                    {r.stats ? `${r.stats.currentStreak}日` : ""}
+                  </td>
+                  <td className="num">
+                    {r.rating != null && (
+                      <>
+                        <span
+                          className="tier-dot"
+                          style={{
+                            background:
+                              TIER_COLORS[resolved][tierIndex(r.rating)],
+                          }}
+                        />
+                        {r.rating > 0 ? r.rating : "未レート"}
+                      </>
+                    )}
+                  </td>
+                </tr>
               );
             })}
           </tbody>
