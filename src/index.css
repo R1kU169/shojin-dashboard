@@ -847,6 +847,32 @@ button.member-card {
 .editor-card {
   padding: 0;
   overflow: hidden;
+  position: relative;
+}
+/* コードエリア右上に浮かせる「テンプレートに戻す」 */
+.tpl-reset {
+  position: absolute;
+  top: 8px;
+  right: 12px;
+  z-index: 1;
+  font: inherit;
+  font-size: 11px;
+  color: var(--muted);
+  background: color-mix(in srgb, var(--surface) 85%, transparent);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 3px 10px;
+  cursor: pointer;
+  opacity: 0.8;
+  transition:
+    opacity 0.15s,
+    color 0.15s,
+    border-color 0.15s;
+}
+.tpl-reset:hover {
+  opacity: 1;
+  color: var(--accent);
+  border-color: var(--accent);
 }
 .editor-wrap {
   display: flex;

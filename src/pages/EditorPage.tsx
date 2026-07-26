@@ -138,6 +138,21 @@ export function EditorPage() {
     localStorage.setItem(LANG_KEY, key);
   };
 
+  // コードを現在の言語のテンプレートに戻す(確認つき・undoで復帰可能)
+  const resetTemplate = () => {
+    const tpl = reindent(lang.template, TEMPLATE_WIDTH, indentWidth);
+    if (code === tpl) return;
+    if (
+      code.trim() !== "" &&
+      !confirm("現在のコードを消してテンプレートに戻します。よろしいですか?")
+    ) {
+      return;
+    }
+    const el = codeRef.current;
+    if (el) edit(el, 0, el.value.length, tpl, tpl.length, tpl.length);
+    else setCode(tpl);
+  };
+
   // インデント幅変更: 既存コードの先頭インデントも新しい幅に変換する
   const changeIndent = (n: number) => {
     const newCode = reindent(code, indentWidth, n);
@@ -401,6 +416,14 @@ export function EditorPage() {
       </div>
 
       <section className="card editor-card">
+        <button
+          type="button"
+          className="tpl-reset"
+          onClick={resetTemplate}
+          title="コードをこの言語のテンプレートに戻す"
+        >
+          ↺ テンプレートに戻す
+        </button>
         <div className="editor-wrap">
           <div className="editor-lines" ref={linesRef} aria-hidden="true">
             {Array.from({ length: lineCount }, (_, i) => (
