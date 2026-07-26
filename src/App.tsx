@@ -11,10 +11,10 @@ function ThemeToggle() {
   const icon = pref === "auto" ? "🌗" : pref === "light" ? "☀️" : "🌙";
   const label =
     pref === "auto"
-      ? "テーマ: 自動 (クリックでライト)"
+      ? "テーマ: 自動 — OSのダークモード設定に追従 (クリックでライト固定)"
       : pref === "light"
-        ? "テーマ: ライト (クリックでダーク)"
-        : "テーマ: ダーク (クリックで自動)";
+        ? "テーマ: ライト固定 (クリックでダーク固定)"
+        : "テーマ: ダーク固定 (クリックで自動に戻す)";
   return (
     <button
       type="button"
