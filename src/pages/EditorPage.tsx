@@ -390,8 +390,8 @@ export function EditorPage() {
                 setProblemInput(e.target.value);
                 setProblemErr("");
               }}
-              placeholder="AtCoderの問題URLを貼って連携"
-              title="連携すると問題ページと提出ページへのリンクが出ます"
+              placeholder="問題URLを貼って連携"
+              title="AtCoderの問題URLを貼って連携すると、問題ページと提出ページへのリンクが出ます"
               aria-label="AtCoder問題URL"
             />
             <button type="submit">連携</button>

@@ -813,8 +813,9 @@ button.member-card {
   gap: 8px;
 }
 .ep-form input {
-  /* placeholder(全角17文字)が途切れず、ツールバー1行に収まる幅 */
-  width: 262px;
+  /* placeholder(全角10文字=約10em)に対して余裕を持った幅。
+     フォント環境で描画幅が変わってもギリギリにならないようにする */
+  width: 230px;
   max-width: 72vw;
   font: inherit;
   font-size: 13px;
