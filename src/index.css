@@ -1286,6 +1286,19 @@ button.member-card {
 .tier-dist-bar span {
   display: block;
 }
+/* 使用言語の積み上げバー(セグメント間は2pxの地の隙間) */
+.lang-bar {
+  display: flex;
+  gap: 2px;
+  height: 12px;
+  border-radius: 999px;
+  overflow: hidden;
+  margin-top: 6px;
+}
+.lang-bar span {
+  display: block;
+  min-width: 3px;
+}
 .tier-dist-legend {
   display: flex;
   flex-wrap: wrap;

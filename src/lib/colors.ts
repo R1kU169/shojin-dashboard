@@ -28,6 +28,16 @@ export const TIER_COLORS: Record<Mode, string[]> = {
   ],
 };
 
+/**
+ * カテゴリカル系列色(dataviz reference palette スロット1..6)。
+ * 隣接ペアで両モードとも検証済み(validate_palette.js: CVD/明度/彩度/コントラスト)。
+ * lightはaqua/yellow/magentaが3:1未満のため、色だけに頼らず凡例ラベルを常設すること。
+ */
+export const CATEGORICAL: Record<Mode, string[]> = {
+  light: ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300"],
+  dark: ["#3987e5", "#d95926", "#199e70", "#c98500", "#d55181", "#008300"],
+};
+
 /** チャート用の非データ色(dataviz reference palette のクロームトークン) */
 export const CHART_CHROME: Record<
   Mode,

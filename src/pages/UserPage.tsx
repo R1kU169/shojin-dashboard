@@ -3,15 +3,23 @@ import type { CSSProperties } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { AnimatedNumber } from "../components/AnimatedNumber";
 import { DifficultyBars } from "../components/DifficultyBars";
+import { GrowthChart } from "../components/GrowthChart";
 import { Heatmap } from "../components/Heatmap";
+import { LangBreakdown } from "../components/LangBreakdown";
 import { PaceChart } from "../components/PaceChart";
 import { RatingChart } from "../components/RatingChart";
 import { RecentList } from "../components/RecentList";
 import { RecommendList } from "../components/RecommendList";
+import { ReviewList } from "../components/ReviewList";
 import { StatCard } from "../components/StatCard";
 import { useUserData } from "../hooks/useUserData";
 import { getRating, getRatingHistory } from "../lib/cache";
-import { TIER_COLORS, TIER_LABELS, tierIndex } from "../lib/colors";
+import {
+  TIER_COLORS,
+  TIER_LABELS,
+  clipDifficulty,
+  tierIndex,
+} from "../lib/colors";
 import { collectIrtItems, estimateTheta, recommend } from "../lib/irt";
 import { getMyId, setMyId } from "../lib/me";
 import { computeStats, todayEpochDay } from "../lib/stats";
@@ -79,6 +87,85 @@ export function UserPage() {
         : [],
     [stats, theta, data.problems, data.models],
   );
+  // 復習リスト: 挑戦した(提出がある)が一度もACしていない問題。最終挑戦の新しい順
+  const reviewList = useMemo(() => {
+    if (!data.subs) return [];
+    const acSet = new Set<string>();
+    for (const s of data.subs) if (s.result === "AC") acSet.add(s.problem_id);
+    const tried = new Map<
+      string,
+      { contestId: string; last: number; count: number }
+    >();
+    for (const s of data.subs) {
+      if (s.result === "AC" || acSet.has(s.problem_id)) continue;
+      const e = tried.get(s.problem_id);
+      if (e) {
+        e.count++;
+        e.last = Math.max(e.last, s.epoch_second);
+      } else {
+        tried.set(s.problem_id, {
+          contestId: s.contest_id,
+          last: s.epoch_second,
+          count: 1,
+        });
+      }
+    }
+    const pmap = new Map((data.problems ?? []).map((p) => [p.id, p]));
+    return [...tried.entries()]
+      .sort((a, b) => b[1].last - a[1].last)
+      .slice(0, 20)
+      .map(([id, t]) => ({
+        id,
+        title: pmap.get(id)?.title ?? id,
+        contestId: t.contestId,
+        url: `https://atcoder.jp/contests/${t.contestId}/tasks/${id}`,
+        difficulty: data.models?.[id]?.difficulty,
+        second: t.last,
+        count: t.count,
+      }));
+  }, [data.subs, data.problems, data.models]);
+
+  // 成長グラフ: 初ACの 日付×難易度(難易度推定のある問題のみ)
+  const growth = useMemo(() => {
+    if (!data.subs || !data.models) return [];
+    const pmap = new Map((data.problems ?? []).map((p) => [p.id, p]));
+    const seen = new Set<string>();
+    const pts = [];
+    for (const s of data.subs) {
+      if (s.result !== "AC" || seen.has(s.problem_id)) continue;
+      seen.add(s.problem_id);
+      const d = data.models[s.problem_id]?.difficulty;
+      if (d === undefined) continue;
+      pts.push({
+        t: s.epoch_second,
+        d: clipDifficulty(d),
+        title: pmap.get(s.problem_id)?.title ?? s.problem_id,
+      });
+    }
+    return pts;
+  }, [data.subs, data.problems, data.models]);
+
+  // 使用言語の内訳(上位5言語+その他)。
+  // "C++ 20 (gcc 12.2)" → "C++"、"Python (CPython 3.11)" → "Python" に正規化
+  const langStats = useMemo(() => {
+    if (!data.subs || data.subs.length === 0) return [];
+    const counts = new Map<string, number>();
+    for (const s of data.subs) {
+      const base =
+        s.language
+          .replace(/\s*\(.*$/, "")
+          .replace(/\s*\d+$/, "")
+          .trim() || s.language;
+      counts.set(base, (counts.get(base) ?? 0) + 1);
+    }
+    const sorted = [...counts.entries()].sort((a, b) => b[1] - a[1]);
+    const top = sorted.slice(0, 5);
+    const rest = sorted.slice(5).reduce((sum, [, n]) => sum + n, 0);
+    if (rest > 0) top.push(["その他", rest]);
+    const total = data.subs.length;
+    return top.map(([name, n]) => ({ name, n, pct: n / total }));
+  }, [data.subs]);
+
   // 初めてACした日の新しい順(最大20問)。subsはepoch昇順なので初出=初AC。
   const recentSolved = useMemo(() => {
     if (!data.subs) return [];
@@ -286,6 +373,27 @@ export function UserPage() {
         </section>
       </div>
 
+      <div className="two-col">
+        <section className="card">
+          <div className="card-head">
+            <h2 className="card-title">成長グラフ</h2>
+            <span className="card-sub">初ACの日付×難易度</span>
+          </div>
+          {growth.length > 0 ? (
+            <GrowthChart points={growth} />
+          ) : (
+            <p className="muted">難易度推定のあるAC問題がまだありません。</p>
+          )}
+        </section>
+        <section className="card">
+          <div className="card-head">
+            <h2 className="card-title">使用言語</h2>
+            <span className="card-sub">提出の内訳</span>
+          </div>
+          <LangBreakdown stats={langStats} />
+        </section>
+      </div>
+
       <section className="card">
         <div className="card-head">
           <h2 className="card-title">次に解く問題</h2>
@@ -298,6 +406,16 @@ export function UserPage() {
         ) : (
           <p className="muted">AC実績がまだないため推定できません。</p>
         )}
+      </section>
+
+      <section className="card">
+        <div className="card-head">
+          <h2 className="card-title">復習リスト</h2>
+          <span className="card-sub">
+            挑戦したが未ACの問題・最終挑戦の新しい順(最大20問)
+          </span>
+        </div>
+        <ReviewList items={reviewList} />
       </section>
 
       <section className="card">
