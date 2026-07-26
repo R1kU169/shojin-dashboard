@@ -897,20 +897,133 @@ button.member-card {
   overflow: hidden;
   user-select: none;
 }
-.editor-code {
+/* ハイライト層(pre)と入力層(textarea)を重ねる。両者のフォント/余白/改行の
+   メトリクスは完全に一致させること(ズレると文字が二重に見える) */
+.editor-pane {
+  position: relative;
   flex: 1;
+  overflow: hidden;
+}
+.editor-highlight,
+.editor-code {
+  position: absolute;
+  inset: 0;
+  margin: 0;
   padding: 14px;
   border: none;
-  outline: none;
-  resize: none;
-  background: transparent;
-  color: var(--ink);
   font-family: var(--font-mono);
   font-size: 13px;
   line-height: 1.55;
   white-space: pre;
-  overflow: auto;
+  word-break: normal;
+  overflow-wrap: normal;
   tab-size: 4;
+}
+.editor-highlight {
+  overflow: hidden;
+  pointer-events: none;
+  color: var(--ink);
+}
+.editor-highlight code {
+  font: inherit;
+}
+.editor-code {
+  outline: none;
+  resize: none;
+  background: transparent;
+  overflow: auto;
+  /* 文字はハイライト層に描かせ、textareaはキャレットと選択だけ見せる */
+  color: transparent;
+  caret-color: var(--ink);
+}
+.editor-code::selection {
+  background: color-mix(in srgb, var(--accent) 25%, transparent);
+  color: transparent;
+}
+
+/* トークン配色(ライト: One Light系 / ダーク: One Dark系)。
+   等幅メトリクスを崩さないよう色のみ(bold/italicは使わない) */
+.token.comment,
+.token.prolog,
+.token.cdata {
+  color: #8c8c85;
+}
+.token.string,
+.token.char,
+.token.attr-value,
+.token.regex {
+  color: #468b41;
+}
+.token.keyword,
+.token.atrule,
+.token.important {
+  color: #a626a4;
+}
+.token.number,
+.token.boolean,
+.token.constant,
+.token.symbol {
+  color: #b25c00;
+}
+.token.function,
+.token.function-name {
+  color: #3667d6;
+}
+.token.class-name,
+.token.builtin,
+.token.namespace {
+  color: #a3690a;
+}
+.token.macro,
+.token.directive,
+.token.directive-hash,
+.token.property,
+.token.tag,
+.token.variable {
+  color: #ba4141;
+}
+.token.operator,
+.token.punctuation {
+  color: var(--ink-2);
+}
+:root[data-theme="dark"] .token.comment,
+:root[data-theme="dark"] .token.prolog,
+:root[data-theme="dark"] .token.cdata {
+  color: #7f848e;
+}
+:root[data-theme="dark"] .token.string,
+:root[data-theme="dark"] .token.char,
+:root[data-theme="dark"] .token.attr-value,
+:root[data-theme="dark"] .token.regex {
+  color: #98c379;
+}
+:root[data-theme="dark"] .token.keyword,
+:root[data-theme="dark"] .token.atrule,
+:root[data-theme="dark"] .token.important {
+  color: #c678dd;
+}
+:root[data-theme="dark"] .token.number,
+:root[data-theme="dark"] .token.boolean,
+:root[data-theme="dark"] .token.constant,
+:root[data-theme="dark"] .token.symbol {
+  color: #d19a66;
+}
+:root[data-theme="dark"] .token.function,
+:root[data-theme="dark"] .token.function-name {
+  color: #61afef;
+}
+:root[data-theme="dark"] .token.class-name,
+:root[data-theme="dark"] .token.builtin,
+:root[data-theme="dark"] .token.namespace {
+  color: #e5c07b;
+}
+:root[data-theme="dark"] .token.macro,
+:root[data-theme="dark"] .token.directive,
+:root[data-theme="dark"] .token.directive-hash,
+:root[data-theme="dark"] .token.property,
+:root[data-theme="dark"] .token.tag,
+:root[data-theme="dark"] .token.variable {
+  color: #e06c75;
 }
 .editor-io .io-area {
   width: 100%;

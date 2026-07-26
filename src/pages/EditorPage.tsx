@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent, FormEvent, KeyboardEvent, UIEvent } from "react";
 import { useSearchParams } from "react-router-dom";
+import { highlightCode } from "../lib/highlight";
 import { EDITOR_LANGS, runCode } from "../lib/wandbox";
 import type { RunResult } from "../lib/wandbox";
 
@@ -95,6 +96,14 @@ export function EditorPage() {
   const abortRef = useRef<AbortController | null>(null);
   const linesRef = useRef<HTMLDivElement>(null);
   const codeRef = useRef<HTMLTextAreaElement>(null);
+  const hlRef = useRef<HTMLPreElement>(null);
+
+  // シンタックスハイライト(textareaの背後に重ねる)。末尾に改行を足して
+  // 最終行の高さがtextareaとずれないようにする
+  const highlighted = useMemo(
+    () => highlightCode(code, langKey) + "\n",
+    [code, langKey],
+  );
 
   // 「次に解く問題」等からの遷移(?contest=&task=&title=)で問題を連携する
   useEffect(() => {
@@ -322,8 +331,12 @@ export function EditorPage() {
   };
 
   const onScroll = (e: UIEvent<HTMLTextAreaElement>) => {
-    if (linesRef.current)
-      linesRef.current.scrollTop = e.currentTarget.scrollTop;
+    const { scrollTop, scrollLeft } = e.currentTarget;
+    if (linesRef.current) linesRef.current.scrollTop = scrollTop;
+    if (hlRef.current) {
+      hlRef.current.scrollTop = scrollTop;
+      hlRef.current.scrollLeft = scrollLeft;
+    }
   };
 
   const lineCount = code.split("\n").length;
@@ -430,19 +443,29 @@ export function EditorPage() {
               <div key={i}>{i + 1}</div>
             ))}
           </div>
-          <textarea
-            ref={codeRef}
-            className="editor-code"
-            style={{ tabSize: indentWidth }}
-            value={code}
-            onChange={(e) => setCode(e.target.value)}
-            onKeyDown={onKeyDown}
-            onScroll={onScroll}
-            spellCheck={false}
-            autoCapitalize="off"
-            autoCorrect="off"
-            aria-label="コード"
-          />
+          <div className="editor-pane">
+            <pre
+              className="editor-highlight"
+              ref={hlRef}
+              aria-hidden="true"
+              style={{ tabSize: indentWidth }}
+            >
+              <code dangerouslySetInnerHTML={{ __html: highlighted }} />
+            </pre>
+            <textarea
+              ref={codeRef}
+              className="editor-code"
+              style={{ tabSize: indentWidth }}
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+              onKeyDown={onKeyDown}
+              onScroll={onScroll}
+              spellCheck={false}
+              autoCapitalize="off"
+              autoCorrect="off"
+              aria-label="コード"
+            />
+          </div>
         </div>
       </section>
 
