@@ -76,11 +76,13 @@ export function EditorPage() {
     return INDENT_WIDTHS.includes(n) ? n : 2;
   });
   const INDENT = " ".repeat(indentWidth);
-  const [code, setCode] = useState(
-    () =>
-      localStorage.getItem(CODE_KEY(langKey)) ??
-      reindent(lang.template, TEMPLATE_WIDTH, indentWidth),
-  );
+  // 保存済みコードを読む。全削除(空白のみ)された保存分はテンプレートに戻す
+  const loadCode = (key: string, template: string): string => {
+    const saved = localStorage.getItem(CODE_KEY(key));
+    if (saved != null && saved.trim() !== "") return saved;
+    return reindent(template, TEMPLATE_WIDTH, indentWidth);
+  };
+  const [code, setCode] = useState(() => loadCode(langKey, lang.template));
   const [stdin, setStdin] = useState(
     () => localStorage.getItem(STDIN_KEY) ?? "",
   );
@@ -127,15 +129,12 @@ export function EditorPage() {
     localStorage.removeItem(PROBLEM_KEY);
   };
 
-  // 言語切替: 現在のコードを保存し、切替先の保存分(無ければテンプレ)を読む
+  // 言語切替: 現在のコードを保存し、切替先の保存分(無ければ/空ならテンプレ)を読む
   const switchLang = (key: string) => {
     localStorage.setItem(CODE_KEY(langKey), code);
     const next = EDITOR_LANGS.find((l) => l.key === key) ?? EDITOR_LANGS[0];
     setLangKey(key);
-    setCode(
-      localStorage.getItem(CODE_KEY(key)) ??
-        reindent(next.template, TEMPLATE_WIDTH, indentWidth),
-    );
+    setCode(loadCode(key, next.template));
     localStorage.setItem(LANG_KEY, key);
   };
 
