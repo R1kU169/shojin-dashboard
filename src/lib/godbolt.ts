@@ -93,9 +93,16 @@ export async function runCodeGodbolt(
 
   const build = j.buildResult ?? {};
   const compilerError = joinLines(build.stderr) + joinLines(build.stdout);
-  // 実行まで到達しなかった場合(コンパイルエラー)は、Wandboxに合わせて
-  // ビルドの終了コードを status にする(CEはこの時 code=-1 を返すため)
-  const status = j.didExecute === false ? (build.code ?? 1) : (j.code ?? 0);
+  // コンパイルに失敗していれば、Wandboxに合わせてビルドの終了コードを status にする。
+  // didExecute は返ってこないことがあるので、それだけに頼らず buildResult.code を見る
+  // (CEは実行に至らなかったとき最上位の code に -1 を入れる)。
+  const buildCode = build.code ?? 0;
+  const status =
+    buildCode !== 0
+      ? buildCode
+      : j.didExecute === false
+        ? 1
+        : (j.code ?? 0);
   const stderr = joinLines(j.stderr);
   return {
     status: String(status),

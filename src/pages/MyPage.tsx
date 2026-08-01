@@ -5,7 +5,7 @@ import { MEMBERS } from "../data/members";
 import { useMemberTiers } from "../hooks/useMemberTiers";
 import { isValidAtcoderId } from "../lib/api";
 import { CHART_CHROME, TIER_COLORS } from "../lib/colors";
-import { clearMyId, getMyId, setMyId } from "../lib/me";
+import { clearMyId, getMyId, sameId, setMyId } from "../lib/me";
 import { useTheme } from "../theme";
 
 export function MyPage() {
@@ -100,7 +100,7 @@ export function MyPage() {
               tier != null
                 ? TIER_COLORS[resolved][tier]
                 : CHART_CHROME[resolved].muted;
-            const current = m.id === myId;
+            const current = sameId(m.id, myId);
             return (
               <button
                 type="button"

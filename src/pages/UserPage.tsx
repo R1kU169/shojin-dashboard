@@ -21,7 +21,7 @@ import {
   tierIndex,
 } from "../lib/colors";
 import { collectIrtItems, estimateTheta, recommend } from "../lib/irt";
-import { getMyId, setMyId } from "../lib/me";
+import { getMyId, sameId, setMyId } from "../lib/me";
 import { computeStats, todayEpochDay } from "../lib/stats";
 import type { RatePoint } from "../lib/types";
 import { useTheme } from "../theme";
@@ -32,7 +32,7 @@ export function UserPage() {
   const { resolved } = useTheme();
   const data = useUserData(userId);
   const [myId, setMyIdState] = useState<string | null>(() => getMyId());
-  const isMine = myId === userId;
+  const isMine = sameId(myId, userId);
   // 公式レーティング(プロフィールのユーザー名の色)。アバター・色味・レート表示に使う。
   const [rating, setRating] = useState<number | null>(null);
   const [history, setHistory] = useState<RatePoint[]>([]);
@@ -146,16 +146,17 @@ export function UserPage() {
   }, [data.subs, data.problems, data.models]);
 
   // 使用言語の内訳(上位5言語+その他)。
-  // "C++ 20 (gcc 12.2)" → "C++"、"Python (CPython 3.11)" → "Python" に正規化
+  // "C++ 20 (gcc 12.2)" → "C++"、"Python (CPython 3.11)" → "Python" に正規化。
+  // 末尾の数字はC++だけ落とす(C++14/17/23は規格の違いなのでまとめる)。
+  // Python3/PyPy3 の数字は言語そのものの区別なので残す。
   const langStats = useMemo(() => {
     if (!data.subs || data.subs.length === 0) return [];
     const counts = new Map<string, number>();
     for (const s of data.subs) {
-      const base =
-        s.language
-          .replace(/\s*\(.*$/, "")
-          .replace(/\s*\d+$/, "")
-          .trim() || s.language;
+      const noParen = s.language.replace(/\s*\(.*$/, "").trim();
+      const base = /^C\+\+/.test(noParen)
+        ? "C++"
+        : noParen || s.language;
       counts.set(base, (counts.get(base) ?? 0) + 1);
     }
     const sorted = [...counts.entries()].sort((a, b) => b[1] - a[1]);
