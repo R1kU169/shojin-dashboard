@@ -2,8 +2,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent, FormEvent, KeyboardEvent, UIEvent } from "react";
 import { useSearchParams } from "react-router-dom";
 import { highlightCode } from "../lib/highlight";
-import { EDITOR_LANGS, runCode } from "../lib/wandbox";
-import type { RunResult } from "../lib/wandbox";
+import { EDITOR_LANGS } from "../lib/wandbox";
+import { runCode } from "../lib/run";
+import type { RunOutcome } from "../lib/run";
 
 const CODE_KEY = (lang: string) => `shojin:editor:code:${lang}`;
 const STDIN_KEY = "shojin:editor:stdin";
@@ -88,7 +89,7 @@ export function EditorPage() {
     () => localStorage.getItem(STDIN_KEY) ?? "",
   );
   const [running, setRunning] = useState(false);
-  const [result, setResult] = useState<RunResult | null>(null);
+  const [result, setResult] = useState<RunOutcome | null>(null);
   const [error, setError] = useState("");
   const [problem, setProblem] = useState<LinkedProblem | null>(loadProblem);
   const [problemInput, setProblemInput] = useState("");
@@ -202,7 +203,7 @@ export function EditorPage() {
     const ac = new AbortController();
     abortRef.current = ac;
     try {
-      const r = await runCode(lang.compiler, code, stdin, lang.options, ac.signal);
+      const r = await runCode(lang, code, stdin, ac.signal);
       setResult(r);
     } catch (e) {
       if ((e as Error).name === "AbortError") setError("中断しました");
@@ -498,6 +499,15 @@ export function EditorPage() {
           {error && <p className="error-text">{error}</p>}
           {result !== null && (
             <>
+              {result.backend === "godbolt" && (
+                <p className="fallback-note">
+                  ⚠ Wandboxが停止中のため{" "}
+                  <a href="https://godbolt.org" target="_blank" rel="noreferrer">
+                    Compiler Explorer
+                  </a>{" "}
+                  で実行しました({result.backendVersion})
+                </p>
+              )}
               <pre className="io-out">{result.stdout || "(出力なし)"}</pre>
               {result.compilerError && (
                 <>
@@ -523,8 +533,12 @@ export function EditorPage() {
         実行は{" "}
         <a href="https://wandbox.org" target="_blank" rel="noreferrer">
           Wandbox
-        </a>{" "}
-        上で行われます(コードは外部サービスに送信されます)。
+        </a>
+        (停止中は{" "}
+        <a href="https://godbolt.org" target="_blank" rel="noreferrer">
+          Compiler Explorer
+        </a>
+        )上で行われます(コードは外部サービスに送信されます)。
       </p>
     </div>
   );

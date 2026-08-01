@@ -1082,6 +1082,12 @@ button.member-card {
   color: #e34948;
   margin-top: 6px;
 }
+/* Wandbox障害でCompiler Explorerに切り替わった時の注意書き */
+.fallback-note {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
 .io-label {
   margin-top: 12px;
   margin-bottom: 4px;
