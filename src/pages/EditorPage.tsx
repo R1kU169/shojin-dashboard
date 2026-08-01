@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent, FormEvent, KeyboardEvent, UIEvent } from "react";
 import { useSearchParams } from "react-router-dom";
+import { getProblems } from "../lib/cache";
 import { highlightCode } from "../lib/highlight";
 import { EDITOR_LANGS } from "../lib/wandbox";
 import { runCode } from "../lib/run";
@@ -23,6 +24,10 @@ const PAIRS: Record<string, string> = {
 };
 const CLOSERS = new Set(Object.values(PAIRS));
 
+// 行末の「:」でブロックが始まる言語。C++/Javaの public: や case 1: で
+// 誤ってインデントしないよう、この言語でだけ「:」を見る。
+const COLON_BLOCK_LANGS = new Set(["python", "pypy", "nim"]);
+
 /** エディターに連携中のAtCoder問題 */
 interface LinkedProblem {
   contest: string;
@@ -30,14 +35,16 @@ interface LinkedProblem {
   title?: string;
 }
 
-// 問題URL(atcoder.jp/contests/x/tasks/y)か問題ID(abc467_b)をパースする
-function parseProblemInput(s: string): LinkedProblem | null {
+// 問題URL(atcoder.jp/contests/x/tasks/y)からコンテストIDと問題IDを取り出す
+function parseProblemUrl(s: string): LinkedProblem | null {
   const m = s.match(/atcoder\.jp\/contests\/([\w-]+)\/tasks\/([\w-]+)/);
-  if (m) return { contest: m[1], task: m[2] };
-  const t = s.trim().match(/^([a-z0-9-]+)_[a-z0-9]+$/i);
-  if (t) return { contest: t[1].toLowerCase(), task: s.trim() };
-  return null;
+  return m ? { contest: m[1], task: m[2] } : null;
 }
+
+// 問題IDらしき文字列(abc467_b / code_festival_2017_qualb_a など)。
+// コンテストIDは問題IDから機械的には決まらない(例: 問題 arc058_a はコンテスト
+// abc042 にもある)ので、ここでは形だけ判定し、実際の対応は問題一覧で引く。
+const PROBLEM_ID = /^[a-z0-9_]+_[a-z0-9]+$/i;
 
 function loadProblem(): LinkedProblem | null {
   try {
@@ -94,6 +101,8 @@ export function EditorPage() {
   const [problem, setProblem] = useState<LinkedProblem | null>(loadProblem);
   const [problemInput, setProblemInput] = useState("");
   const [problemErr, setProblemErr] = useState("");
+  // 問題IDから問題一覧を引いている最中(初回は1MBほど取得することがある)
+  const [linking, setLinking] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const linesRef = useRef<HTMLDivElement>(null);
   const codeRef = useRef<HTMLTextAreaElement>(null);
@@ -121,17 +130,41 @@ export function EditorPage() {
     setParams({}, { replace: true }); // URLを綺麗に保つ(再訪時はlocalStorageから復元)
   }, [params, setParams]);
 
-  const linkProblem = (e: FormEvent) => {
-    e.preventDefault();
-    const p = parseProblemInput(problemInput);
-    if (!p) {
-      setProblemErr("問題URL(atcoder.jp/contests/…/tasks/…)か問題ID(abc467_b)を入れてください");
-      return;
-    }
+  const applyProblem = (p: LinkedProblem) => {
     setProblem(p);
     setProblemInput("");
     setProblemErr("");
     localStorage.setItem(PROBLEM_KEY, JSON.stringify(p));
+  };
+
+  const linkProblem = async (e: FormEvent) => {
+    e.preventDefault();
+    const s = problemInput.trim();
+    const fromUrl = parseProblemUrl(s);
+    if (fromUrl) {
+      applyProblem(fromUrl);
+      return;
+    }
+    if (!PROBLEM_ID.test(s)) {
+      setProblemErr("問題URL(atcoder.jp/contests/…/tasks/…)か問題ID(abc467_b)を入れてください");
+      return;
+    }
+    // 問題IDだけ渡された場合はコンテストIDを推測できないので問題一覧で引く
+    setLinking(true);
+    setProblemErr("");
+    try {
+      const id = s.toLowerCase();
+      const hit = (await getProblems()).find((p) => p.id === id);
+      if (hit) {
+        applyProblem({ contest: hit.contest_id, task: hit.id, title: hit.title });
+      } else {
+        setProblemErr(`問題ID「${s}」が見つかりませんでした。問題URLを貼ってください`);
+      }
+    } catch {
+      setProblemErr("問題一覧を取得できませんでした。問題URLを貼ってください");
+    } finally {
+      setLinking(false);
+    }
   };
 
   const unlinkProblem = () => {
@@ -163,11 +196,20 @@ export function EditorPage() {
     else setCode(tpl);
   };
 
-  // インデント幅変更: 既存コードの先頭インデントも新しい幅に変換する
+  // インデント幅変更: 既存コードの先頭インデントも新しい幅に変換する。
+  // 表示中の言語だけでなく、他言語の保存済みコードも合わせて変換しないと
+  // 言語を切り替えたときに旧い幅のコードが出てきて混在する。
   const changeIndent = (n: number) => {
     const newCode = reindent(code, indentWidth, n);
     setIndentWidth(n);
     localStorage.setItem(INDENT_KEY, String(n));
+    for (const l of EDITOR_LANGS) {
+      if (l.key === langKey) continue;
+      const saved = localStorage.getItem(CODE_KEY(l.key));
+      if (saved == null) continue;
+      const conv = reindent(saved, indentWidth, n);
+      if (conv !== saved) localStorage.setItem(CODE_KEY(l.key), conv);
+    }
     if (newCode === code) return;
     const el = codeRef.current;
     if (el) {
@@ -286,8 +328,10 @@ export function EditorPage() {
       const indent = /^[ \t]*/.exec(line)?.[0] ?? "";
       const prev = v[s - 1] ?? "";
       const next = v[t] ?? "";
-      // { や ( [ の直後、Pythonの行末: では1段深く
-      const opens = (prev !== "" && "{([".includes(prev)) || /:\s*$/.test(line);
+      // { や ( [ の直後、Python系の行末: では1段深く
+      const opens =
+        (prev !== "" && "{([".includes(prev)) ||
+        (COLON_BLOCK_LANGS.has(langKey) && /:\s*$/.test(line));
       if (PAIRS[prev] && PAIRS[prev] === next) {
         // 括弧の間で改行: 中に1段インデントした行を作り、閉じ括弧を揃えて次行へ
         const mid = s + 1 + indent.length + INDENT.length;
@@ -411,7 +455,7 @@ export function EditorPage() {
             </button>
           </>
         ) : (
-          <form className="ep-form" onSubmit={linkProblem}>
+          <form className="ep-form" onSubmit={(e) => void linkProblem(e)}>
             <input
               value={problemInput}
               onChange={(e) => {
@@ -422,7 +466,9 @@ export function EditorPage() {
               title="AtCoderの問題URLを貼って連携すると、問題ページと提出ページへのリンクが出ます"
               aria-label="AtCoder問題URL"
             />
-            <button type="submit">連携</button>
+            <button type="submit" disabled={linking}>
+              {linking ? "確認中…" : "連携"}
+            </button>
           </form>
         )}
           {problemErr && <span className="error-text">{problemErr}</span>}
