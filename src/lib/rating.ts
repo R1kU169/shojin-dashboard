@@ -1,10 +1,11 @@
 // AtCoderの「公式レーティング」(プロフィールのユーザー名の色の基準)を取得する。
 // board 本体の推定内部レート(irt.ts)とは別物で、ホームのアバター色はこちらに合わせる。
 //
-// 本番は public/snapshot/ratings.json を同一オリジンから読むのが主(snapshot.ts)。
-// スナップショットが無い場合(dev等)のフォールバックとして atcoder.jp を叩く。
-// ブラウザから atcoder.jp を直接叩くと CORS で弾かれるため、dev では
-// devサーバーの同一オリジンプロキシ(vite.config.ts の /atcoder)経由にする。
+// 本番は public/snapshot/ratings.json を同一オリジンから読む(snapshot.ts)。
+// ここの atcoder.jp 直読みは dev 専用のフォールバック。ブラウザから atcoder.jp を
+// 直接叩くと CORS で弾かれる(実測 503)ため、dev では devサーバーの同一オリジン
+// プロキシ(vite.config.ts の /atcoder)経由にする。本番でこの関数を呼ぶと必ず
+// 失敗するので、cache.ts 側で CAN_FETCH_ATCODER を見て呼ばないようにしている。
 import type { RatePoint } from "./types";
 
 const ATCODER = import.meta.env.DEV ? "/atcoder" : "https://atcoder.jp";

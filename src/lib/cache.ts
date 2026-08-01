@@ -22,6 +22,19 @@ import type {
 const DAY_MS = 24 * 60 * 60 * 1000;
 const SUBS_FRESH_MS = 10 * 60 * 1000; // 10分以内の再訪はAPIを叩かない
 
+// atcoder.jp はCORSヘッダを返さないため、本番のブラウザからは直接読めない
+// (実測: /users/*/history/json は 503)。devだけ同一オリジンプロキシ経由で叩ける。
+// 本番でsnapshotに無いユーザー(=部員以外)は、必ず失敗するリクエストを出さずに
+// 「レート不明」として扱う。呼び出し側は .catch() でレート表示を隠す。
+const CAN_FETCH_ATCODER = import.meta.env.DEV;
+
+class RatingUnavailable extends Error {
+  constructor(user: string) {
+    super(`レート情報がありません: ${user}`);
+    this.name = "RatingUnavailable";
+  }
+}
+
 interface ResourceEntry<T> {
   at: number;
   data: T;
@@ -84,8 +97,8 @@ const ratingsMap = () =>
 
 /**
  * ユーザーの公式レーティング(未レートは0)。まず同一オリジンのsnapshot表を引き、
- * 無ければ(部員以外・snapshot未生成)atcoder.jpへフォールバックする。
- * 取得失敗時は例外を投げる(呼び出し側で .catch(() => null) して中立色にする)。
+ * 無ければ(部員以外・snapshot未生成)devのみ atcoder.jp へフォールバックする。
+ * 取得できない時は例外を投げる(呼び出し側で .catch(() => null) して中立色にする)。
  */
 export const getRating = (user: string): Promise<number> =>
   cachedResource<number>(
@@ -96,6 +109,7 @@ export const getRating = (user: string): Promise<number> =>
         () => ({}) as Record<string, number>,
       );
       if (map[key] != null) return map[key];
+      if (!CAN_FETCH_ATCODER) throw new RatingUnavailable(user);
       return fetchAtcoderRating(user);
     },
     DAY_MS,
@@ -119,6 +133,7 @@ export const getRatingHistory = (user: string): Promise<RatePoint[]> =>
         () => ({}) as Record<string, RatePoint[]>,
       );
       if (map[key]) return map[key];
+      if (!CAN_FETCH_ATCODER) throw new RatingUnavailable(user);
       return fetchRatingHistory(user);
     },
     DAY_MS,
