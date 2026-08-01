@@ -71,6 +71,16 @@ export function Home() {
             </div>
           </form>
           {err && <p className="error-text">{err}</p>}
+          <p className="hero-links">
+            <a
+              className="hero-link"
+              href="https://atcoder.jp/"
+              target="_blank"
+              rel="noreferrer"
+            >
+              AtCoder公式サイト ↗
+            </a>
+          </p>
         </div>
         <div className="hero-side">
           <div className="hero-art" aria-hidden="true">

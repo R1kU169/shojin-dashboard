@@ -468,6 +468,31 @@ a:hover {
   margin-top: 26px;
 }
 
+/* 入力欄の下の外部リンク(AtCoder公式など) */
+.hero-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin: 12px 0 0;
+}
+.hero-link {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-2);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: 999px;
+  padding: 5px 14px;
+  transition:
+    color 0.15s,
+    border-color 0.15s;
+}
+.hero-link:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+  text-decoration: none;
+}
+
 /* アートカード: 炎のヒートマップ。手貼りステッカーのように少し傾ける */
 .hero-art {
   position: relative;
