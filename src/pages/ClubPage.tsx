@@ -231,7 +231,10 @@ export function ClubPage() {
           </thead>
           <tbody>
             {ordered.map((r, i) => {
+              // 昇順(sortDir="asc")では先頭が最下位なので、メダルもMVPも付けない
+              const ranked = sortDir === "desc";
               const isTop =
+                ranked &&
                 r.status === "done" &&
                 i === 0 &&
                 sortKey === "ac" &&
@@ -243,7 +246,11 @@ export function ClubPage() {
                   className={isTop ? "first-place" : undefined}
                 >
                   <td className="num rank-cell">
-                    {r.status === "done" ? (RANK_BADGES[i] ?? i + 1) : "—"}
+                    {r.status !== "done"
+                      ? "—"
+                      : ranked
+                        ? (RANK_BADGES[i] ?? i + 1)
+                        : i + 1}
                   </td>
                   <td>
                     <Link to={`/u/${r.member.id}`}>{r.member.name}</Link>
