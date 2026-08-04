@@ -210,93 +210,97 @@ export function ClubPage() {
       </section>
 
       <section className="card">
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th className="num">#</th>
-              <th>部員</th>
-              <th className="num sortable" onClick={() => sortBy("ac")}>
-                {acLabel}
-                {ind("ac")}
-              </th>
-              <th className="num sortable" onClick={() => sortBy("streak")}>
-                ストリーク
-                {ind("streak")}
-              </th>
-              <th className="num sortable" onClick={() => sortBy("rating")}>
-                レート
-                {ind("rating")}
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {ordered.map((r, i) => {
-              // 昇順(sortDir="asc")では先頭が最下位なので、メダルもMVPも付けない
-              const ranked = sortDir === "desc";
-              const isTop =
-                ranked &&
-                r.status === "done" &&
-                i === 0 &&
-                sortKey === "ac" &&
-                period !== "all" &&
-                metric(r) > 0;
-              return (
-                <tr
-                  key={r.member.id}
-                  className={isTop ? "first-place" : undefined}
-                >
-                  <td className="num rank-cell">
-                    {r.status !== "done"
-                      ? "—"
-                      : ranked
-                        ? (RANK_BADGES[i] ?? i + 1)
-                        : i + 1}
-                  </td>
-                  <td>
-                    <Link to={`/u/${r.member.id}`}>{r.member.name}</Link>
-                    {isTop && (
-                      <span className="best-chip">
-                        👑 {period === "month" ? "今月" : "今週"}のMVP
-                      </span>
-                    )}
-                    {r.status === "loading" && (
-                      <span className="muted">
-                        {" "}
-                        取得中…
-                        {r.progress > 0
-                          ? `${r.progress.toLocaleString()}件`
-                          : ""}
-                      </span>
-                    )}
-                    {r.status === "error" && (
-                      <span className="error-text"> 取得失敗</span>
-                    )}
-                  </td>
-                  <td className="num">
-                    {r.stats ? periodAc(r.stats, period).toLocaleString() : ""}
-                  </td>
-                  <td className="num">
-                    {r.stats ? `${r.stats.currentStreak}日` : ""}
-                  </td>
-                  <td className="num">
-                    {r.rating != null && (
-                      <>
-                        <span
-                          className="tier-dot"
-                          style={{
-                            background:
-                              TIER_COLORS[resolved][tierIndex(r.rating)],
-                          }}
-                        />
-                        {r.rating > 0 ? r.rating : "未レート"}
-                      </>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+        {/* 5列の数値表はmin-contentが366pxあり、狭い幅ではページ全体を横に広げて
+            スティッキーヘッダーごと横パンさせてしまう。表の中だけでスクロールさせる */}
+        <div className="table-scroll">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th className="num">#</th>
+                <th>部員</th>
+                <th className="num sortable" onClick={() => sortBy("ac")}>
+                  {acLabel}
+                  {ind("ac")}
+                </th>
+                <th className="num sortable" onClick={() => sortBy("streak")}>
+                  ストリーク
+                  {ind("streak")}
+                </th>
+                <th className="num sortable" onClick={() => sortBy("rating")}>
+                  レート
+                  {ind("rating")}
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {ordered.map((r, i) => {
+                // 昇順(sortDir="asc")では先頭が最下位なので、メダルもMVPも付けない
+                const ranked = sortDir === "desc";
+                const isTop =
+                  ranked &&
+                  r.status === "done" &&
+                  i === 0 &&
+                  sortKey === "ac" &&
+                  period !== "all" &&
+                  metric(r) > 0;
+                return (
+                  <tr
+                    key={r.member.id}
+                    className={isTop ? "first-place" : undefined}
+                  >
+                    <td className="num rank-cell">
+                      {r.status !== "done"
+                        ? "—"
+                        : ranked
+                          ? (RANK_BADGES[i] ?? i + 1)
+                          : i + 1}
+                    </td>
+                    <td>
+                      <Link to={`/u/${r.member.id}`}>{r.member.name}</Link>
+                      {isTop && (
+                        <span className="best-chip">
+                          👑 {period === "month" ? "今月" : "今週"}のMVP
+                        </span>
+                      )}
+                      {r.status === "loading" && (
+                        <span className="muted">
+                          {" "}
+                          取得中…
+                          {r.progress > 0
+                            ? `${r.progress.toLocaleString()}件`
+                            : ""}
+                        </span>
+                      )}
+                      {r.status === "error" && (
+                        <span className="error-text"> 取得失敗</span>
+                      )}
+                    </td>
+                    <td className="num">
+                      {r.stats ? periodAc(r.stats, period).toLocaleString() : ""}
+                    </td>
+                    <td className="num">
+                      {r.stats ? `${r.stats.currentStreak}日` : ""}
+                    </td>
+                    <td className="num">
+                      {r.rating != null && (
+                        <>
+                          <span
+                            className="tier-dot"
+                            style={{
+                              background:
+                                TIER_COLORS[resolved][tierIndex(r.rating)],
+                            }}
+                          />
+                          {r.rating > 0 ? r.rating : "未レート"}
+                        </>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </section>
     </div>
   );

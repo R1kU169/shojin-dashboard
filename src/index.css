@@ -1399,6 +1399,13 @@ button.member-card {
   border-radius: 50%;
   display: inline-block;
 }
+/* 列数の多い表を、ページ全体ではなく表の中だけで横スクロールさせる箱。
+   これが無いと狭い画面でページごと横に広がり、スティッキーヘッダーが横パンで
+   ずれて見える(visualViewportがオフセットするため) */
+.table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
 .data-table {
   width: 100%;
   border-collapse: collapse;
