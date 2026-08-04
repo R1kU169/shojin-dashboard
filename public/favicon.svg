@@ -1,0 +1,33 @@
+<!-- タブ用。16pxでも潰れないようアイコン原本より炎を大きめに、角丸は自前で持つ -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="fv-tile" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1d1d20" />
+      <stop offset="1" stop-color="#0a0a0b" />
+    </linearGradient>
+    <radialGradient id="fv-glow" cx="0.5" cy="0.72" r="0.58">
+      <stop offset="0" stop-color="#eb6834" stop-opacity="0.5" />
+      <stop offset="0.5" stop-color="#eda100" stop-opacity="0.14" />
+      <stop offset="1" stop-color="#eda100" stop-opacity="0" />
+    </radialGradient>
+    <linearGradient id="fv-flame" x1="0.5" y1="0" x2="0.5" y2="1">
+      <stop offset="0" stop-color="#ffd06a" />
+      <stop offset="0.38" stop-color="#f7a71f" />
+      <stop offset="0.72" stop-color="#f0682f" />
+      <stop offset="1" stop-color="#e34948" />
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="96" fill="url(#fv-tile)" />
+  <rect width="512" height="512" rx="96" fill="url(#fv-glow)" />
+  <g transform="translate(256 256) scale(1.18) translate(-256 -256)">
+    <path
+      d="M272 78C298 130 318 158 336 196C349 223 354 260 354 302C354 356.1 308.1 400 256 400C203.9 400 158 356.1 158 302C158 254 186 244 210 224C226 210 232 190 230 160C228 124 248 100 272 78Z"
+      fill="url(#fv-flame)"
+    />
+    <g fill="#fff8ea">
+      <rect x="205" y="308" width="27" height="52" rx="9" />
+      <rect x="244" y="272" width="27" height="88" rx="9" />
+      <rect x="283" y="236" width="27" height="124" rx="9" />
+    </g>
+  </g>
+</svg>
