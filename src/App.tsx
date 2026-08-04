@@ -39,7 +39,10 @@ export default function App() {
         </NavLink>
         <nav>
           <NavLink to="/me">マイページ</NavLink>
-          <NavLink to="/club">クラブ内ランキング</NavLink>
+          {/* .nav-long は狭い幅で畳まれる補足語 (→「ランキング」「DS倶楽部 ↗」) */}
+          <NavLink to="/club">
+            <span className="nav-long">クラブ内</span>ランキング
+          </NavLink>
           <NavLink to="/editor">エディター</NavLink>
           <a
             className="nav-ext"
@@ -47,7 +50,7 @@ export default function App() {
             target="_blank"
             rel="noreferrer"
           >
-            DS倶楽部HP ↗
+            DS倶楽部<span className="nav-long">HP</span> ↗
           </a>
         </nav>
         <ThemeToggle />

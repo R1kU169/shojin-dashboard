@@ -174,6 +174,9 @@ a:hover {
   color: var(--ink-2);
   font-size: 14px;
   padding: 4px 2px;
+  /* 幅が足りないときに1文字ずつ折り返してヘッダーから溢れるのを防ぐ */
+  white-space: nowrap;
+  flex: none;
 }
 .app-header nav a:hover {
   color: var(--ink);
@@ -240,6 +243,53 @@ a:hover {
   text-transform: uppercase;
   color: var(--muted);
   margin-left: 8px;
+}
+
+/* 1行に収まらない幅では2段組みにする:
+   1段目=ブランド+テーマ切替 / 2段目=ナビをタブストリップとして横並び。
+   ラベルは .nav-long を畳んで短縮し、それでも足りない極端な幅では横スクロールで逃がす */
+@media (max-width: 760px) {
+  .app-header {
+    flex-wrap: wrap;
+    height: auto;
+    gap: 0 12px;
+    padding: 8px 12px 0;
+  }
+  .brand {
+    order: 1;
+  }
+  .theme-toggle {
+    order: 2;
+    margin-left: auto;
+  }
+  .app-header nav {
+    order: 3;
+    flex: none;
+    /* 幅360pxでも4項目が横スクロールなしで収まる詰め方 */
+    gap: 14px;
+    /* 横スクロール用のクリップ境界がリンクに接するとフォーカスリング(outline 2px +
+       offset 2px)とactiveの下線が切れる。左右4pxだけヘッダーの外へ出し、その分を
+       paddingで戻すことで、境界をリンクの外側に逃がす(見た目の位置は100%幅と同じ) */
+    width: calc(100% + 8px);
+    margin: 0 -4px;
+    padding: 6px 4px 10px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .app-header nav::-webkit-scrollbar {
+    display: none;
+  }
+  .app-header nav a {
+    padding-inline: 0;
+  }
+  .app-header nav a.nav-ext {
+    margin-left: 0;
+  }
+  .nav-long {
+    display: none;
+  }
 }
 
 /* ---------- レイアウト ---------- */
