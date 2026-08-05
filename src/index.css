@@ -147,7 +147,9 @@ a:hover {
   align-items: center;
   gap: 24px;
   height: 56px;
-  padding: 0 24px;
+  /* 中身を本文・フッターと同じコンテンツ列(max-width 1040px + 左右20px)に揃える。
+     背景のぼかしと下線は全幅のまま残す */
+  padding: 0 max(20px, calc((100% - 1040px) / 2 + 20px));
   position: sticky;
   top: 0;
   z-index: 10;
@@ -253,7 +255,8 @@ a:hover {
     flex-wrap: wrap;
     height: auto;
     gap: 0 12px;
-    padding: 8px 12px 0;
+    /* 左右は基底ルールの値(この幅では20px = .containerと同じ)をそのまま使う */
+    padding-block: 8px 0;
   }
   .brand {
     order: 1;
@@ -1517,6 +1520,10 @@ button.member-card {
 @media (max-width: 560px) {
   .container {
     padding: 16px 12px;
+  }
+  /* .container に合わせてヘッダーも詰める(揃えたままにする) */
+  .app-header {
+    padding-inline: 12px;
   }
   .stat-grid {
     grid-template-columns: repeat(2, 1fr);
