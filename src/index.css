@@ -273,9 +273,9 @@ a:hover {
     /* 横スクロール用のクリップ境界がリンクに接するとフォーカスリング(outline 2px +
        offset 2px)とactiveの下線が切れる。左右4pxだけヘッダーの外へ出し、その分を
        paddingで戻すことで、境界をリンクの外側に逃がす(見た目の位置は100%幅と同じ) */
-    width: calc(100% + 8px);
-    margin: 0 -4px;
-    padding: 6px 4px 10px;
+    width: calc(100% + 12px);
+    margin: 0 -6px;
+    padding: 6px 6px 10px;
     overflow-x: auto;
     overflow-y: hidden;
     scrollbar-width: none;
@@ -286,9 +286,6 @@ a:hover {
   }
   .app-header nav a {
     padding-inline: 0;
-  }
-  .app-header nav a.nav-ext {
-    margin-left: 0;
   }
   .nav-long {
     display: none;
