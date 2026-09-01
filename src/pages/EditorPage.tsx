@@ -1,7 +1,9 @@
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import type { ChangeEvent, KeyboardEvent, UIEvent } from "react";
 import { useSearchParams } from "react-router-dom";
+import { AcPopup } from "../components/AcPopup";
 import { ProblemSearch } from "../components/ProblemSearch";
+import { collectCompletions } from "../lib/completion";
 import { highlightCode } from "../lib/highlight";
 import { EDITOR_LANGS } from "../lib/wandbox";
 import { runCode } from "../lib/run";
@@ -36,6 +38,24 @@ function loadProblem(): LinkedProblem | null {
   } catch {
     return null;
   }
+}
+
+// ポップアップの想定サイズ(画面端でのはみ出し回避に使う)
+const AC_W = 220;
+const AC_H = 176;
+
+/** 表示中の補完ポップアップ */
+interface AcState {
+  items: string[];
+  /** 選択中の候補 */
+  index: number;
+  /** 置き換え開始位置(入力中の語の先頭) */
+  from: number;
+  /** ビューポート座標(position: fixed) */
+  x: number;
+  y: number;
+  /** キャレットの上に出すか(下に入らないとき) */
+  above: boolean;
 }
 
 // テンプレート(wandbox.ts)が書かれているインデント幅
@@ -85,10 +105,16 @@ export function EditorPage() {
   // 「コードをコピーして提出」を押した直後の表示切り替え
   const [copied, setCopied] = useState(false);
   const [copyErr, setCopyErr] = useState(false);
+  const [ac, setAc] = useState<AcState | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const linesRef = useRef<HTMLDivElement>(null);
   const codeRef = useRef<HTMLTextAreaElement>(null);
   const hlRef = useRef<HTMLPreElement>(null);
+  const measureRef = useRef<HTMLSpanElement>(null);
+  // IME変換中はonChangeに途中のかなが飛んでくるので候補を組み立てない
+  const composingRef = useRef(false);
+  // edit()由来のinputイベントで候補を開き直さないための目印
+  const skipAcRef = useRef(false);
 
   // シンタックスハイライト(textareaの背後に重ねる)。末尾に改行を足して
   // 最終行の高さがtextareaとずれないようにする
@@ -259,6 +285,10 @@ export function EditorPage() {
     selFrom: number,
     selTo: number,
   ) => {
+    // プログラムからの書き換えでは補完を開かない。edit()が唯一の書き換え口なので
+    // ここで目印を立てておけば、確定後・自動インデント後・括弧補完後の
+    // inputイベントをまとめて弾ける
+    skipAcRef.current = true;
     // execCommandは「フォーカス中の編集可能要素」に効く。インデントのセレクト
     // 操作直後などフォーカスが外れたままだと選択置換にならず重複挿入されるため、
     // 必ず先にtextareaへフォーカスして選択を張る
@@ -272,11 +302,110 @@ export function EditorPage() {
     if (ok && el.value === expected) {
       el.setSelectionRange(selFrom, selTo);
     } else {
-      // 失敗や環境差での不整合は、期待する内容へsetStateで強制的に揃える
+      // 失敗や環境差での不整合は、期待する内容へsetStateで強制的に揃える。
+      // この経路はinputイベントが出ないのでonChangeが走らず、目印が残ってしまう
+      skipAcRef.current = false;
       setCode(expected);
       requestAnimationFrame(() => el.setSelectionRange(selFrom, selTo));
     }
   };
+
+  /**
+   * キャレットのビューポート座標を測る。
+   *
+   * 「文字幅を1度測ってcol×charW」はやらない。Webフォントはdisplay=swapなので
+   * 初回はフォールバックの幅を測ってしまい、日本語コメント(Zen Kaku)とタブ幅可変で
+   * 崩れる。行頭からキャレットまでの実文字列を毎回測る方が常に正しい。
+   * .editor-codeは white-space: pre で折り返さないので、これで足りる。
+   */
+  const caretPoint = (el: HTMLTextAreaElement, pos: number) => {
+    const span = measureRef.current;
+    if (!span) return null;
+    const cs = getComputedStyle(el);
+    // フォント指定はCSSに複製せずtextareaから実測値をコピーする。
+    // 複製すると「2層のメトリクスを一致させる」不変条件のコピーがもう1つ増える
+    span.style.fontFamily = cs.fontFamily;
+    span.style.fontSize = cs.fontSize;
+    span.style.fontWeight = cs.fontWeight;
+    span.style.fontStyle = cs.fontStyle;
+    span.style.letterSpacing = cs.letterSpacing;
+    span.style.fontVariantLigatures = cs.fontVariantLigatures;
+    span.style.fontFeatureSettings = cs.fontFeatureSettings;
+    span.style.tabSize = cs.tabSize;
+
+    const v = el.value;
+    const lineStart = v.lastIndexOf("\n", pos - 1) + 1;
+    const lineIdx = v.slice(0, lineStart).split("\n").length - 1;
+    span.textContent = v.slice(lineStart, pos);
+    const w = span.getBoundingClientRect().width;
+
+    const r = el.getBoundingClientRect();
+    const lineH =
+      parseFloat(cs.lineHeight) || parseFloat(cs.fontSize) * 1.55;
+    const x = r.left + parseFloat(cs.paddingLeft) + w - el.scrollLeft;
+    const top = r.top + parseFloat(cs.paddingTop) + lineIdx * lineH - el.scrollTop;
+    // キャレットがコード欄の外へスクロールされていたら出さない
+    if (top + lineH < r.top || top > r.bottom || x < r.left - 1 || x > r.right)
+      return null;
+    // 画面下に入らなければキャレットの上に出す
+    const above = top + lineH + AC_H > window.innerHeight - 8;
+    return {
+      x: Math.max(8, Math.min(x, window.innerWidth - AC_W - 8)),
+      y: above ? Math.max(8, top - AC_H) : top + lineH,
+      above,
+    };
+  };
+
+  const openAc = (el: HTMLTextAreaElement) => {
+    const c = collectCompletions(el.value, el.selectionStart);
+    if (!c) {
+      setAc(null);
+      return;
+    }
+    const pt = caretPoint(el, el.selectionStart);
+    if (!pt) {
+      setAc(null);
+      return;
+    }
+    setAc({ items: c.items, index: 0, from: c.from, ...pt });
+  };
+
+  const onCodeChange = (e: ChangeEvent<HTMLTextAreaElement>) => {
+    const el = e.currentTarget;
+    setCode(el.value);
+    if (skipAcRef.current) {
+      // プログラムからの書き換え。開き直さないだけでなく、開いていたものも閉じる。
+      // ここで閉じ忘れると、ポップアップ表示中に「(」を打ったときに
+      // 古い接頭辞・古い座標のまま出しっぱなしになる
+      skipAcRef.current = false;
+      setAc(null);
+      return;
+    }
+    if (composingRef.current) return;
+    openAc(el);
+  };
+
+  const acceptAc = (word: string) => {
+    const el = codeRef.current;
+    if (!el || !ac) return;
+    const to = el.selectionStart;
+    // edit()経由にすることでCmd+Zで1操作として戻せる
+    edit(el, ac.from, to, word, ac.from + word.length, ac.from + word.length);
+    setAc(null);
+  };
+
+  // ページがスクロール/リサイズされるとビューポート座標がずれる。
+  // 位置を計算し直すより閉じてしまう方が単純で、実害も無い
+  useEffect(() => {
+    if (!ac) return;
+    const close = () => setAc(null);
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("resize", close);
+    return () => {
+      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("resize", close);
+    };
+  }, [ac]);
 
   // エディターの入力支援: 改行の自動インデント・括弧/クォート補完・
   // Tab/Shift+Tabのブロックインデント・Ctrl/Cmd+Enterで実行
@@ -291,6 +420,49 @@ export function EditorPage() {
     const v = el.value;
     const s = el.selectionStart;
     const t = el.selectionEnd;
+
+    // 補完ポップアップが開いている間のキー操作。修飾キー付きは素通しする
+    if (ac && !e.altKey && !e.ctrlKey && !e.metaKey) {
+      if (e.key === "Tab" && !e.shiftKey) {
+        // ポップアップは「選択が畳まれていて直前が2文字以上の語」のときしか
+        // 開かないので、ブロックインデントの意図と衝突することはない
+        e.preventDefault();
+        acceptAc(ac.items[ac.index]);
+        return;
+      }
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setAc({ ...ac, index: (ac.index + 1) % ac.items.length });
+        return;
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setAc({
+          ...ac,
+          index: (ac.index - 1 + ac.items.length) % ac.items.length,
+        });
+        return;
+      }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setAc(null);
+        return;
+      }
+      // Enterは確定に使わない(打った語がたまたま長い語の接頭辞だったときに
+      // 黙って書き換わる事故を防ぐ)。閉じて通常の自動インデントへ流す。
+      // Shift+Tabのデデントとキャレット移動も同じく閉じて素通し
+      if (
+        e.key === "Enter" ||
+        e.key === "Tab" ||
+        e.key.startsWith("Arrow") ||
+        e.key === "Home" ||
+        e.key === "End" ||
+        e.key === "PageUp" ||
+        e.key === "PageDown"
+      ) {
+        setAc(null);
+      }
+    }
 
     // 行頭ジャンプ(Home / macOSのCmd+←)は列0ではなく行の最初の文字へ。
     // もう一度押すと列0に移る(VS Codeと同じ)。トグルが無いとインデントされた行で
@@ -530,16 +702,41 @@ export function EditorPage() {
               className="editor-code"
               style={{ tabSize: indentWidth }}
               value={code}
-              onChange={(e) => setCode(e.target.value)}
+              onChange={onCodeChange}
               onKeyDown={onKeyDown}
               onScroll={onScroll}
+              onBlur={() => setAc(null)}
+              // マウスでキャレットを動かしたら接頭辞が古くなる
+              onClick={() => setAc(null)}
+              onCompositionStart={() => {
+                composingRef.current = true;
+                setAc(null);
+              }}
+              onCompositionEnd={() => {
+                composingRef.current = false;
+              }}
               spellCheck={false}
               autoCapitalize="off"
               autoCorrect="off"
               aria-label="コード"
+              aria-autocomplete="list"
             />
+            {/* キャレット位置の実測用。CSSは位置決めだけ持ち、フォントは
+                caretPointがtextareaからコピーする */}
+            <span ref={measureRef} className="editor-measure" aria-hidden="true" />
           </div>
         </div>
+        {ac && (
+          <AcPopup
+            items={ac.items}
+            index={ac.index}
+            x={ac.x}
+            y={ac.y}
+            above={ac.above}
+            onPick={acceptAc}
+            onHover={(i) => setAc({ ...ac, index: i })}
+          />
+        )}
       </section>
 
       <div className="two-col editor-io">
