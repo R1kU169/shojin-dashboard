@@ -289,6 +289,12 @@ export function EditorPage() {
   // エディターの入力支援: 改行の自動インデント・括弧/クォート補完・
   // Tab/Shift+Tabのブロックインデント・Ctrl/Cmd+Enterで実行
   const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    // IME変換中のキーは一切横取りしない。ここを通すと変換確定のEnterで改行が入り、
+    // 「」や(の入力が括弧補完に食われて変換バッファが壊れる。
+    // keyCode 229 も見るのは、Safariが compositionend を keydown より先に出すため
+    // (確定時のkeydownでは isComposing が既にfalseになっている)。
+    if (e.nativeEvent.isComposing || e.keyCode === 229) return;
+
     const el = e.currentTarget;
     const v = el.value;
     const s = el.selectionStart;
@@ -461,6 +467,12 @@ export function EditorPage() {
               onChange={(e) => {
                 setProblemInput(e.target.value);
                 setProblemErr("");
+              }}
+              // 変換確定のEnterでフォームが送信されてしまうのを防ぐ
+              onKeyDown={(e) => {
+                if (e.nativeEvent.isComposing || e.keyCode === 229) {
+                  e.preventDefault();
+                }
               }}
               placeholder="問題URLを貼って連携"
               title="AtCoderの問題URLを貼って連携すると、問題ページと提出ページへのリンクが出ます"
