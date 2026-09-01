@@ -321,6 +321,43 @@ export function EditorPage() {
     const s = el.selectionStart;
     const t = el.selectionEnd;
 
+    // 行頭ジャンプ(Home / macOSのCmd+←)は列0ではなく行の最初の文字へ。
+    // もう一度押すと列0に移る(VS Codeと同じ)。トグルが無いとインデントされた行で
+    // 列0にキーボードから到達できなくなり、機能が後退してしまう。
+    // Cmd+←を拾うので、下の修飾キーreturnより前に置くこと。
+    // .editor-codeは white-space: pre で折り返さないため、論理行頭がそのまま視覚的な行頭。
+    const isLineHome =
+      (e.key === "Home" && !e.ctrlKey && !e.metaKey && !e.altKey) ||
+      (e.key === "ArrowLeft" && e.metaKey && !e.ctrlKey && !e.altKey);
+    if (isLineHome) {
+      e.preventDefault();
+      // 選択を伸ばすときは「動く側の端」を動かす(Safariは"none"を返すのでforward扱い)
+      const head = el.selectionDirection === "backward" ? s : t;
+      const lineStart = v.lastIndexOf("\n", head - 1) + 1;
+      let lineEnd = v.indexOf("\n", lineStart);
+      if (lineEnd === -1) lineEnd = v.length;
+      const indent = /^[ \t]*/.exec(v.slice(lineStart, lineEnd))?.[0] ?? "";
+      const firstNs = lineStart + indent.length;
+      // 空白だけの行はfirstNsが行末になってしまうので列0を目標にする
+      const target =
+        head === firstNs || firstNs === lineEnd ? lineStart : firstNs;
+      if (e.shiftKey) {
+        const anchor = el.selectionDirection === "backward" ? t : s;
+        el.setSelectionRange(
+          Math.min(anchor, target),
+          Math.max(anchor, target),
+          target < anchor ? "backward" : "forward",
+        );
+      } else {
+        // 純粋なキャレット移動なのでedit()は通さない(undo履歴に空の項目が積まれる)
+        el.setSelectionRange(target, target);
+      }
+      // 長い行を右にスクロールしているとジャンプ後にキャレットが画面外に残る。
+      // scrollLeftを戻すとscrollイベント経由でハイライト層と行番号も追随する
+      if (el.scrollLeft > 0) el.scrollLeft = 0;
+      return;
+    }
+
     // 他のショートカット(コピー・undo等)は邪魔しない。
     // Ctrl/Cmd+Enterはページ全体のリスナー(下のuseEffect)が受ける
     if (e.ctrlKey || e.metaKey || e.altKey) return;
