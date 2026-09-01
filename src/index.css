@@ -726,6 +726,85 @@ a:hover {
   color: var(--ink-2);
   margin-top: 3px;
 }
+
+/* トップの「アップデート内容」バナー。コンテスト予定カードと同じアクセント色の
+   タイントを使うが、リンクではないのでhoverの浮き上がりは付けない */
+.updates-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 14px 16px;
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface));
+}
+.ub-icon {
+  flex: none;
+  font-size: 18px;
+  line-height: 1.3;
+}
+.ub-body {
+  flex: 1;
+  /* 見出しが長いときにflex行の中で縮めるために必要 */
+  min-width: 0;
+}
+.ub-head {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 6px;
+}
+.ub-item + .ub-item {
+  margin-top: 10px;
+}
+.ub-date {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted);
+}
+.ub-title {
+  font-size: 14px;
+  font-weight: 700;
+}
+.ub-list {
+  margin: 4px 0 0;
+  padding-left: 1.1em;
+  font-size: 13px;
+  color: var(--ink-2);
+}
+.ub-more {
+  margin-top: 8px;
+  font-size: 12px;
+}
+.ub-ack {
+  flex: none;
+  align-self: flex-start;
+  margin-left: auto;
+  font: inherit;
+  font-size: 13px;
+  color: var(--ink-2);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 5px 14px;
+  cursor: pointer;
+}
+.ub-ack:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+@media (max-width: 560px) {
+  .updates-banner {
+    flex-direction: column;
+  }
+  .ub-ack {
+    width: 100%;
+    margin-left: 0;
+  }
+}
 .member-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
