@@ -964,6 +964,8 @@ button.member-card {
   padding: 14px 8px 14px 0;
   text-align: right;
   font-family: var(--font-mono);
+  font-variant-ligatures: none;
+  font-feature-settings: "liga" 0, "calt" 0;
   font-size: 13px;
   line-height: 1.55;
   color: var(--muted);
@@ -993,6 +995,10 @@ button.member-card {
   word-break: normal;
   overflow-wrap: normal;
   tab-size: 4;
+  /* JetBrains Monoのプログラミング合字を切る(!= が ≠、== が ⩵ に化けるため)。
+     2層でメトリクスを揃える必要があるので、必ず両方に効かせること */
+  font-variant-ligatures: none;
+  font-feature-settings: "liga" 0, "calt" 0;
 }
 .editor-highlight {
   overflow: hidden;
@@ -1001,6 +1007,10 @@ button.member-card {
 }
 .editor-highlight code {
   font: inherit;
+  /* font ショートハンドは font-feature-settings 等を初期値に戻してしまう。
+     明示的に継承させないとハイライト層だけ合字が復活して2層が非対称になる */
+  font-variant-ligatures: inherit;
+  font-feature-settings: inherit;
 }
 .editor-code {
   outline: none;
@@ -1108,6 +1118,8 @@ button.member-card {
   background: color-mix(in srgb, var(--ink) 2%, transparent);
   color: var(--ink);
   font-family: var(--font-mono);
+  font-variant-ligatures: none;
+  font-feature-settings: "liga" 0, "calt" 0;
   font-size: 13px;
   line-height: 1.55;
   padding: 10px 12px;
@@ -1122,6 +1134,8 @@ button.member-card {
   border-radius: 10px;
   background: color-mix(in srgb, var(--ink) 2%, transparent);
   font-family: var(--font-mono);
+  font-variant-ligatures: none;
+  font-feature-settings: "liga" 0, "calt" 0;
   font-size: 13px;
   line-height: 1.55;
   padding: 10px 12px;
