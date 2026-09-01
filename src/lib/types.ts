@@ -19,6 +19,13 @@ export interface Problem {
   title: string;
 }
 
+/** エディターに連携中のAtCoder問題 */
+export interface LinkedProblem {
+  contest: string;
+  task: string;
+  title?: string;
+}
+
 /** kenkoooo problem-models.json の1エントリ。難易度推定がない問題はフィールド欠落 */
 export interface ProblemModel {
   slope?: number;

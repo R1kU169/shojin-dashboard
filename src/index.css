@@ -993,6 +993,94 @@ button.member-card {
   color: var(--accent);
   border-color: var(--accent);
 }
+
+/* 問題名検索のドロップダウン。ツールバーの祖先にoverflow:hiddenは無いので
+   (.editor-cardのそれは親ではなく兄弟)、素直に絶対配置で足りる */
+.ep-search {
+  position: relative;
+}
+.ep-listbox {
+  position: absolute;
+  top: calc(100% + 6px);
+  /* 入力はツールバー右端に寄っているので右揃え。leftだと画面外に出る */
+  right: 0;
+  z-index: 20; /* スティッキーヘッダー(10)より上 */
+  width: min(380px, 86vw);
+  max-height: 320px;
+  overflow-y: auto;
+  /* 端まで来てもページごとスクロールしない */
+  overscroll-behavior: contain;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow-lift);
+}
+.ep-note {
+  padding: 8px 10px;
+  font-size: 12px;
+}
+.ep-opt {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.ep-opt.on {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+.ep-opt-idx {
+  flex: none;
+  min-width: 2.2em;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted);
+}
+.ep-opt-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ep-opt-contest {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted);
+}
+@media (max-width: 560px) {
+  .editor-problem {
+    width: 100%;
+    margin-left: 0;
+  }
+  .ep-search {
+    flex: 1;
+    min-width: 0;
+  }
+  .ep-form {
+    width: 100%;
+  }
+  .ep-form input {
+    width: 100%;
+    max-width: none;
+    /* iOS Safariは16px未満の入力にフォーカスすると勝手にズームする */
+    font-size: 16px;
+  }
+  .ep-listbox {
+    left: 0;
+    right: 0;
+    width: auto;
+    max-height: 50vh;
+  }
+}
 .to-editor {
   margin-left: 10px;
   font-size: 12px;

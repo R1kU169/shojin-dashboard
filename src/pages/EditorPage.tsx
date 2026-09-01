@@ -1,11 +1,12 @@
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
-import type { ChangeEvent, FormEvent, KeyboardEvent, UIEvent } from "react";
+import type { ChangeEvent, KeyboardEvent, UIEvent } from "react";
 import { useSearchParams } from "react-router-dom";
-import { getProblems } from "../lib/cache";
+import { ProblemSearch } from "../components/ProblemSearch";
 import { highlightCode } from "../lib/highlight";
 import { EDITOR_LANGS } from "../lib/wandbox";
 import { runCode } from "../lib/run";
 import type { RunOutcome } from "../lib/run";
+import type { LinkedProblem } from "../lib/types";
 
 const CODE_KEY = (lang: string) => `shojin:editor:code:${lang}`;
 const STDIN_KEY = "shojin:editor:stdin";
@@ -27,24 +28,6 @@ const CLOSERS = new Set(Object.values(PAIRS));
 // 行末の「:」でブロックが始まる言語。C++/Javaの public: や case 1: で
 // 誤ってインデントしないよう、この言語でだけ「:」を見る。
 const COLON_BLOCK_LANGS = new Set(["python", "pypy", "nim"]);
-
-/** エディターに連携中のAtCoder問題 */
-interface LinkedProblem {
-  contest: string;
-  task: string;
-  title?: string;
-}
-
-// 問題URL(atcoder.jp/contests/x/tasks/y)からコンテストIDと問題IDを取り出す
-function parseProblemUrl(s: string): LinkedProblem | null {
-  const m = s.match(/atcoder\.jp\/contests\/([\w-]+)\/tasks\/([\w-]+)/);
-  return m ? { contest: m[1], task: m[2] } : null;
-}
-
-// 問題IDらしき文字列(abc467_b / code_festival_2017_qualb_a など)。
-// コンテストIDは問題IDから機械的には決まらない(例: 問題 arc058_a はコンテスト
-// abc042 にもある)ので、ここでは形だけ判定し、実際の対応は問題一覧で引く。
-const PROBLEM_ID = /^[a-z0-9_]+_[a-z0-9]+$/i;
 
 function loadProblem(): LinkedProblem | null {
   try {
@@ -99,10 +82,9 @@ export function EditorPage() {
   const [result, setResult] = useState<RunOutcome | null>(null);
   const [error, setError] = useState("");
   const [problem, setProblem] = useState<LinkedProblem | null>(loadProblem);
-  const [problemInput, setProblemInput] = useState("");
-  const [problemErr, setProblemErr] = useState("");
-  // 問題IDから問題一覧を引いている最中(初回は1MBほど取得することがある)
-  const [linking, setLinking] = useState(false);
+  // 「コードをコピーして提出」を押した直後の表示切り替え
+  const [copied, setCopied] = useState(false);
+  const [copyErr, setCopyErr] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const linesRef = useRef<HTMLDivElement>(null);
   const codeRef = useRef<HTMLTextAreaElement>(null);
@@ -132,39 +114,28 @@ export function EditorPage() {
 
   const applyProblem = (p: LinkedProblem) => {
     setProblem(p);
-    setProblemInput("");
-    setProblemErr("");
     localStorage.setItem(PROBLEM_KEY, JSON.stringify(p));
   };
 
-  const linkProblem = async (e: FormEvent) => {
-    e.preventDefault();
-    const s = problemInput.trim();
-    const fromUrl = parseProblemUrl(s);
-    if (fromUrl) {
-      applyProblem(fromUrl);
-      return;
-    }
-    if (!PROBLEM_ID.test(s)) {
-      setProblemErr("問題URL(atcoder.jp/contests/…/tasks/…)か問題ID(abc467_b)を入れてください");
-      return;
-    }
-    // 問題IDだけ渡された場合はコンテストIDを推測できないので問題一覧で引く
-    setLinking(true);
-    setProblemErr("");
-    try {
-      const id = s.toLowerCase();
-      const hit = (await getProblems()).find((p) => p.id === id);
-      if (hit) {
-        applyProblem({ contest: hit.contest_id, task: hit.id, title: hit.title });
-      } else {
-        setProblemErr(`問題ID「${s}」が見つかりませんでした。問題URLを貼ってください`);
-      }
-    } catch {
-      setProblemErr("問題一覧を取得できませんでした。問題URLを貼ってください");
-    } finally {
-      setLinking(false);
-    }
+  /**
+   * 提出リンクのクリックでコードをクリップボードへ入れる。
+   * ブラウザからatcoder.jpへは投稿できない(CORSもログインもある)ので、
+   * 「貼り付けるだけ」まで持っていくのが現実的な上限。
+   *
+   * <a>のままにしてpreventDefaultしないので、ポップアップブロックと無縁で
+   * ⌘クリックや中クリックも生きる。コピーに失敗しても遷移は止めない。
+   */
+  const copyForSubmit = () => {
+    // ユーザー操作の直後である必要があるので、最初の文で同期的に呼ぶ
+    const p = navigator.clipboard?.writeText(code);
+    if (!p) return;
+    void p.then(
+      () => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      },
+      () => setCopyErr(true),
+    );
   };
 
   const unlinkProblem = () => {
@@ -445,6 +416,14 @@ export function EditorPage() {
   };
 
   const lineCount = code.split("\n").length;
+  // クリップボードが使えない環境(古いWebView等)では従来の文言のままにする
+  const copyLabel = !navigator.clipboard
+    ? "AtCoderで提出 ↗"
+    : copied
+      ? "コピーしました ✓"
+      : copyErr
+        ? "コピーできませんでした(提出ページへ) ↗"
+        : "コードをコピーして提出 ↗";
   const exitOk = result !== null && result.status === "0" && !result.signal;
 
   return (
@@ -492,52 +471,33 @@ export function EditorPage() {
         <span className="muted editor-hint">Ctrl+Enterでも実行</span>
         <div className="editor-problem">
           {problem ? (
-          <>
-            <span className="ep-label">問題</span>
-            <a
-              className="ep-title"
-              href={`https://atcoder.jp/contests/${problem.contest}/tasks/${problem.task}`}
-              target="_blank"
-              rel="noreferrer"
-            >
-              {problem.title ?? problem.task} ↗
-            </a>
-            <a
-              className="ep-submit"
-              href={`https://atcoder.jp/contests/${problem.contest}/submit?taskScreenName=${problem.task}`}
-              target="_blank"
-              rel="noreferrer"
-            >
-              AtCoderで提出 ↗
-            </a>
-            <button type="button" className="linklike" onClick={unlinkProblem}>
-              解除
-            </button>
-          </>
-        ) : (
-          <form className="ep-form" onSubmit={(e) => void linkProblem(e)}>
-            <input
-              value={problemInput}
-              onChange={(e) => {
-                setProblemInput(e.target.value);
-                setProblemErr("");
-              }}
-              // 変換確定のEnterでフォームが送信されてしまうのを防ぐ
-              onKeyDown={(e) => {
-                if (e.nativeEvent.isComposing || e.keyCode === 229) {
-                  e.preventDefault();
-                }
-              }}
-              placeholder="問題URLを貼って連携"
-              title="AtCoderの問題URLを貼って連携すると、問題ページと提出ページへのリンクが出ます"
-              aria-label="AtCoder問題URL"
-            />
-            <button type="submit" disabled={linking}>
-              {linking ? "確認中…" : "連携"}
-            </button>
-          </form>
-        )}
-          {problemErr && <span className="error-text">{problemErr}</span>}
+            <>
+              <span className="ep-label">問題</span>
+              <a
+                className="ep-title"
+                href={`https://atcoder.jp/contests/${problem.contest}/tasks/${problem.task}`}
+                target="_blank"
+                rel="noreferrer"
+              >
+                {problem.title ?? problem.task} ↗
+              </a>
+              <a
+                className="ep-submit"
+                href={`https://atcoder.jp/contests/${problem.contest}/submit?taskScreenName=${problem.task}`}
+                target="_blank"
+                rel="noreferrer"
+                onClick={copyForSubmit}
+                title="コードをクリップボードにコピーして、AtCoderの提出ページを新しいタブで開きます(提出ページの言語選択は引き継げません)"
+              >
+                {copyLabel}
+              </a>
+              <button type="button" className="linklike" onClick={unlinkProblem}>
+                解除
+              </button>
+            </>
+          ) : (
+            <ProblemSearch onPick={applyProblem} />
+          )}
         </div>
       </div>
 
