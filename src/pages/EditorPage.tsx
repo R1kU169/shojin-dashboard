@@ -17,6 +17,7 @@ const PROBLEM_KEY = "shojin:editor:problem";
 
 // エディター入力支援: 自動補完する括弧/クォートのペア
 const INDENT_KEY = "shojin:editor:indent";
+const HEIGHT_KEY = "shojin:editor:height";
 const INDENT_WIDTHS = [2, 4, 8];
 const PAIRS: Record<string, string> = {
   "(": ")",
@@ -107,6 +108,7 @@ export function EditorPage() {
   const [copyErr, setCopyErr] = useState(false);
   const [ac, setAc] = useState<AcState | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
   const linesRef = useRef<HTMLDivElement>(null);
   const codeRef = useRef<HTMLTextAreaElement>(null);
   const hlRef = useRef<HTMLPreElement>(null);
@@ -578,6 +580,24 @@ export function EditorPage() {
     }
   };
 
+  // コード欄の高さ(CSSのresizeでユーザーがドラッグした値)を覚えておく。
+  //
+  // ネイティブのresizeはインラインstyleに書き込むので、それが空のうちは
+  // まだ掴まれていない=CSSのclamp(画面高に追従)のままにしておく。
+  // 無条件に保存すると、一度も掴んでいないのに画面サイズ由来の高さが
+  // 焼き付いてしまい、以後ウィンドウを変えても追従しなくなる。
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (!el) return;
+    const saved = localStorage.getItem(HEIGHT_KEY);
+    if (saved) el.style.height = saved;
+    const ro = new ResizeObserver(() => {
+      if (el.style.height) localStorage.setItem(HEIGHT_KEY, el.style.height);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   const onScroll = (e: UIEvent<HTMLTextAreaElement>) => {
     const { scrollTop, scrollLeft } = e.currentTarget;
     if (linesRef.current) linesRef.current.scrollTop = scrollTop;
@@ -682,7 +702,7 @@ export function EditorPage() {
         >
           ↺ テンプレートに戻す
         </button>
-        <div className="editor-wrap">
+        <div className="editor-wrap" ref={wrapRef}>
           <div className="editor-lines" ref={linesRef} aria-hidden="true">
             {Array.from({ length: lineCount }, (_, i) => (
               <div key={i}>{i + 1}</div>
