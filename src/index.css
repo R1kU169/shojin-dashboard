@@ -1056,6 +1056,25 @@ button.member-card {
   font-size: 11px;
   color: var(--muted);
 }
+/* コンテスト目次の見出し。長い目次でも今どのコンテストか分かるよう貼り付ける */
+.ep-head {
+  position: sticky;
+  /* .ep-listbox の padding 4px を打ち消す。0だと隙間を行が通り抜ける */
+  top: -4px;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 10px 5px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted);
+}
+/* 目次は EX26 や A01 のような記号が並ぶので、記号欄を広げて名前を揃える */
+.ep-listbox.toc .ep-opt-idx {
+  min-width: 3.4em;
+}
 @media (max-width: 560px) {
   .editor-problem {
     width: 100%;

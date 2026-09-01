@@ -1,14 +1,25 @@
-import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Fragment,
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import type { FormEvent, KeyboardEvent } from "react";
 import { getProblems } from "../lib/cache";
 import {
   PROBLEM_ID,
   buildIndex,
+  findById,
+  indexLabel,
   isSearchable,
   parseProblemUrl,
+  searchContests,
   searchProblems,
   toLinked,
 } from "../lib/problemSearch";
+import type { ContestGroup } from "../lib/problemSearch";
 import type { LinkedProblem, Problem } from "../lib/types";
 
 /** 候補の表示上限。問題名は480件ほど重複があるので8件では足りない */
@@ -33,6 +44,10 @@ export function ProblemSearch({
   // 変換中の onChange は "かんｓ" のような途中の値なので拾わない
   const composing = useRef(false);
   const wrapRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLUListElement>(null);
+  // 直前のactive変更がキーボード由来か。マウス由来でスクロールすると
+  // 別の行がカーソルの下に来てmouseenterが再発火し、ループになる
+  const kbdRef = useRef(false);
 
   // 問題一覧(gzipで約200KB)は初回フォーカス時に読む。検索しない人には払わせない。
   // getProblemsはIndexedDBに24時間キャッシュ + 同時呼び出しを束ねるので何度呼んでもよい
@@ -61,15 +76,50 @@ export function ProblemSearch({
   // PROBLEM_IDは英数字と_の間に_を要求するので、問題名と競合することはない
   const idHit = useMemo(() => {
     if (!ix || looksUrl || !PROBLEM_ID.test(trimmed)) return null;
-    const id = trimmed.toLowerCase();
-    return ix.problems.find((p) => p.id === id) ?? null;
+    return findById(ix.problems, trimmed) ?? null;
   }, [ix, trimmed, looksUrl]);
 
-  const rows = useMemo(() => {
+  // 問題名で当たった分。上限とオーバーフロー注記はこのブロックにだけ効かせる
+  const named = useMemo(() => {
     const base = idHit ? [idHit, ...hits.filter((p) => p.id !== idHit.id)] : hits;
     return base.slice(0, LIMIT);
   }, [idHit, hits]);
   const overflow = (idHit ? hits.length + 1 : hits.length) > LIMIT;
+
+  // コンテスト名で引かれたら、そのコンテストの問題を章立て順に全部出す(上限なし)。
+  // 名前一致だけで上限を超えているなら名前クエリとみなし、偶発的な目次は出さない
+  const groups = useMemo(
+    () => (ix && !looksUrl ? searchContests(ix, trimmed, !overflow) : []),
+    [ix, trimmed, looksUrl, overflow],
+  );
+
+  const rows = useMemo(
+    () => named.concat(...groups.map((g) => g.problems)),
+    [named, groups],
+  );
+  // 見出しを差し込む行番号
+  const heads = useMemo(() => {
+    const m = new Map<number, ContestGroup>();
+    let at = named.length;
+    for (const g of groups) {
+      m.set(at, g);
+      at += g.problems.length;
+    }
+    return m;
+  }, [named, groups]);
+
+  // 目次は137行になることがあるので、キーボードで動かした選択を見える位置に送る
+  useEffect(() => {
+    if (!kbdRef.current || active < 0) return;
+    document
+      .getElementById(`ep-opt-${active}`)
+      ?.scrollIntoView({ block: "nearest" });
+  }, [active]);
+
+  // <ul>は再マウントされないので、クエリが変わったらスクロール位置を戻す
+  useEffect(() => {
+    listRef.current?.scrollTo({ top: 0 });
+  }, [trimmed]);
 
   // 入力欄の外を触ったら閉じる(ツールバーはフォーカストラップではない)
   useEffect(() => {
@@ -110,8 +160,7 @@ export function ProblemSearch({
       // 候補が無い(=一覧が未読込)場合はここで引く
       setErr("");
       try {
-        const id = s.toLowerCase();
-        const hit = (await getProblems()).find((p) => p.id === id);
+        const hit = findById(await getProblems(), s);
         if (hit) {
           pick(hit);
           return;
@@ -134,9 +183,11 @@ export function ProblemSearch({
     if (e.key === "ArrowDown" && rows.length > 0) {
       e.preventDefault();
       setOpen(true);
+      kbdRef.current = true;
       setActive((i) => (i + 1) % rows.length);
     } else if (e.key === "ArrowUp" && rows.length > 0) {
       e.preventDefault();
+      kbdRef.current = true;
       setActive((i) => (i <= 0 ? -1 : i - 1));
     } else if (e.key === "Escape" && open) {
       e.preventDefault(); // Safariは入力欄を空にしてしまうので止める
@@ -189,7 +240,12 @@ export function ProblemSearch({
         <button type="submit">連携</button>
       </form>
       {showList && (
-        <ul className="ep-listbox" id={listId} role="listbox">
+        <ul
+          className={groups.length ? "ep-listbox toc" : "ep-listbox"}
+          id={listId}
+          role="listbox"
+          ref={listRef}
+        >
           {loading && <li className="ep-note muted">問題一覧を読み込み中…</li>}
           {loadErr && (
             <li className="ep-note error-text">
@@ -209,25 +265,43 @@ export function ProblemSearch({
             rows.length === 0 && (
               <li className="ep-note muted">一致する問題がありません</li>
             )}
-          {rows.map((p, i) => (
-            <li
-              key={p.id}
-              id={`ep-opt-${i}`}
-              role="option"
-              aria-selected={i === active}
-              className={i === active ? "ep-opt on" : "ep-opt"}
-              // blurで先に閉じてクリックが届かなくなるのを防ぐ
-              onMouseDown={(e) => e.preventDefault()}
-              onMouseEnter={() => setActive(i)}
-              onClick={() => pick(p)}
-            >
-              <span className="ep-opt-idx">{p.problem_index}</span>
-              <span className="ep-opt-name">{p.name}</span>
-              <span className="ep-opt-contest">
-                {toLinked(p, ix?.contests ?? new Set()).contest}
-              </span>
-            </li>
-          ))}
+          {rows.map((p, i) => {
+            const head = heads.get(i);
+            const contests = ix?.contests ?? new Set<string>();
+            return (
+              // 同じ問題が名前一致と目次の両方に出ることがあるのでキーに位置を混ぜる
+              <Fragment key={`${i}-${p.id}`}>
+                {head && (
+                  <li className="ep-head" role="presentation">
+                    <span>{head.id}</span>
+                    <span>{head.problems.length}問</span>
+                  </li>
+                )}
+                <li
+                  id={`ep-opt-${i}`}
+                  role="option"
+                  aria-selected={i === active}
+                  className={i === active ? "ep-opt on" : "ep-opt"}
+                  // blurで先に閉じてクリックが届かなくなるのを防ぐ
+                  onMouseDown={(e) => e.preventDefault()}
+                  onMouseEnter={() => {
+                    kbdRef.current = false;
+                    setActive(i);
+                  }}
+                  onClick={() => pick(p)}
+                >
+                  <span className="ep-opt-idx">{indexLabel(p, contests)}</span>
+                  <span className="ep-opt-name">{p.name}</span>
+                  {/* 目次の行は見出しにコンテスト名が出ているので繰り返さない */}
+                  {i < named.length && (
+                    <span className="ep-opt-contest">
+                      {toLinked(p, contests).contest}
+                    </span>
+                  )}
+                </li>
+              </Fragment>
+            );
+          })}
           {overflow && (
             <li className="ep-note muted">
               他にも候補があります。絞り込んでください
