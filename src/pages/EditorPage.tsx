@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import type { ChangeEvent, FormEvent, KeyboardEvent, UIEvent } from "react";
 import { useSearchParams } from "react-router-dom";
 import { getProblems } from "../lib/cache";
@@ -255,6 +255,27 @@ export function EditorPage() {
     }
   };
 
+  // Ctrl/Cmd+Enterはコード欄に限らずエディタータブのどこからでも効かせる。
+  // run() は code/stdin/lang/running を閉じ込むので、[]依存で登録した素の
+  // クロージャだと「常に初期コードを実行し、runningがfalse固定で中断も壊れる」。
+  // useEffectEventなら識別子は安定したまま常に最新のrunを呼べる。
+  const onRunHotkey = useEffectEvent(() => {
+    void run();
+  });
+  useEffect(() => {
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if (e.isComposing || e.keyCode === 229) return;
+      if (e.repeat) return; // 長押しで実行↔中断がピンポンするのを防ぐ
+      if (!(e.ctrlKey || e.metaKey) || e.key !== "Enter") return;
+      // preventDefaultは必須(消すと実行と同時にtextareaへ改行が入る)
+      e.preventDefault();
+      onRunHotkey();
+    };
+    // キャプチャで拾って、途中で伝播を止める要素があっても取りこぼさない
+    document.addEventListener("keydown", onKey, true);
+    return () => document.removeEventListener("keydown", onKey, true);
+  }, []);
+
   /**
    * [from,to) を text に置き換えて選択を張り直す。まず execCommand を使い、
    * ブラウザのundo履歴(Cmd+Z)を保つ。使えない環境ではsetStateにフォールバック。
@@ -300,12 +321,8 @@ export function EditorPage() {
     const s = el.selectionStart;
     const t = el.selectionEnd;
 
-    if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
-      e.preventDefault();
-      void run();
-      return;
-    }
-    // 他のショートカット(コピー・undo等)は邪魔しない
+    // 他のショートカット(コピー・undo等)は邪魔しない。
+    // Ctrl/Cmd+Enterはページ全体のリスナー(下のuseEffect)が受ける
     if (e.ctrlKey || e.metaKey || e.altKey) return;
 
     if (e.key === "Tab") {
