@@ -1140,12 +1140,54 @@ button.member-card {
   /* 画面の高さに応じて広く使う(小さい画面でも380pxは確保)。
      ユーザーがドラッグしたあとはインラインstyleの高さが優先される */
   height: clamp(380px, 58vh, 800px);
-  /* コード欄の高さを標準入力欄と同じ感覚で変えられるようにする。
+  /* 高さは下端のつまみ(.editor-grip)が inline style で書き換える。
      textarea自体はハイライト層に絶対配置で重ねてあるので、
-     高さを持っているこの箱をリサイズ対象にする(resizeにはoverflowが要る) */
-  resize: vertical;
-  overflow: hidden;
+     高さを持っているこの箱を対象にしている */
   min-height: 160px;
+}
+/* コード欄の高さを変えるつまみ。
+   CSSの resize のつまみは .editor-card の overflow:hidden + border-radius に
+   丸ごと切られて見えなかったので、カード下端に自前のバーとして出す */
+.editor-grip {
+  flex: none;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 10px;
+  border-top: 1px solid var(--border);
+  background: color-mix(in srgb, var(--ink) 2%, transparent);
+  cursor: ns-resize;
+  /* タッチでドラッグするときにページのスクロールに取られないようにする */
+  touch-action: none;
+}
+.editor-grip::before {
+  content: "";
+  width: 24px;
+  height: 8px;
+  /* 標準入力欄のつまみと同じ斜線の見た目。--baselineでは暗いテーマで
+     ほとんど見えなかったので、両テーマで視認できる--mutedを使う */
+  background: repeating-linear-gradient(
+    -45deg,
+    var(--muted) 0 1px,
+    transparent 1px 4px
+  );
+}
+.editor-grip:hover {
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+.editor-grip:hover::before {
+  background: repeating-linear-gradient(
+    -45deg,
+    var(--accent) 0 1px,
+    transparent 1px 4px
+  );
+}
+@media (max-width: 560px) {
+  /* 指で掴める高さを確保する */
+  .editor-grip {
+    height: 24px;
+  }
 }
 .editor-note {
   font-size: 12px;

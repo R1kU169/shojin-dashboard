@@ -1,5 +1,10 @@
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
-import type { ChangeEvent, KeyboardEvent, UIEvent } from "react";
+import type {
+  ChangeEvent,
+  KeyboardEvent,
+  PointerEvent as ReactPointerEvent,
+  UIEvent,
+} from "react";
 import { useSearchParams } from "react-router-dom";
 import { AcPopup } from "../components/AcPopup";
 import { ProblemSearch } from "../components/ProblemSearch";
@@ -18,6 +23,8 @@ const PROBLEM_KEY = "shojin:editor:problem";
 // エディター入力支援: 自動補完する括弧/クォートのペア
 const INDENT_KEY = "shojin:editor:indent";
 const HEIGHT_KEY = "shojin:editor:height";
+// コード欄の最小高さ(CSSの .editor-wrap min-height と揃える)
+const MIN_EDITOR_H = 160;
 const INDENT_WIDTHS = [2, 4, 8];
 const PAIRS: Record<string, string> = {
   "(": ")",
@@ -598,6 +605,48 @@ export function EditorPage() {
     return () => ro.disconnect();
   }, []);
 
+  /** コード欄の高さを px で設定する(最小値でクランプ)。保存はResizeObserverが拾う */
+  const setEditorHeight = (h: number) => {
+    const el = wrapRef.current;
+    if (el) el.style.height = `${Math.round(Math.max(MIN_EDITOR_H, h))}px`;
+  };
+
+  // つまみのドラッグ。setPointerCaptureで、掴んだ指/カーソルがバーの外へ出ても
+  // 追従させる(はみ出した瞬間にリサイズが止まるのを防ぐ)
+  const onGripDown = (e: ReactPointerEvent<HTMLDivElement>) => {
+    const el = wrapRef.current;
+    if (!el) return;
+    e.preventDefault();
+    const grip = e.currentTarget;
+    const startY = e.clientY;
+    const startH = el.getBoundingClientRect().height;
+    grip.setPointerCapture(e.pointerId);
+    const move = (ev: PointerEvent) => setEditorHeight(startH + ev.clientY - startY);
+    const up = () => {
+      grip.releasePointerCapture(e.pointerId);
+      grip.removeEventListener("pointermove", move);
+      grip.removeEventListener("pointerup", up);
+      grip.removeEventListener("pointercancel", up);
+    };
+    grip.addEventListener("pointermove", move);
+    grip.addEventListener("pointerup", up);
+    grip.addEventListener("pointercancel", up);
+  };
+
+  // マウスが使えない場合の操作手段(role="separator"は矢印キーで動かせることが期待される)
+  const onGripKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    const el = wrapRef.current;
+    if (!el) return;
+    const step = e.shiftKey ? 80 : 20;
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setEditorHeight(el.getBoundingClientRect().height + step);
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setEditorHeight(el.getBoundingClientRect().height - step);
+    }
+  };
+
   const onScroll = (e: UIEvent<HTMLTextAreaElement>) => {
     const { scrollTop, scrollLeft } = e.currentTarget;
     if (linesRef.current) linesRef.current.scrollTop = scrollTop;
@@ -746,6 +795,17 @@ export function EditorPage() {
             <span ref={measureRef} className="editor-measure" aria-hidden="true" />
           </div>
         </div>
+        {/* 高さ変更のつまみ。ネイティブのresizeのつまみはカードの角丸に
+            完全に切られて見えないので、自前でカード下端に出す */}
+        <div
+          className="editor-grip"
+          onPointerDown={onGripDown}
+          onKeyDown={onGripKeyDown}
+          role="separator"
+          aria-orientation="horizontal"
+          aria-label="コード欄の高さを変える(ドラッグ、または上下キー)"
+          tabIndex={0}
+        />
         {ac && (
           <AcPopup
             items={ac.items}
