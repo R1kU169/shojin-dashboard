@@ -17,6 +17,15 @@ export interface EditorLang {
   template: string;
   /** Wandboxに渡すスイッチ(カンマ区切り)。未指定はコンパイラのデフォルト */
   options?: string;
+  /**
+   * compiler-option-raw に渡す生のコンパイラ引数。1要素 = argv 1個。
+   *
+   * APIは改行区切りで受け取るので、ここでは必ず配列で持つこと。
+   * "-Wno-a -Wno-b" のように1要素へ詰めると、その文字列ごと1個の引数として渡り、
+   * 存在しないオプション扱いになって警告が消えないどころか増える(実測)。
+   * switchのフラグより後ろに置かれるので、gccの後勝ちで -Wno-* が効く。
+   */
+  rawOptions?: string[];
 }
 
 // 各言語のテンプレートはA+B問題の解答例。全言語とも実際にWandboxで
@@ -30,6 +39,10 @@ export const EDITOR_LANGS: EditorLang[] = [
     version: "C++23",
     // オプション未指定だとgccデフォルト(gnu++17)になるため、gnu++2b(=C++23)を明示
     options: "warning,gnu++2b",
+    // warningは -Wall -Wextra に展開される。未使用変数の指摘は競プロの書き捨てコードでは
+    // 当たり前に出るうえ実行を妨げないので、この2つだけ黙らせる。
+    // -Wsign-compare のような本当に役立つ警告は残る(実測で確認)。
+    rawOptions: ["-Wno-unused-variable", "-Wno-unused-but-set-variable"],
     template: `#include <bits/stdc++.h>
 using namespace std;
 
@@ -79,6 +92,8 @@ class Main {
     label: "C (GCC 13)",
     compiler: "gcc-13.2.0-c",
     version: "C17",
+    // C++と違いoptionsを付けていない=-Wallが無いので、未使用変数の警告は
+    // そもそも出ない。よってrawOptionsも要らない(付け忘れではない)
     template: `#include <stdio.h>
 
 int main(void) {
@@ -258,16 +273,25 @@ export interface RunResult {
 
 /** コードを実行して結果を返す。ネットワーク/サービスエラー時は例外。 */
 export async function runCode(
-  compiler: string,
+  lang: EditorLang,
   code: string,
   stdin: string,
-  options?: string,
   signal?: AbortSignal,
 ): Promise<RunResult> {
   const res = await fetch(`${API}/compile.json`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ compiler, code, stdin, ...(options ? { options } : {}) }),
+    body: JSON.stringify({
+      compiler: lang.compiler,
+      code,
+      stdin,
+      ...(lang.options ? { options: lang.options } : {}),
+      // キー名はケバブケース。1要素=argv1個なので改行で繋ぐ(スペース区切りは不可)。
+      // 使わない言語では送らない(compiler-option-raw非対応のコンパイラがあるため)
+      ...(lang.rawOptions?.length
+        ? { "compiler-option-raw": lang.rawOptions.join("\n") }
+        : {}),
+    }),
     signal,
   });
   if (!res.ok) throw new Error(`実行APIエラー (HTTP ${res.status})`);

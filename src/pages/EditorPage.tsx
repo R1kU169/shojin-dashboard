@@ -8,10 +8,11 @@ import type {
 import { useSearchParams } from "react-router-dom";
 import { AcPopup } from "../components/AcPopup";
 import { ProblemSearch } from "../components/ProblemSearch";
+import { toggleLineComment } from "../lib/comment";
 import { collectCompletions } from "../lib/completion";
 import { highlightCode } from "../lib/highlight";
 import { EDITOR_LANGS } from "../lib/wandbox";
-import { runCode } from "../lib/run";
+import { isWarningOnly, runCode } from "../lib/run";
 import type { RunOutcome } from "../lib/run";
 import type { LinkedProblem } from "../lib/types";
 
@@ -485,7 +486,9 @@ export function EditorPage() {
       e.preventDefault();
       // 選択を伸ばすときは「動く側の端」を動かす(Safariは"none"を返すのでforward扱い)
       const head = el.selectionDirection === "backward" ? s : t;
-      const lineStart = v.lastIndexOf("\n", head - 1) + 1;
+      // 位置0のときlastIndexOfに-1を渡すと0にクランプされ、先頭の改行自身に
+      // 一致してしまう(行頭が1行ずれる)ので分岐する
+      const lineStart = head === 0 ? 0 : v.lastIndexOf("\n", head - 1) + 1;
       let lineEnd = v.indexOf("\n", lineStart);
       if (lineEnd === -1) lineEnd = v.length;
       const indent = /^[ \t]*/.exec(v.slice(lineStart, lineEnd))?.[0] ?? "";
@@ -510,6 +513,25 @@ export function EditorPage() {
       return;
     }
 
+    // Ctrl+/ (macOSは⌘+/) で行コメントをトグル。
+    // 下の「修飾キーは素通し」returnより前に置くこと。
+    //
+    // AltGrは ctrlKey && altKey として報告されるので、altKeyが立っていたら
+    // 見送る(「/」をAltGrで打つ配列でユーザーの入力を食わないため)。
+    // e.code は見ない: JISでも「/」キーは key:"/" を返すので得が無く、
+    // Slash位置が別文字の配列(独語の「-」など)で誤爆する。
+    // shiftKeyも見ない(「/」にShiftが要る配列があるため)。
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key === "/") {
+      e.preventDefault();
+      if (e.repeat) return; // 長押しでコメント↔解除がピンポンするのを防ぐ
+      const patch = toggleLineComment(v, s, t, langKey);
+      if (!patch) return;
+      // edit()のsetCodeフォールバック経路ではinputが出ず候補が閉じないので明示的に閉じる
+      setAc(null);
+      edit(el, patch.from, patch.to, patch.text, patch.selFrom, patch.selTo);
+      return;
+    }
+
     // 他のショートカット(コピー・undo等)は邪魔しない。
     // Ctrl/Cmd+Enterはページ全体のリスナー(下のuseEffect)が受ける
     if (e.ctrlKey || e.metaKey || e.altKey) return;
@@ -518,7 +540,9 @@ export function EditorPage() {
       e.preventDefault();
       if (e.shiftKey || v.slice(s, t).includes("\n")) {
         // 選択行ブロックをまとめてインデント/デデント
-        const blockStart = v.lastIndexOf("\n", s - 1) + 1;
+        // 上と同じ理由。ここは from > to の壊れた置換になりうる
+        // (先頭が空行の文書で、位置0からShift+Tab)
+        const blockStart = s === 0 ? 0 : v.lastIndexOf("\n", s - 1) + 1;
         let blockEnd = v.indexOf("\n", Math.max(s, t - 1));
         if (blockEnd === -1) blockEnd = v.length;
         const lines = v.slice(blockStart, blockEnd).split("\n");
@@ -666,6 +690,9 @@ export function EditorPage() {
         ? "コピーできませんでした(提出ページへ) ↗"
         : "コードをコピーして提出 ↗";
   const exitOk = result !== null && result.status === "0" && !result.signal;
+  // コンパイラの出力が警告(=実行を妨げないもの)だけかどうか。
+  // 判定できないときはfalseになり、従来どおりエラー扱いの赤で出る
+  const warnOnly = result !== null && isWarningOnly(result);
 
   return (
     <div className="page">
@@ -709,7 +736,9 @@ export function EditorPage() {
         >
           {running ? "中断" : "実行 ▶"}
         </button>
-        <span className="muted editor-hint">Ctrl+Enterでも実行</span>
+        <span className="muted editor-hint">
+          Ctrl+Enterで実行 / Ctrl+/でコメント
+        </span>
         <div className="editor-problem">
           {problem ? (
             <>
@@ -860,8 +889,12 @@ export function EditorPage() {
               <pre className="io-out">{result.stdout || "(出力なし)"}</pre>
               {result.compilerError && (
                 <>
-                  <div className="io-label">コンパイラメッセージ</div>
-                  <pre className="io-out io-err">{result.compilerError}</pre>
+                  <div className="io-label">
+                    {warnOnly ? "コンパイラの警告" : "コンパイラメッセージ"}
+                  </div>
+                  <pre className={warnOnly ? "io-out io-warn" : "io-out io-err"}>
+                    {result.compilerError}
+                  </pre>
                 </>
               )}
               {result.stderr && (

@@ -30,6 +30,28 @@ function isSandboxFailure(r: RunResult): boolean {
 }
 
 /**
+ * コンパイラの出力が「実行を妨げないメッセージだけ」と言い切れるか。
+ *
+ * 言い切れないときはfalse(=従来どおりエラー扱いの赤)。警告を赤く出す害より、
+ * エラーを警告色で出して見落とさせる害の方が大きいので、迷ったら赤に寄せる。
+ *
+ * 終了コードだけでも文字列だけでも判定できない(どちらも実測で反例がある):
+ *  - 文字列だけでは不足: Goの「declared and not used」はコンパイルエラーなのに
+ *    error という語を含まない
+ *  - 終了コードだけでは不足: 警告つきでabortしたコードは status 134 になるが
+ *    コンパイル自体は通っている(Wandboxはシグナルを128+nとしてstatusに畳むので
+ *    signalは常に空)
+ */
+export function isWarningOnly(r: RunResult): boolean {
+  if (r.compilerError === "") return false;
+  // 「エラーらしい語」の検出はわざと大雑把。ユーザーのコードにerrorという識別子が
+  // あると誤検知するが、その場合は従来の赤に戻るだけで実害はない
+  if (/\berrors?\b/i.test(r.compilerError)) return false;
+  // プログラムが動いた証拠があれば、コンパイル自体は通っている
+  return r.status === "0" || r.stdout !== "" || r.stderr !== "";
+}
+
+/**
  * コードを実行する。Wandboxが使えない場合はCompiler Explorerに切り替える。
  * 中断(AbortError)はそのまま投げ直す。どちらでも実行できない場合は例外。
  */
@@ -41,7 +63,7 @@ export async function runCode(
 ): Promise<RunOutcome> {
   let reason: string;
   try {
-    const r = await runWandbox(lang.compiler, code, stdin, lang.options, signal);
+    const r = await runWandbox(lang, code, stdin, signal);
     if (!isSandboxFailure(r)) return { ...r, backend: "wandbox" };
     reason = "Wandboxの実行サンドボックスが停止しています";
   } catch (e) {

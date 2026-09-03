@@ -1424,6 +1424,16 @@ button.member-card {
   color: #e34948;
   margin-top: 6px;
 }
+/* 警告だけのコンパイラメッセージ。エラーと同じ赤にすると「直さないと動かない」と
+   誤解させるので琥珀色にする。--brand-aはブランド装飾用に役割を分けてあるので
+   トークンは使わず、.exit-chipと同じくリテラル+ダーク上書きの作法にする */
+.io-warn {
+  color: #a15c00;
+  margin-top: 6px;
+}
+:root[data-theme="dark"] .io-warn {
+  color: #e0a34a;
+}
 /* Wandbox障害でCompiler Explorerに切り替わった時の注意書き */
 .fallback-note {
   margin: 0 0 8px;
