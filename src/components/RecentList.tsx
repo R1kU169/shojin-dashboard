@@ -10,10 +10,11 @@ export interface RecentSolved {
   second: number;
 }
 
-function ymd(sec: number): string {
+function ymdhm(sec: number): string {
   const d = new Date(sec * 1000);
   const p = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+  const date = `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+  return `${date} ${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
 export function RecentList({ items }: { items: RecentSolved[] }) {
@@ -27,7 +28,7 @@ export function RecentList({ items }: { items: RecentSolved[] }) {
         <tr>
           <th>問題</th>
           <th className="num">難易度</th>
-          <th className="num">解いた日</th>
+          <th className="num">解いた日時</th>
         </tr>
       </thead>
       <tbody>
@@ -48,7 +49,7 @@ export function RecentList({ items }: { items: RecentSolved[] }) {
                 <span className="muted contest-id">{it.contestId}</span>
               </td>
               <td className="num">{clip ?? "—"}</td>
-              <td className="num">{ymd(it.second)}</td>
+              <td className="num">{ymdhm(it.second)}</td>
             </tr>
           );
         })}

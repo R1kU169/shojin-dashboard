@@ -1738,6 +1738,7 @@ button.member-card {
 .data-table .num {
   text-align: right;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 .rank-cell {
   font-size: 16px;
