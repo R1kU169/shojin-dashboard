@@ -266,7 +266,8 @@ class Parser {
     if (minBp < 30) {
       if (t.k === "op" && t.v === "(") return this.callPostfix(left);
       if (t.k === "op" && t.v === "[" && !t.sp) return this.indexPostfix(left);
-      if (t.k === "op" && (t.v === "." || t.v === "?." || t.v === "&." || (t.v === "->" && d.arrowMember) || t.v === "::")) {
+      // PHP / Perl の . は文字列の連結(二項演算子として後で読む)
+      if (t.k === "op" && ((t.v === "." && !d.concatOps.has(".")) || t.v === "?." || t.v === "&." || (t.v === "->" && d.arrowMember) || t.v === "::")) {
         return this.memberPostfix(left);
       }
       if (t.k === "op" && t.v === ":" && d.colonMethod && this.peek(1)?.k === "ident" && (this.isOp("(", 2) || this.peek(2)?.k === "str")) {

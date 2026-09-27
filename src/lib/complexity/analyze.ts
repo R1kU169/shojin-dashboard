@@ -261,10 +261,12 @@ export class Analyzer {
       case "call": {
         const r = rangeOf(e);
         if (r) return boundOf(r.to, this.boundEnv(env))?.expr ?? Q;
-        if (["sorted", "list", "reversed", "set", "enumerate", "tuple", "zip", "deque", "frozenset", "Counter", "sort", "scan_words"].includes(e.name) && e.args[0]) return this.sizeOf(e.args[0], env);
+        if (["sorted", "list", "reversed", "set", "enumerate", "tuple", "zip", "deque", "frozenset", "Counter", "sort", "scan_words", "keys", "values", "reverse", "uniq", "shuffle"].includes(e.name) && e.args.length) return this.sizeOf(e.args[e.args.length - 1], env);
         if (e.name === "head" && this.lang === "bash") return ONE;
-        // map(f, a) / filter(f, a) / Julia の parse.(Int, xs) は最後の引数の要素数(以下)
-        if ((e.name === "map" || e.name === "filter") && e.args.length >= 2) return this.sizeOf(e.args[e.args.length - 1], env);
+        // map(f, a) / filter(f, a) / Julia の parse.(Int, xs) / PHP の array_map(f, $a) は最後の引数の要素数(以下)
+        if ((e.name === "map" || e.name === "filter" || e.name === "array_map") && e.args.length >= 2) return this.sizeOf(e.args[e.args.length - 1], env);
+        // PHP の配列関数は第1引数の要素数(以下)
+        if (["array_filter", "array_values", "array_keys", "array_reverse", "array_unique", "array_slice", "array_merge", "str_split", "explode"].includes(e.name) && e.args[0]) return this.sizeOf(e.args[e.name === "explode" ? 1 : 0] ?? e.args[0], env);
         if (this.isInputExpr(e, env)) return this.named("N", "入力の要素数", 0);
         return this.named(`|${sexprText(e, 24)}|`, `${sexprText(e, 24)} の要素数`, 0);
       }
@@ -476,6 +478,8 @@ export class Analyzer {
     if (target.kind === "index") {
       let base: SExpr = target;
       while (base.kind === "index") base = base.of;
+      // $this->g[] = … / self.memo[k] = … はフィールド g / memo
+      if (base.kind === "member" && base.args === null && base.of.kind === "sym" && ["this", "self"].includes(base.of.name)) base = { kind: "sym", name: base.name };
       const idxCost = target.idx.reduce((acc, x) => plus(acc, this.exprCost(x, env, false, line)), empty());
       if (base.kind !== "sym") return idxCost;
       const name = base.name;
@@ -486,7 +490,9 @@ export class Analyzer {
       if (kind === "omap" || kind === "oset") time = logOfExpr(this.sizeSym(name));
       const sized = d && d.dims.length > 0;
       if (!sized && (kind === "hmap" || kind === "omap" || kind === "unknown" || (kind === "array" && (this.lang === "lua" || this.lang === "perl" || this.lang === "php" || this.lang === "bash" || this.lang === "js" || this.lang === "ts" || this.lang === "ruby" || this.lang === "julia")))) {
-        g.set(name, ONE);
+        // $g[] = str_split($line) のように配列を足すなら、足した配列の大きさぶん増える(S4')
+        const pushArr = target.idx.length === 0 && value && (allocOf(value, this.spec.typeKind) !== null || (value.kind === "call" && ["str_split", "explode", "preg_split", "array_fill", "range", "array_map"].includes(value.name)));
+        g.set(name, pushArr && value ? this.sizeOf(value, env) : ONE);
       }
       return plus(idxCost, { time, alloc: ONE, grow: g, specials: [] });
     }
@@ -958,7 +964,24 @@ export class Analyzer {
             }
           }
           pending.push(...n.scalars.filter((s) => !this.consts[s]));
-        } else if (n.kind === "func") perBlock(n.body);
+          continue;
+        }
+        // 確保の大きさやループの回数に使った入力は、別の役割(グリッドの H・W など)なので配列の長さの候補から外す
+        const used = new Set<string>();
+        if (n.kind === "decl") n.dims.forEach((d) => walk(d, (x) => void (x.kind === "sym" && used.add(x.name))));
+        if (n.kind === "assign" && n.value) {
+          const al = allocOf(n.value, this.spec.typeKind);
+          al?.dims.forEach((d) => walk(d, (x) => void (x.kind === "sym" && used.add(x.name))));
+        }
+        if (n.kind === "loop") {
+          const b = n.bound;
+          walk(b.form === "for-range" ? b.to : b.form === "for-c" ? b.cond : b.form === "count" ? b.count : null, (x) => void (x.kind === "sym" && used.add(x.name)));
+        }
+        for (const u of used) {
+          const k = pending.indexOf(u);
+          if (k >= 0) pending.splice(k, 1);
+        }
+        if (n.kind === "func") perBlock(n.body);
         else if (n.kind === "loop") perBlock(n.body);
         else if (n.kind === "branch") n.branches.forEach(perBlock);
       }
@@ -1262,7 +1285,11 @@ export class Analyzer {
 /** b = a / b = sorted(a) / b = a[:] / b = a.copy() の写し元 */
 function copySource(e: SExpr): string | null {
   if (e.kind === "sym") return e.name;
-  if (e.kind === "call" && ["sorted", "list", "reversed", "copy", "deepcopy", "tuple", "sort", "scan_words"].includes(e.name) && e.args[0]?.kind === "sym") return e.args[0].name;
+  // sort { … } @a / reverse @a のようにブロックが先に来る形もあるので、最後の名前の引数を写し元にする
+  if (e.kind === "call" && ["sorted", "list", "reversed", "copy", "deepcopy", "tuple", "sort", "scan_words", "reverse", "grep", "uniq", "shuffle"].includes(e.name)) {
+    const src = [...e.args].reverse().find((a) => a.kind === "sym");
+    if (src && src.kind === "sym") return src.name;
+  }
   if (e.kind === "member" && ["copy", "clone", "dup", "to_vec", "to_owned", "sorted", "reversed", "slice", "concat", "to_a"].includes(e.name) && e.of.kind === "sym") return e.of.name;
   if (e.kind === "slice" && e.of.kind === "sym") return e.of.name;
   return null;

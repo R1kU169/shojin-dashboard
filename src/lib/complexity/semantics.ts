@@ -171,8 +171,8 @@ export function allocOf(e: SExpr, typeKind: Readonly<Record<string, ContainerKin
       if (e.brace) return { container: e.brace === "hash" ? "hmap" : "hset", dims: [], costsTime: false };
       return { container: "array", dims: e.items.length > 0 ? [{ kind: "num", value: e.items.length }] : [], costsTime: e.items.length > 0 };
     case "bin": {
-      // [0] * n(Python)/ (0) x $n(Perl)/ "a" * n(Ruby の文字列)
-      if ((e.op === "*" || e.op === "x") && (e.l.kind === "list" || e.l.kind === "str")) {
+      // [0] * n(Python)/ (0) x $n(Perl。(0) は括弧を剥がすと数になる)/ "a" * n(Ruby の文字列)
+      if ((e.op === "*" && (e.l.kind === "list" || e.l.kind === "str")) || e.op === "x") {
         const inner = e.l.kind === "list" && e.l.items.length === 1 ? nested(e.l.items[0]) : [];
         return { container: e.l.kind === "str" ? "string" : "array", dims: [e.r, ...inner], costsTime: true };
       }
@@ -213,7 +213,8 @@ export function allocOf(e: SExpr, typeKind: Readonly<Record<string, ContainerKin
         const r = rangeOf(a[0]);
         return { container: "array", dims: [r ? r.to : size(a[0])], costsTime: true };
       }
-      if ((n === "range" || n === "iota") && a.length >= 1) return null; // Python の range は遅延(確保しない)
+      // Python の range は遅延(確保しない)。PHP の range(a, b) は配列を作る(言語の typeKind に range があるとき)
+      if ((n === "range" || n === "iota") && a.length >= 1) return typeKind.range === "array" ? { container: "array", dims: [a[a.length >= 2 ? 1 : 0]], costsTime: true } : null;
       if ((n === "zeros" || n === "ones" || n === "trues" || n === "falses" || n === "fill" || n === "Vector" || n === "Matrix" || n === "Array" || n === "similar") && a.length >= 1) {
         // Julia: zeros(Int, n, m) / fill(x, n, m) / Vector{Int}(undef, n) / Array{Int}(undef, n, m)
         const sizes = a.filter((x, i) => !(n === "fill" && i === 0) && !(x.kind === "sym" && (/^[A-Z]/.test(x.name) || x.name === "undef")));

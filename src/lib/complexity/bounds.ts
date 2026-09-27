@@ -357,6 +357,8 @@ function updateOf(e: SExpr, v: string): { op: string; by: SExpr | null } | null 
   if (val.kind === "bin" && val.l.kind === "sym" && val.l.name === v) return { op: `${val.op}=`, by: val.r };
   if (val.kind === "bin" && val.op === "+" && val.r.kind === "sym" && val.r.name === v) return { op: "+=", by: val.l };
   if (val.kind === "bin" && val.op === "&") return { op: "&=", by: val.r };
+  // PHP の $k = intdiv($k, 2)
+  if (val.kind === "call" && val.name === "intdiv" && val.args[0]?.kind === "sym" && val.args[0].name === v && val.args[1]) return { op: "/=", by: val.args[1] };
   // Nim の x = x div 10 / Ruby の x = x / 10 は上で拾える。それ以外は不明
   return { op: "=", by: val };
 }

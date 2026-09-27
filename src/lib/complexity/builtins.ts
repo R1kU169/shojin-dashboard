@@ -282,6 +282,41 @@ const BASH_FREE = table([
   ["head echo printf read readarray read_all len substr date bc expr test true false", r(one)],
 ]);
 
+// PHP
+/** max(...$a) / max($a) は配列の要素数、max($x, $y) は1 */
+const maxMin = (c: CallCtx): Expr => {
+  const s = c.args.find((a) => a.kind === "un" && a.op === "*");
+  if (s && s.kind === "un") return c.size(s.e);
+  return c.args.length === 1 ? c.size(c.args[0]) : ONE;
+};
+const PHP_FREE = table([
+  ["sort rsort asort arsort ksort krsort natsort natcasesort array_multisort", r(AlogA(0))],
+  ["usort uasort uksort", r(AlogA(0), { cmpArg: 1 })],
+  ["array_sum array_product array_keys array_values array_flip array_reverse array_merge array_slice array_unique array_count_values array_column array_fill_keys array_diff array_diff_key array_intersect array_intersect_key array_combine array_pad array_chunk shuffle str_split array_filter array_walk array_reduce iterator_to_array strrev strtolower strtoupper str_replace preg_replace preg_match_all json_encode array_shift array_unshift array_splice", r(A(0), { loopArg: 1 })],
+  ["in_array array_search implode join explode preg_split strpos stripos strrpos str_contains str_starts_with str_ends_with substr_count", r(A(1))],
+  ["range str_repeat", r(B(1))],
+  ["array_fill count sizeof strlen mb_strlen isset empty unset array_key_exists key_exists array_pop array_key_first array_key_last intval floatval strval boolval intdiv abs floor ceil round sqrt pow mt_rand rand random_int ord chr substr sprintf printf fwrite fputs number_format trim rtrim ltrim fgets fscanf sscanf readline is_numeric is_array is_int gettype var_dump print_r str_pad fopen fclose gmp_add gmp_mul gmp_mod bcadd bcmul bcmod", r(one)],
+]);
+PHP_FREE.array_map = r(lastColl, { loopArg: 0 });
+PHP_FREE.array_push = r(one, { grows: true });
+PHP_FREE.max = r(maxMin);
+PHP_FREE.min = r(maxMin);
+
+// Perl(sort { … } @a / map { … } @a / grep { … } @a はブロックを先に、リストを最後に書く)
+const lastCollLog = (c: CallCtx): Expr => {
+  const s = lastColl(c);
+  return mul(s, logOfExpr(s));
+};
+const PERL_FREE = table([
+  ["sort", r(lastCollLog, { cmpArg: 0 })],
+  ["map grep first any all none sum sum0 max min maxstr minstr uniq shuffle reduce pairs", r(lastColl, { loopArg: 0 })],
+  ["reverse join keys values", r(lastColl)],
+  ["splice unshift", r(A(0))],
+  ["index rindex lc uc", r(A(0))],
+  ["pop shift scalar length exists delete defined abs int sqrt ord chr sprintf printf print say chomp chop die warn substr ref bless open close each wantarray exit", r(one)],
+]);
+PERL_FREE.push = r(one, { grows: true });
+
 /** 8言語の表は langs/*.ts から登録する(循環を避けるため後から入れる) */
 export const FREE: Record<FreeTable, Record<string, BuiltinRule>> = {
   cpp: CPP_FREE,
@@ -294,8 +329,8 @@ export const FREE: Record<FreeTable, Record<string, BuiltinRule>> = {
   bash: BASH_FREE,
   nim: {},
   haskell: {},
-  perl: {},
-  php: {},
+  perl: PERL_FREE,
+  php: PHP_FREE,
 };
 
 /** 言語 → 自由関数の表(19キー) */

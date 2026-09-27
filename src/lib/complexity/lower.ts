@@ -114,6 +114,10 @@ export function loopBound(kw: string, head: readonly Tok[], ctx: LowerCtx): Loop
     const vars = semis[0].filter((x) => x.k === "ident");
     return forInOrRange(vars.length ? vars[vars.length - 1].v : null, parseTokens(semis[1], d));
   }
+  // Perl の for (@a) / foreach (sort keys %h) は $_ で回す(for my $x (…) は下の形)
+  if (ctx.spec.key === "perl" && !(isOp(head[head.length - 1], ")") && head.some((x) => x.sigil))) {
+    return forInOrRange("_", parseTokens(head, d));
+  }
   // C++ / Java の範囲 for: auto& x : a / int x : a / auto [k, v] : mp
   const colon = d.colonRange ? -1 : findTop(head, (x) => isOp(x, ":"));
   if (colon > 0) return forInOrRange(varOf(head.slice(0, colon)), parseTokens(head.slice(colon + 1), d));

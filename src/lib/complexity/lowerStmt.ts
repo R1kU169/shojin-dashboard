@@ -28,7 +28,7 @@ const KEYWORDS = new Set(["return", "delete", "throw", "goto", "new", "case", "d
 /** 宣言の前に付いてよい語(C 系) */
 const DECL_MODS = new Set(["static", "const", "constexpr", "consteval", "constinit", "final", "public", "private", "protected", "volatile", "register", "extern", "inline", "mutable", "thread_local", "readonly", "unsigned", "signed", "struct", "class", "enum", "typename", "override", "virtual", "scope", "immutable", "shared", "__gshared", "internal", "sealed", "unsafe", "transient", "synchronized", "abstract", "fixed"]);
 /** 1行の分割・数値変換として時間に数えない呼び出し(I1) */
-export const READ_FUNCS = new Set(["split", "split_whitespace", "splitlines", "words", "lines", "map", "Select", "int", "float", "parse", "parseInt", "parseFloat", "Number", "BigInt", "to_i", "to_f", "list", "tuple", "collect", "ToArray", "ToList", "toList", "read", "readInt", "strip", "rstrip", "lstrip", "trim", "chomp", "chop", "unwrap", "expect", "trim_end", "Parse", "atoi", "stoi", "stoll", "intval", "explode", "preg_split", "str_split", "array_map", "fromJust", "chars", "bytes", "to_vec", "to_string", "String", "as_bytes", "Split", "Trim", "ReadLine", "readLine", "readline", "input", "next", "nextInt", "nextLong", "nextDouble", "nextLine", "Scan", "Scanln", "Fscan", "scanf", "fscanf", "fgets", "gets", "getline", "readln", "readf", "to", "text", "decode", "buffer", "stdin", "iter", "unpack", "filter", "join", "toInt", "match", "tonumber"]);
+export const READ_FUNCS = new Set(["split", "split_whitespace", "splitlines", "words", "lines", "map", "Select", "int", "float", "parse", "parseInt", "parseFloat", "Number", "BigInt", "to_i", "to_f", "list", "tuple", "collect", "ToArray", "ToList", "toList", "read", "readInt", "strip", "rstrip", "lstrip", "trim", "chomp", "chop", "unwrap", "expect", "trim_end", "Parse", "atoi", "stoi", "stoll", "intval", "explode", "preg_split", "str_split", "array_map", "fromJust", "chars", "bytes", "to_vec", "to_string", "String", "as_bytes", "Split", "Trim", "ReadLine", "readLine", "readline", "input", "next", "nextInt", "nextLong", "nextDouble", "nextLine", "Scan", "Scanln", "Fscan", "scanf", "fscanf", "fgets", "gets", "getline", "readln", "readf", "to", "text", "decode", "buffer", "stdin", "iter", "unpack", "filter", "join", "toInt", "match", "tonumber", "shift", "splice"]);
 
 export const loc = (toks: readonly Tok[], line?: number): Loc => ({ line: toks[0]?.line ?? line ?? 1, endLine: lastLine(toks, toks[0]?.line ?? line ?? 1) });
 
@@ -81,16 +81,18 @@ function pureConversion(e: SExpr | null): boolean {
   return ok;
 }
 
-/** 読み取りの元になった入力の名前(split(line) / s.split() / b = line の line)。回数(range(n) の n)は含めない */
+/** 行を語に分ける呼び出し(分けた元の変数は、できた配列の長さではなく中身) */
+const SPLIT_FUNCS = new Set(["split", "split_whitespace", "splitWhitespace", "Split", "explode", "preg_split", "str_split", "words", "chars", "each_char", "lines", "Fields"]);
+
+/** 読み取りの元になった入力の名前(split(line) / s.split() / explode(" ", $s) の line / s)。回数(range(n) の n)は含めない */
 function sourceRefs(e: SExpr | null, ctx: LowerCtx): string[] {
   const out = new Set<string>();
   const add = (x: SExpr | undefined) => {
     if (x && x.kind === "sym" && ctx.inputNames.has(x.name)) out.add(x.name);
   };
-  if (e && e.kind === "sym") add(e);
   walk(e, (x) => {
-    if (x.kind === "call" && READ_FUNCS.has(x.name)) x.args.forEach(add);
-    if (x.kind === "member" && READ_FUNCS.has(x.name)) add(x.of);
+    if (x.kind === "call" && SPLIT_FUNCS.has(x.name)) x.args.forEach(add);
+    if (x.kind === "member" && SPLIT_FUNCS.has(x.name)) add(x.of);
   });
   return [...out];
 }
@@ -401,7 +403,8 @@ function finishAssign(e0: SExpr & { kind: "assign" }, toks: readonly Tok[], ctx:
     if (e.target.kind === "sym" && e.op === "=") trackConst(n, value, ctx, l.line);
     else if (e.target.kind === "sym" || e.target.kind === "list") delete ctx.consts[n];
   }
-  out.push({ kind: "assign", target: e.target, op: e.op, value, loc: l, src, reading: !!inp || undefined });
+  // 読み取りの値を配列の要素やフィールドに入れる形($this->g[] = str_split(fgets(STDIN)))も読み取りの文
+  out.push({ kind: "assign", target: e.target, op: e.op, value, loc: l, src, reading: !!inp || readsInput(value, ctx) || undefined });
   return out;
 }
 
@@ -446,7 +449,8 @@ export function lowerStmt(toks: readonly Tok[], ctx: LowerCtx): IrNode[] {
     const value = toks.length > 1 ? parseStatement(toks.slice(1), ctx.d) : null;
     return [{ kind: "return", value, loc: l }];
   }
-  if (first.k === "ident" && !first.sigil && spec.declWords.has(first.v) && !isOp(toks[1], "(") && !isOp(toks[1], ".")) {
+  // my ($a, $b) = … の my ( は宣言(ほかの言語の let( / var( は呼び出しとして読む)
+  if (first.k === "ident" && !first.sigil && spec.declWords.has(first.v) && (!isOp(toks[1], "(") || ["my", "our", "state"].includes(first.v)) && !isOp(toks[1], ".")) {
     return keywordDecl(toks, ctx);
   }
   if (spec.typedDecls) {

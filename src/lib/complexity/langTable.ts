@@ -13,6 +13,8 @@ import { luaSpec } from "./langs/lua.ts";
 import { rubySpec } from "./langs/ruby.ts";
 import { juliaSpec } from "./langs/julia.ts";
 import { bashSpec } from "./langs/bash.ts";
+import { phpSpec } from "./langs/php.ts";
+import { perlSpec } from "./langs/perl.ts";
 
 export const LANG_SPECS: Record<string, LangSpec | null> = {
   cpp: cppSpec,
@@ -30,8 +32,8 @@ export const LANG_SPECS: Record<string, LangSpec | null> = {
   d: dSpec,
   nim: null,
   julia: juliaSpec,
-  perl: null,
-  php: null,
+  perl: perlSpec,
+  php: phpSpec,
   lua: luaSpec,
   bash: bashSpec,
 };
