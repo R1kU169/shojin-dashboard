@@ -1282,6 +1282,11 @@ button.member-card {
   color: transparent;
   caret-color: var(--ink);
 }
+/* textarea の文字色は透明なので、プレースホルダーには色を明示する(Firefox は文字色を薄めて使うため消える) */
+.editor-code::placeholder {
+  color: var(--muted);
+  opacity: 1;
+}
 .editor-code::selection {
   background: color-mix(in srgb, var(--accent) 25%, transparent);
   color: transparent;
@@ -1414,8 +1419,7 @@ button.member-card {
 :root[data-theme="dark"] .token.variable {
   color: #e06c75;
 }
-.editor-io .io-area,
-.cx-code {
+.editor-io .io-area {
   width: 100%;
   min-height: 140px;
   border: 1px solid var(--border);
@@ -1514,17 +1518,12 @@ button.member-card {
 .cx-cols > .card {
   min-width: 0;
 }
-/* 貼り付け専用なのでハイライトは重ねず、素の textarea を等幅で折り返さずに出す */
-.cx-code {
-  display: block;
-  min-height: 260px;
-  overflow: auto;
-  tab-size: 4;
-  white-space: pre;
-}
+/* コード欄の上の帯(エラー・「コードが変更されています」)。コード欄は .editor-card で余白が無いので、帯が自分で余白を持つ */
 .cx-msg {
-  margin: 0 0 10px;
+  margin: 0;
+  padding: 8px 14px;
   font-size: 13px;
+  border-bottom: 1px solid var(--border);
 }
 .cx-empty {
   margin: 0;

@@ -5,9 +5,12 @@
 // 解析結果の式(time.full)に値を入れて回数を計算し直すだけにする(解析し直さない)。
 // .page 直下の子は常に6個に固定する(条件付きの要素はカードの中に閉じる)。
 // nth-child の時間差アニメーションがずれないようにするため。
+// コード欄はエディタータブと同じ CodeEditor(ハイライト・行番号・入力支援)を使い、インデント幅もエディターの設定に従う。
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import type { ChangeEvent } from "react";
 import { useSearchParams } from "react-router-dom";
+import { CodeEditor } from "../components/CodeEditor";
+import type { CodeEditorHandle } from "../components/CodeEditor";
 import { StatCard } from "../components/StatCard";
 import { EDITOR_LANGS } from "../lib/wandbox";
 import { analyzeCode, BASIC_LANGS, evaluate, formatOps, isSupported, LANG_NOTES, parseBoundValue, SPEED } from "../lib/complexity";
@@ -17,9 +20,11 @@ const LANG_KEY = "shojin:complexity:lang";
 const CODE_KEY = (lang: string) => `shojin:complexity:code:${lang}`;
 const RANGES_KEY = "shojin:complexity:ranges";
 const TL_KEY = "shojin:complexity:tl";
+const HEIGHT_KEY = "shojin:complexity:height";
 // エディターの保存先(EditorPage と同じキー)
 const EDITOR_LANG_KEY = "shojin:editor:lang";
 const EDITOR_CODE_KEY = (lang: string) => `shojin:editor:code:${lang}`;
+const EDITOR_INDENT_KEY = "shojin:editor:indent";
 
 function load(key: string): string | null {
   try {
@@ -44,6 +49,12 @@ function initialLang(): string {
   const editor = load(EDITOR_LANG_KEY);
   if (knownLang(editor)) return editor;
   return EDITOR_LANGS[0].key;
+}
+
+/** エディターで選んだインデント幅(EditorPage の INDENT_WIDTHS と同じ 2 / 4 / 8。既定 2) */
+function loadIndentWidth(): number {
+  const n = Number(load(EDITOR_INDENT_KEY));
+  return [2, 4, 8].includes(n) ? n : 2;
 }
 
 function loadRanges(): Record<string, string> {
@@ -101,7 +112,8 @@ export function ComplexityPage() {
   // 前回の保存から復元しただけで、このページでまだ触っていない範囲(「前回の値」と出す)
   const [restored, setRestored] = useState<Set<string>>(() => new Set(Object.keys(loadRanges())));
   const [rawTl, setRawTl] = useState(() => load(TL_KEY) ?? "2");
-  const codeRef = useRef<HTMLTextAreaElement>(null);
+  const [indentWidth] = useState(loadIndentWidth);
+  const editorRef = useRef<CodeEditorHandle>(null);
   const importedRef = useRef(false);
 
   const lang = EDITOR_LANGS.find((l) => l.key === langKey) ?? EDITOR_LANGS[0];
@@ -123,7 +135,7 @@ export function ComplexityPage() {
     if (src.trim() === "") {
       setError("コードを貼り付けてください");
       setResult(null);
-      codeRef.current?.focus();
+      editorRef.current?.focus();
       return;
     }
     let r: Analysis;
@@ -191,22 +203,8 @@ export function ComplexityPage() {
     onFromEditor();
   }, [params]);
 
-  /** textarea の lineFrom〜lineTo 行を選択して見える位置へ動かす */
-  const jumpTo = (lineFrom: number, lineTo = lineFrom) => {
-    const ta = codeRef.current;
-    if (!ta || lineFrom < 1) return;
-    const lines = ta.value.split("\n");
-    let start = 0;
-    for (let i = 0; i < lineFrom - 1 && i < lines.length; i++) start += lines[i].length + 1;
-    let end = start;
-    for (let i = lineFrom - 1; i < lineTo && i < lines.length; i++) end += lines[i].length + 1;
-    end = Math.max(start, Math.min(end - 1, ta.value.length));
-    ta.focus();
-    ta.setSelectionRange(start, end);
-    // Chrome / Safari は選択位置まで自動でスクロールしないので、行の高さから計算する
-    const lh = parseFloat(getComputedStyle(ta).lineHeight) || 20;
-    ta.scrollTop = Math.max(0, (lineFrom - 1) * lh - ta.clientHeight / 3);
-  };
+  /** コード欄の lineFrom〜lineTo 行を選択して見える位置へ動かす */
+  const jumpTo = (lineFrom: number, lineTo = lineFrom) => editorRef.current?.selectLines(lineFrom, lineTo);
 
   // ---- 範囲と回数の概算 ----
   const bounds = useMemo(() => {
@@ -276,22 +274,20 @@ export function ComplexityPage() {
         <button type="button" className="linklike" onClick={importFromEditor}>
           エディターのコードを読み込む
         </button>
-        <span className="muted editor-hint">Ctrl+Enterで解析</span>
+        <span className="muted editor-hint">Ctrl+Enterで解析 / Ctrl+/でコメント</span>
       </div>
 
-      <section className="card cx-code-card">
+      <section className="card editor-card cx-code-card">
         {error && <p className="error-text cx-msg">{error}</p>}
         {!error && stale && <p className="muted cx-msg">コードが変更されています。もう一度解析してください</p>}
-        <textarea
-          ref={codeRef}
-          className="io-area cx-code"
-          value={code}
-          onChange={(e) => setCode(e.target.value)}
-          wrap="off"
-          spellCheck={false}
-          autoCapitalize="off"
-          autoCorrect="off"
-          aria-label="解析するコード"
+        <CodeEditor
+          ref={editorRef}
+          code={code}
+          onChange={setCode}
+          langKey={langKey}
+          indentWidth={indentWidth}
+          heightKey={HEIGHT_KEY}
+          ariaLabel="解析するコード"
           placeholder="ここにコードを貼り付けて「解析 ▶」"
         />
       </section>
