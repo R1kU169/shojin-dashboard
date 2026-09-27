@@ -22,7 +22,7 @@ export const UPDATES: Update[] = [
     title: "AtCoder Problems へのリンクを追加",
     items: [
       "ユーザーのページの「AtCoder Problems ↗」から、その人の AtCoder Problems のページを開けます",
-      "トップページからも AtCoder Problems を開けます",
+      "トップページと、PC ではヘッダーからも AtCoder Problems を開けます",
     ],
   },
   {

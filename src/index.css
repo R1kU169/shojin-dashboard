@@ -191,10 +191,14 @@ a:hover {
   text-underline-offset: 7px;
   text-decoration-thickness: 2px;
 }
-/* 外部サイト(DS倶楽部HP)は内部タブと区別して右端に控えめに置く */
+/* 外部サイト(AtCoder Problems・DS倶楽部HP)は内部タブと区別して右端に控えめに置く。
+   右寄せは最初の外部リンクだけにして、2つ目以降はその隣に並べる */
 .app-header nav a.nav-ext {
   margin-left: auto;
   color: var(--muted);
+}
+.app-header nav a.nav-ext + a.nav-ext {
+  margin-left: 0;
 }
 .app-header nav a.nav-ext:hover {
   color: var(--accent);
@@ -250,6 +254,17 @@ a:hover {
 /* 1行に収まらない幅では2段組みにする:
    1段目=ブランド+テーマ切替 / 2段目=ナビをタブストリップとして横並び。
    ラベルは .nav-long を畳んで短縮し、それでも足りない極端な幅では横スクロールで逃がす */
+/* 広い画面向けのリンク(AtCoder Problems)は、1行のヘッダーに余裕で収まる幅だけに出す。
+   761〜769px では1行のヘッダーがはみ出すので、フォントの幅の揺れも見込んで 820px 以下では畳む。
+   2段組みのタブストリップでは DS倶楽部HP が押し出されないようにする狙いもある */
+@media (max-width: 820px) {
+  .app-header nav a.nav-wide {
+    display: none;
+  }
+  .app-header nav a.nav-wide + a.nav-ext {
+    margin-left: auto;
+  }
+}
 @media (max-width: 760px) {
   .app-header {
     flex-wrap: wrap;

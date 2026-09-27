@@ -49,6 +49,16 @@ export default function App() {
           </NavLink>
           <NavLink to="/editor">エディター</NavLink>
           <NavLink to="/complexity">計算量</NavLink>
+          {/* 幅 820px を超える画面だけに出す(.nav-wide)。スマホではタブが横スクロールになり DS倶楽部HP が
+              押し出されるので、ユーザーのページとトップページのリンクから開いてもらう */}
+          <a
+            className="nav-ext nav-wide"
+            href="https://kenkoooo.com/atcoder/"
+            target="_blank"
+            rel="noreferrer"
+          >
+            AtCoder Problems ↗
+          </a>
           <a
             className="nav-ext"
             href="https://mocaluna0117.github.io/ds-club-web"
