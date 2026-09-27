@@ -24,6 +24,7 @@ const dialect: Dialect = {
   pyTernary: true,
   comprehension: true,
   pySlice: true,
+  braceHash: true,
   wordOps: { and: "&&", or: "||", not: "!", in: "in", is: "is" },
   lambdas: new Set(["pylambda"]),
   sizeFuncs: new Set(["len"]),

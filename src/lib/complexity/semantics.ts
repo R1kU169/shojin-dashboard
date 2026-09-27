@@ -168,6 +168,7 @@ export function allocOf(e: SExpr, typeKind: Readonly<Record<string, ContainerKin
   };
   switch (e.kind) {
     case "list":
+      if (e.brace) return { container: e.brace === "hash" ? "hmap" : "hset", dims: [], costsTime: false };
       return { container: "array", dims: e.items.length > 0 ? [{ kind: "num", value: e.items.length }] : [], costsTime: e.items.length > 0 };
     case "bin": {
       // [0] * n(Python)/ (0) x $n(Perl)/ "a" * n(Ruby の文字列)
@@ -178,6 +179,8 @@ export function allocOf(e: SExpr, typeKind: Readonly<Record<string, ContainerKin
       return null;
     }
     case "comp": {
+      // {k: v for …} / {x for …} は要素数ぶんのハッシュ・集合
+      if (e.brace) return { container: e.brace === "hash" ? "hmap" : "hset", dims: [countOf(e.gens[0]?.iter ?? e.elem)], costsTime: true };
       if (!pureElem(e.elem, typeKind) || e.conds.length > 0) return null;
       return { container: "array", dims: [...e.gens.map((g) => countOf(g.iter)), ...nested(e.elem)], costsTime: true };
     }

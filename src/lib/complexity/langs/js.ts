@@ -22,6 +22,7 @@ function dialect(ts: boolean): Dialect {
   return {
     ...BASE_DIALECT,
     genericCaps: ts,
+    braceHash: true,
     lambdas: new Set(["arrow", "function"]),
     sizeMembers: new Set(["length", "size"]),
     sizeFuncs: new Set(),

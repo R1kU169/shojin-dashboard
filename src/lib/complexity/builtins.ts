@@ -59,6 +59,11 @@ const logB = (i: number) => (c: CallCtx) => logOfExpr(c.bound(c.args[i] ?? null)
 
 const r = (cost: (c: CallCtx) => Expr, extra: Partial<BuiltinRule> = {}): BuiltinRule => ({ cost, ...extra });
 
+/** 2つの式が同じ形か(s:sub(i, i) は1文字) */
+const sameExpr = (a: SExpr | undefined, b: SExpr | undefined) => !!a && !!b && JSON.stringify(a) === JSON.stringify(b);
+/** s:sub(i, j) / string.sub(s, i, j) は長さ j - i + 1。同じ添字なら1文字、それ以外は |s| で見積もる */
+const substr = (from: number) => (c: CallCtx) => (sameExpr(c.args[from], c.args[from + 1]) ? ONE : from === 0 ? S(c) : c.size(c.args[0] ?? null));
+
 function table(entries: [string, BuiltinRule][]): Record<string, BuiltinRule> {
   const out: Record<string, BuiltinRule> = {};
   for (const [names, rule] of entries) for (const n of names.split(" ")) out[n] = rule;
@@ -82,6 +87,9 @@ const ARRAY_METHODS: Record<string, BuiltinRule> = {
 };
 // 先頭への追加・削除・挿入は配列では O(N)
 for (const n of ["append", "push", "push_back", "Add", "add", "emplace_back", "<<"]) ARRAY_METHODS[n] = r(one, { grows: true });
+// Ruby の take(k) / drop(k) / first(k) / last(k) は k 個(引数が無ければ1)
+for (const n of ["take", "first", "last"]) ARRAY_METHODS[n] = r((c) => (c.args[0] ? c.bound(c.args[0]) : ONE));
+ARRAY_METHODS.drop = r(S);
 ARRAY_METHODS.pop = r((c) => (c.args.length > 0 && !(c.args[0].kind === "un" && c.args[0].op === "-") && !(c.args[0].kind === "num" && c.args[0].value < 0) ? S(c) : ONE));
 ARRAY_METHODS.extend = r(A(0), { grows: true });
 ARRAY_METHODS.concat = r(S);
@@ -100,7 +108,9 @@ const HASH_METHODS: Record<string, BuiltinRule> = table([
   ["insert emplace erase find count contains at add remove discard get put containsKey has delete Add Remove Contains ContainsKey TryGetValue getOrDefault get_or_insert entry or_insert setdefault pop key? has_key? hasKey getOrDefault mgetOrPut hasKeyOrPut del excl incl inc fetch dig store haskey get! delete! push! set", r(one, { conf: "medium", note: "ハッシュは平均 O(1)(最悪 O(N))" })],
   ["size empty len is_empty clear Count keys values items entries iter", r(one)],
 ]);
-for (const n of ["insert", "emplace", "add", "put", "Add", "set", "setdefault", "entry", "incl", "inc", "store", "push!", "get!", "mgetOrPut", "hasKeyOrPut", "try_emplace", "insert_or_assign"]) HASH_METHODS[n] = r(one, { grows: true, conf: "medium" });
+for (const n of ["insert", "emplace", "add", "put", "Add", "set", "setdefault", "entry", "incl", "inc", "store", "push!", "get!", "mgetOrPut", "hasKeyOrPut", "try_emplace", "insert_or_assign", "<<", "add?"]) HASH_METHODS[n] = r(one, { grows: true, conf: "medium" });
+// Ruby の h.keys / h.values / h.to_a は配列を作る
+for (const n of ["to_a", "sort_by", "min_by", "max_by", "sum", "count", "map", "select", "reject", "each", "each_pair", "each_key", "each_value", "sort", "group_by", "find", "any?", "all?"]) HASH_METHODS[n] = r(S, { loopArg: 0 });
 
 const PQ_METHODS: Record<string, BuiltinRule> = table([
   ["push emplace pop add offer poll remove insert extract Enqueue Dequeue TryDequeue push_back pushpop replace del", r(logS)],
@@ -121,6 +131,7 @@ const STRING_METHODS: Record<string, BuiltinRule> = table([
 ]);
 for (const n of ["push_back", "append", "push", "push_str", "Append", "add"]) STRING_METHODS[n] = r(one, { grows: true });
 STRING_METHODS.substr = r((c) => (c.args.length >= 2 ? c.bound(c.args[1]) : S(c)));
+STRING_METHODS.sub = r(substr(0));
 STRING_METHODS.substring = r((c) => (c.args.length >= 2 ? c.bound(c.args[1]) : S(c)));
 
 const LINKED_METHODS: Record<string, BuiltinRule> = table([
@@ -140,16 +151,21 @@ const ACL_METHODS: Record<string, BuiltinRule> = table([
 /** 受け手の種類が分からないときの既定 */
 export const UNKNOWN_METHODS: Record<string, BuiltinRule> = {
   ...table([
-    ["push_back emplace_back push append pop_back pop back front first last size length len empty isEmpty is_empty top peek get at add offer poll popleft appendleft push_front pop_front begin end clear", r(one)],
+    ["push_back emplace_back push append pop_back pop back front first last size length len empty isEmpty is_empty top peek get at add offer poll popleft appendleft push_front pop_front begin end clear << key? has_key? include_key?", r(one)],
     ["insert erase find count remove lower_bound upper_bound contains containsKey has discard delete", r(logS, { conf: "medium", warn: "型が分からないので set/map と仮定しました" })],
     ["sort sort! sorted sort_unstable Sort", r(SlogS, { cmpArg: 0 })],
     ["index indexOf reverse sum max min join copy includes include? Contains dup clone to_a uniq", r(S)],
   ]),
   ...table([[ITERATE, r(S, { loopArg: 0 })]]),
 };
-for (const n of ["push_back", "emplace_back", "push", "append", "add", "offer", "appendleft", "push_front", "insert"]) {
+for (const n of ["push_back", "emplace_back", "push", "append", "add", "offer", "appendleft", "push_front", "insert", "<<"]) {
   UNKNOWN_METHODS[n] = { ...UNKNOWN_METHODS[n], grows: true };
 }
+// 文字列らしいメソッド(Lua の s:sub(i, i) / s:byte(i)、Ruby の s.sub(a, b))
+UNKNOWN_METHODS.sub = r(substr(0));
+UNKNOWN_METHODS.byte = r(one);
+UNKNOWN_METHODS.char = r(one);
+for (const n of ["gsub", "gmatch", "upper", "lower", "reverse", "rep", "format"]) UNKNOWN_METHODS[n] = r(S);
 
 export const METHODS: Partial<Record<ContainerKind, Record<string, BuiltinRule>>> = {
   array: ARRAY_METHODS,
@@ -226,6 +242,19 @@ OTHER_FREE.min = r(spreadSize);
 OTHER_FREE.Max = r(spreadSize);
 OTHER_FREE.Min = r(spreadSize);
 
+// Lua の table.* / string.* / math.*(名前空間を畳んだ後の名前で引く)
+const LUA_FREE = table([
+  ["sort", r(AlogA(0), { cmpArg: 1 })],
+  ["concat unpack", r(A(0))],
+  ["rep", r(B(1))],
+  ["gsub find match gmatch reverse upper lower", r(A(0))],
+  ["format tonumber tostring type print pairs ipairs select next rawget rawset rawlen assert error pcall xpcall setmetatable getmetatable floor ceil abs max min sqrt random randomseed fmod modf exp log pow write read lines byte char len tointeger", r(one)],
+]);
+// table.insert(t, x) は末尾に足す(1)。table.insert(t, pos, x) は途中に挿入(|t|)
+LUA_FREE.insert = r((c) => (c.args.length >= 3 ? c.size(c.args[0] ?? null) : ONE), { grows: true });
+LUA_FREE.remove = r((c) => (c.args.length >= 2 ? c.size(c.args[0] ?? null) : ONE));
+LUA_FREE.sub = r(substr(1));
+
 /** 8言語の表は langs/*.ts から登録する(循環を避けるため後から入れる) */
 export const FREE: Record<FreeTable, Record<string, BuiltinRule>> = {
   cpp: CPP_FREE,
@@ -233,7 +262,7 @@ export const FREE: Record<FreeTable, Record<string, BuiltinRule>> = {
   java: JAVA_FREE,
   other: OTHER_FREE,
   ruby: {},
-  lua: {},
+  lua: LUA_FREE,
   julia: {},
   bash: {},
   nim: {},

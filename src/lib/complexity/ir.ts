@@ -60,11 +60,12 @@ export type SExpr =
   /** ++ / -- は value が null */
   | { kind: "assign"; op: string; target: SExpr; value: SExpr | null }
   | { kind: "cond"; c: SExpr; a: SExpr; b: SExpr }
-  | { kind: "list"; items: SExpr[] }
+  /** brace: { } で書いたハッシュ(key: value)・集合のリテラル(Python / Ruby / JS)。無ければ配列・タプル */
+  | { kind: "list"; items: SExpr[]; brace?: "hash" | "set" }
   /** range()/a..b/1:n/0..<n を統一したもの。負の刻みは from/to を入れ替えて正にしてある */
   | { kind: "range"; from: SExpr | null; to: SExpr; step: SExpr | null; inclusive: boolean }
   /** 内包表記。gens は外側から */
-  | { kind: "comp"; elem: SExpr; gens: { vars: string[]; iter: SExpr }[]; conds: SExpr[] }
+  | { kind: "comp"; elem: SExpr; gens: { vars: string[]; iter: SExpr }[]; conds: SExpr[]; brace?: "hash" | "set" }
   /** ラムダ。本体が文なら body、式なら expr */
   | { kind: "lambda"; params: string[]; body: IrNode[]; expr: SExpr | null; loc: Loc }
   /** new T[n][m] / new T(args) */

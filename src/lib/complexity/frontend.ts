@@ -18,6 +18,8 @@ export type RawParser = (toks: readonly Tok[], spec: LangSpec, warn: (w: FrontWa
 const PARSERS: Partial<Record<LangSpec["family"], RawParser>> = {
   brace: parseBrace,
   indent: parseIndent,
+  // end 系は字句の後処理(endRewrite.ts)で波括弧の形に直してあるので、波括弧系と同じに読む
+  end: parseBrace,
 };
 
 /** end 系・Haskell・シェルのフロントエンドを後から登録する */

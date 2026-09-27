@@ -9,6 +9,8 @@ import { rustSpec } from "./langs/rust.ts";
 import { goSpec } from "./langs/go.ts";
 import { jsSpec, tsSpec } from "./langs/js.ts";
 import { dSpec } from "./langs/d.ts";
+import { luaSpec } from "./langs/lua.ts";
+import { rubySpec } from "./langs/ruby.ts";
 
 export const LANG_SPECS: Record<string, LangSpec | null> = {
   cpp: cppSpec,
@@ -21,13 +23,13 @@ export const LANG_SPECS: Record<string, LangSpec | null> = {
   go: goSpec,
   js: jsSpec,
   ts: tsSpec,
-  ruby: null,
+  ruby: rubySpec,
   haskell: null,
   d: dSpec,
   nim: null,
   julia: null,
   perl: null,
   php: null,
-  lua: null,
+  lua: luaSpec,
   bash: null,
 };

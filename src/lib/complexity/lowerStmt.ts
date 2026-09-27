@@ -1,9 +1,9 @@
 // 単純な文 → IR。宣言(C 系の「型 名前」、let / var / my などの語)・入力の読み取り・
 // 代入・式の文を見分けて IrNode にする。ブロックの入れ子は lower.ts が扱う。
-import type { ContainerKind, FrontWarning, IrNode, Loc, SExpr, Tok } from "./ir.ts";
+import type { ContainerKind, FrontWarning, IrNode, Loc, LoopBound, SExpr, Tok } from "./ir.ts";
 import { paramNames, parseStatement, parseTokens, splitTop } from "./sexpr.ts";
 import type { Dialect } from "./sexpr.ts";
-import { allocOf, evalConst, isCast, symbolsIn, targetNames, walk } from "./semantics.ts";
+import { allocOf, evalConst, isCast, rangeOf, symbolsIn, targetNames, walk } from "./semantics.ts";
 import type { Consts } from "./semantics.ts";
 import { findTop, isOp, isWord, lastLine, matchClose, tokText } from "./spec.ts";
 import type { LangSpec } from "./spec.ts";
@@ -450,6 +450,10 @@ export function lowerStmt(toks: readonly Tok[], ctx: LowerCtx): IrNode[] {
   }
   const e = parseStatement(use, ctx.d);
   if (e.kind === "assign") return finishAssign(e, toks, ctx);
+  // ラベルはブロックの手前まで(n.times { |i| … } → n.times)
+  const brace = findTop(toks, (x, i) => i > 0 && isOp(x, "{"));
+  const bl = blockLoop(e, l, tokText(brace > 0 ? toks.slice(0, brace) : toks, 50));
+  if (bl) return [bl];
   const out: IrNode[] = [];
   const inp = inputOf(e, ctx);
   if (inp) {
@@ -466,6 +470,47 @@ export function lowerStmt(toks: readonly Tok[], ctx: LowerCtx): IrNode[] {
   if (e.kind === "unknown" && e.text === "") return out;
   out.push({ kind: "expr", e, loc: l, src: tokText(toks), reading: !!inp || readsInput(e, ctx) || undefined });
   return out;
+}
+
+/** 文として書いたブロック付きの反復は、そのままループとして読むメソッド */
+const BLOCK_ITER = new Set(["each", "each_with_index", "each_char", "each_byte", "each_line", "each_key", "each_value", "each_pair", "each_slice", "each_cons", "each_entry", "each_index", "reverse_each", "map", "map!", "flat_map", "collect", "select", "select!", "filter", "filter!", "reject", "reject!", "filter_map", "sum", "count", "find", "detect", "any?", "all?", "none?", "one?", "min_by", "max_by", "sort_by", "sort_by!", "group_by", "partition", "each_with_object", "inject", "reduce", "tally_by", "find_index", "combination", "permutation", "repeated_permutation", "repeated_combination", "product", "forEach", "for_each", "each_char_with_index"]);
+/** 反復の数が受け手と引数で決まるもの(a.combination(2) は |a|² 通り) */
+const COUNTED_ITER = new Set(["combination", "permutation", "repeated_permutation", "repeated_combination", "product"]);
+
+/**
+ * n.times do |i| … end / a.each { |x| … } / 1.upto(n) { |i| … } / loop do … end / a.forEach(x => { … }) のように、
+ * ブロック(コールバック)付きの反復を文として書いたものはループにする。ループにしておくと、
+ * 隣接リストの走査や償却(尺取り)の規則がそのまま効く。値を使う形(b = a.map { … })は式のまま(コールバックとして数える)
+ */
+function blockLoop(e: SExpr, l: Loc, src: string): IrNode | null {
+  let recv: SExpr | null = null;
+  let name = "";
+  let args: SExpr[] = [];
+  if (e.kind === "member" && e.args && e.args.length > 0) {
+    recv = e.of;
+    name = e.name;
+    args = e.args;
+  } else if (e.kind === "call" && e.name === "loop" && e.args.length > 0) {
+    name = "loop";
+    args = e.args;
+  } else return null;
+  const lam = args[args.length - 1];
+  if (lam.kind !== "lambda") return null;
+  const rest = args.slice(0, -1);
+  const v = lam.params[0] ?? null;
+  let bound: LoopBound | null = null;
+  if (!recv) bound = { form: "while", cond: null, doWhile: false };
+  else if (name === "times") bound = { form: "for-range", var: v, from: null, to: recv, step: null, inclusive: false };
+  else if (name === "upto" && rest[0]) bound = { form: "for-range", var: v, from: recv, to: rest[0], step: null, inclusive: true };
+  else if (name === "downto" && rest[0]) bound = { form: "for-range", var: v, from: rest[0], to: recv, step: null, inclusive: true };
+  else if (name === "step" && rest[0]) bound = { form: "for-range", var: v, from: recv, to: rest[0], step: rest[1] ?? null, inclusive: true };
+  else if (BLOCK_ITER.has(name)) {
+    const coll: SExpr = COUNTED_ITER.has(name) && rest.length ? { kind: "member", of: recv, name, args: rest } : recv;
+    const r = rangeOf(coll);
+    bound = r ? { form: "for-range", var: v, from: r.from, to: r.to, step: r.step, inclusive: r.inclusive } : { form: "for-in", var: v, coll };
+  } else return null;
+  const body: IrNode[] = lam.body.length ? lam.body : lam.expr ? [{ kind: "expr", e: lam.expr, loc: lam.loc, src: "" }] : [];
+  return { kind: "loop", bound, body, hasBreak: false, loc: { line: l.line, endLine: Math.max(l.endLine, lam.loc.endLine) }, src };
 }
 
 /** 仮引数のトークンから名前を取る(Perl は本体の my ($a, $b) = @_ / shift から) */

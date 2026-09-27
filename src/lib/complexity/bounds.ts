@@ -71,7 +71,9 @@ export interface Bound {
 }
 
 const NULLISH = new Set(["true", "false", "null", "nullptr", "None", "nil", "undefined", "True", "False", "Inf", "inf", "INF"]);
-const TRANSPARENT = new Set(["int", "ll", "long", "float", "double", "Number", "abs", "ceil", "floor", "round", "Int", "Int64", "parseInt", "parse", "static_cast", "i64", "u64", "usize", "to_i", "toInt", "trunc", "ceil_div", "cast", "BigInt", "llabs", "fabs"]);
+const TRANSPARENT = new Set(["int", "ll", "long", "float", "double", "Number", "abs", "ceil", "floor", "round", "Int", "Int64", "parseInt", "parse", "static_cast", "i64", "u64", "usize", "to_i", "toInt", "trunc", "ceil_div", "cast", "BigInt", "llabs", "fabs", "tonumber", "tointeger", "intval", "Integer", "isqrt_floor"]);
+/** 名前空間つきの呼び出し math.floor(x) / Math.sqrt(x) は関数として見る */
+const MATH_NS = new Set(["math", "Math", "std", "np", "numpy", "Base"]);
 
 export function boundOf(e: SExpr | null, env: BoundEnv, depth = 0): Bound | null {
   if (!e || depth > 16) return null;
@@ -167,6 +169,7 @@ export function boundOf(e: SExpr | null, env: BoundEnv, depth = 0): Bound | null
     }
     case "member": {
       const n = e.name;
+      if (e.args && e.of.kind === "sym" && MATH_NS.has(e.of.name)) return boundOf({ kind: "call", name: n, ns: e.of.name, args: e.args }, env, depth + 1);
       if ((isCast(n) || TRANSPARENT.has(n) || ["to_i", "to_f", "floor", "ceil", "round", "int", "float", "toInt", "unwrap", "abs", "trunc", "as_usize", "as_i64"].includes(n)) && (e.args === null || e.args.length === 0)) {
         return b(e.of);
       }
@@ -356,10 +359,14 @@ function updateOf(e: SExpr, v: string): { op: string; by: SExpr | null } | null 
 /** 条件の中の、ループ変数 v と上限 E の比較 */
 function limitOf(cond: SExpr, v: string): { E: SExpr; kind: "lt" | "gt" | "sqrt" | "end" } | null {
   const conj: SExpr[] = [];
+  const INVERT: Record<string, string> = { "<": ">=", "<=": ">", ">": "<=", ">=": "<", "==": "!=", "!=": "==" };
   const split = (x: SExpr) => {
     if (x.kind === "logic" && x.op === "&&") {
       split(x.l);
       split(x.r);
+    } else if (x.kind === "not" && x.e.kind === "cmp" && INVERT[x.e.op]) {
+      // until i >= n / repeat … until i >= n は while i < n
+      conj.push({ ...x.e, op: INVERT[x.e.op] as typeof x.e.op });
     } else conj.push(x);
   };
   split(cond);

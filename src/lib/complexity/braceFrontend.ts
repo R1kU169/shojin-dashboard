@@ -364,6 +364,8 @@ export class BraceParser {
       return null;
     }
     if (h[0].k === "ident" && spec.funcWords.has(h[0].v)) return "func";
+    // end 系は def / function で定義するので、f(a) { … } はブロック付きの呼び出し(Ruby の foo(x) { |v| … })
+    if (spec.family === "end") return null;
     // 型 名前(引数) 修飾 { の形(C 系の関数・メソッド・コンストラクタ)
     const paren = findTop(h, (x, j) => isOp(x, "(") && j > 0 && (h[j - 1].k === "ident" || (h[j - 1].k === "op" && j >= 2 && isWord(h[j - 2], "operator"))));
     if (paren < 0) return null;

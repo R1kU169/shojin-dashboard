@@ -66,6 +66,8 @@ export interface Dialect {
   curlyGenerics: boolean;
   /** Nim の newSeq[int](n) のような角括弧の型引数付き呼び出し */
   bracketGenerics: boolean;
+  /** 式の中の { } はハッシュ・集合のリテラル(Python / Ruby / JS)。C 系の初期化子リストとは区別する */
+  braceHash?: boolean;
   /** ラムダの本体(文の並び)をブロック木にする。フロントエンドが与える */
   parseBody?: (toks: Tok[]) => IrNode[];
 }
@@ -707,8 +709,14 @@ class Parser {
 
   bracePrefix(): SExpr {
     const items = this.groupArgs();
-    if (items.length === 1 && items[0].kind === "comp") return items[0];
-    return { kind: "list", items };
+    if (!this.d.braceHash) {
+      if (items.length === 1 && items[0].kind === "comp") return items[0];
+      return { kind: "list", items };
+    }
+    // {k: v} / {} はハッシュ、{1, 2} は集合。内包表記も同じ({k: v for …} / {x for …})
+    const isPair = (x: SExpr) => x.kind === "assign" && x.op === ":";
+    if (items.length === 1 && items[0].kind === "comp") return { ...items[0], brace: isPair(items[0].elem) ? "hash" : "set" };
+    return { kind: "list", items, brace: items.length === 0 || items.some(isPair) ? "hash" : "set" };
   }
 
   newExpr(): SExpr {

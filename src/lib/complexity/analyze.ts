@@ -77,7 +77,7 @@ interface WalkEnv {
 const NAMESPACES = new Set(["std", "ranges", "views", "atcoder", "heapq", "bisect", "math", "itertools", "collections", "functools", "sys", "operator", "string", "Arrays", "Collections", "Math", "Integer", "Long", "String", "System", "Objects", "Character", "Double", "Stream", "IntStream", "Enumerable", "Console", "Convert", "Array", "Object", "Number", "JSON", "BigInt", "strings", "sort", "strconv", "fmt", "slices", "maps", "os", "bufio", "io", "table", "utf8", "Base", "Iterators", "DataStructures", "sequtils", "algorithm", "strutils", "std::cmp", "cmp", "mem", "iter", "Vec", "HashMap", "HashSet", "BTreeMap", "BTreeSet", "VecDeque", "BinaryHeap", "Set", "Hash", "List", "Util", "Data", "M", "S", "V", "IM", "IS", "SplFixedArray"]);
 
 /** 未知でも黙って O(1) にしてよい呼び出し(出力・変換など) */
-const QUIET = new Set(["print", "println", "printf", "puts", "p", "echo", "say", "write", "writeln", "writefln", "Println", "Printf", "Print", "WriteLine", "Write", "log", "cout", "endl", "flush", "format", "sprintf", "String", "str", "int", "float", "parseInt", "Number", "chr", "ord", "abs", "min", "max", "exit", "assert", "eprintln", "dbg!", "println!", "print!", "write!", "writeln!", "format!", "vec!", "assert!", "assert_eq!", "panic!", "unreachable!", "debug_assert!", "to_string", "toString", "valueOf", "toFixed", "parse", "unwrap", "expect", "ok", "clone", "into", "from", "new", "as_str", "setrecursionlimit", "Some", "Ok", "Err", "None", "chomp", "die", "require", "local", "defined", "ref", "bless", "sprintf", "sizeof", "alignof", "decltype", "typeid", "stack_size", "start", "setDaemon", "daemon", "Thread", "sync_with_stdio", "tie"]);
+const QUIET = new Set(["print", "println", "printf", "puts", "p", "echo", "say", "write", "writeln", "writefln", "Println", "Printf", "Print", "WriteLine", "Write", "log", "cout", "endl", "flush", "format", "sprintf", "String", "str", "int", "float", "parseInt", "Number", "chr", "ord", "abs", "min", "max", "exit", "assert", "eprintln", "dbg!", "println!", "print!", "write!", "writeln!", "format!", "vec!", "assert!", "assert_eq!", "panic!", "unreachable!", "debug_assert!", "to_string", "toString", "valueOf", "toFixed", "parse", "unwrap", "expect", "ok", "clone", "into", "from", "new", "as_str", "setrecursionlimit", "Some", "Ok", "Err", "None", "chomp", "die", "require", "local", "defined", "ref", "bless", "sprintf", "sizeof", "alignof", "decltype", "typeid", "stack_size", "start", "setDaemon", "daemon", "Thread", "sync_with_stdio", "tie", "to_i", "to_s", "to_f", "to_sym", "to_r", "chr", "ord", "even?", "odd?", "zero?", "nil?", "positive?", "negative?", "succ", "pred", "freeze", "frozen?", "is_a?", "kind_of?", "respond_to?", "inspect", "object_id", "tap", "then", "divmod", "fdiv", "floor", "ceil", "round", "truncate", "between?", "clamp", "class", "if", "unless", "case", "while", "switch", "lambda", "proc", "rand", "srand", "exit!", "abort", "sleep", "Integer", "Float", "Rational", "Complex", "chomp", "chop", "strip", "empty?", "to_a", "eof?", "eof", "combination", "permutation", "repeated_permutation", "repeated_combination", "each_slice", "each_cons", "lazy", "each_entry"]);
 
 /** 受け手の要素数を保つ(以下にする)メソッド: a.keys() / a.map(f) / a.iter().rev() */
 const SIZE_KEEPING_MEMBERS = new Set(["keys", "values", "items", "iter", "chars", "bytes", "entries", "to_a", "clone", "copy", "dup", "rev", "reverse", "sorted", "into_iter", "begin", "end", "rbegin", "map", "filter", "select", "reject", "collect", "to_vec", "cloned", "copied", "enumerate", "sort_by", "uniq", "compact", "each_with_index", "with_index", "filter_map", "iter_mut", "Select", "Where", "ToList", "ToArray", "toList", "toSeq", "mapIt", "filterIt", "reversed", "slice", "to_owned", "as_slice", "values_mut", "keySet", "entrySet", "stream", "boxed"]);
@@ -222,7 +222,7 @@ export class Analyzer {
       return "unknown";
     }
     if (e.kind === "str") return "string";
-    if (e.kind === "list" || e.kind === "comp") return "array";
+    if (e.kind === "list" || e.kind === "comp") return e.brace === "hash" ? "hmap" : e.brace === "set" ? "hset" : "array";
     if (e.kind === "member" && e.args === null && e.of.kind === "sym" && (e.of.name === "this" || e.of.name === "self")) return this.kindOf({ kind: "sym", name: e.name });
     const al = allocOf(e, this.spec.typeKind);
     if (al) return al.container;
@@ -233,6 +233,7 @@ export class Analyzer {
     if (!e) return Q;
     switch (e.kind) {
       case "sym":
+        if (this.spec.inputMarkers.has(e.name) && !this.decls.has(e.name)) return this.named("N", "入力の要素数", 0);
         return this.sizeSym(e.name);
       case "index": {
         if (e.of.kind === "sym") {
@@ -255,6 +256,7 @@ export class Analyzer {
       case "member":
         if (e.of.kind === "sym" && (e.of.name === "this" || e.of.name === "self") && e.args === null) return this.sizeSym(e.name);
         if (SIZE_KEEPING_MEMBERS.has(e.name)) return this.sizeOf(e.of, env);
+        if (this.isInputExpr(e, env)) return this.named("N", "入力の要素数", 0);
         return this.named(`|${sexprText(e, 24)}|`, `${sexprText(e, 24)} の要素数`, 0);
       case "call": {
         const r = rangeOf(e);
@@ -539,6 +541,10 @@ export class Analyzer {
       }
       case "bin": {
         const c = plus(sub(e.l), sub(e.r));
+        // Ruby の a << x / adj[u] << v / s << c は末尾への追加(1 << n のような数のシフトは除く)
+        if (e.op === "<<" && this.lang === "ruby" && e.l.kind !== "num" && e.r.kind !== "num" && this.kindOf(e.l) !== "scalar") {
+          return plus(c, this.callCost("<<", null, e.l, [e.r], env, reading, line));
+        }
         if (e.op === "+" && (this.lang === "python" || this.lang === "pypy") && (this.kindOf(e.l) === "array" || this.kindOf(e.r) === "array") && !reading) {
           return plus(c, { ...empty(), time: add(this.sizeOf(e.l, env), this.sizeOf(e.r, env)) });
         }
