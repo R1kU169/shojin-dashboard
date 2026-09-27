@@ -81,6 +81,14 @@ export function Home() {
             >
               AtCoder公式サイト ↗
             </a>
+            <a
+              className="hero-link"
+              href="https://kenkoooo.com/atcoder/"
+              target="_blank"
+              rel="noreferrer"
+            >
+              AtCoder Problems ↗
+            </a>
           </p>
         </div>
         <div className="hero-side">

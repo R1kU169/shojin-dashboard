@@ -17,6 +17,15 @@ export interface Update {
 // 新しいものが先頭。追加するときは必ず配列の先頭に足すこと。
 export const UPDATES: Update[] = [
   {
+    id: "2026-09-27b",
+    date: "2026-09-27",
+    title: "AtCoder Problems へのリンクを追加",
+    items: [
+      "ユーザーのページの「AtCoder Problems ↗」から、その人の AtCoder Problems のページを開けます",
+      "トップページからも AtCoder Problems を開けます",
+    ],
+  },
+  {
     id: "2026-09-27a",
     date: "2026-09-27",
     title: "計算量タブを追加",

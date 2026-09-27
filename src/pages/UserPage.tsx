@@ -253,6 +253,14 @@ export function UserPage() {
               >
                 AtCoderプロフィール ↗
               </a>
+              <a
+                className="profile-link"
+                href={`https://kenkoooo.com/atcoder/#/user/${encodeURIComponent(userId)}`}
+                target="_blank"
+                rel="noreferrer"
+              >
+                AtCoder Problems ↗
+              </a>
               {isMine ? (
                 <>
                   <span
