@@ -216,6 +216,15 @@ const OTHER_FREE = table([
   ["len cap delete append make print println Println Printf Print Sprintf Sprint Atoi Itoa ParseInt FormatInt max min abs parseInt parseFloat Number String Boolean isNaN WriteLine Write ReadLine Parse ToInt32 ToInt64 Abs Max Min Pow Sqrt Floor Ceiling Round swap writeln write writefln readln to text", r(one)],
 ]);
 OTHER_FREE.append = r(one, { grows: true });
+// Math.max(...a) は展開した配列の要素数ぶん
+const spreadSize = (c: CallCtx): Expr => {
+  const s = c.args.find((a) => a.kind === "un" && a.op === "*");
+  return s && s.kind === "un" ? c.size(s.e) : ONE;
+};
+OTHER_FREE.max = r(spreadSize);
+OTHER_FREE.min = r(spreadSize);
+OTHER_FREE.Max = r(spreadSize);
+OTHER_FREE.Min = r(spreadSize);
 
 /** 8言語の表は langs/*.ts から登録する(循環を避けるため後から入れる) */
 export const FREE: Record<FreeTable, Record<string, BuiltinRule>> = {

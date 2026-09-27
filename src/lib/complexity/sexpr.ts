@@ -442,7 +442,10 @@ class Parser {
           return this.done() ? unknown("@") : this.expr(26);
         }
         if (t.v === "&" && this.isWord("mut")) this.i++;
-        return this.done() ? unknown(t.v) : this.expr(26);
+        if (this.done()) return unknown(t.v);
+        // JS の ...a(展開・残りの要素)は Python の *a と同じく配列の印を付ける
+        if (t.v === "...") return { kind: "un", op: "*", e: this.expr(26) };
+        return this.expr(26);
       }
       case "|":
       case "||":

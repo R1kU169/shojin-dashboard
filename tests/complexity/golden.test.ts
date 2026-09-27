@@ -1,4 +1,4 @@
-// ゴールデンテスト: 主要言語のスニペット → 期待する計算量(docs/complexity-analyzer-plan.md §10)
+// ゴールデンテスト: 主要11言語のスニペット → 期待する計算量(docs/complexity-analyzer-plan.md §10)
 import { test } from "node:test";
 import { check } from "./helpers.ts";
 import type { Golden } from "./helpers.ts";
@@ -1094,6 +1094,258 @@ const CASES: Golden[] = [
       for i in range(x):
           pass`,
     time: "O(20·N)",
+  },
+  {
+    id: "Java: テンプレート(A+B)",
+    lang: "java",
+    code: `
+      import java.util.*;
+      public class Main {
+          public static void main(String[] args) {
+              Scanner sc = new Scanner(System.in);
+              int a = sc.nextInt();
+              int b = sc.nextInt();
+              System.out.println(a + b);
+          }
+      }`,
+    time: "O(1)",
+    space: "O(1)",
+    noWarn: true,
+  },
+  {
+    id: "69 Java: Arrays.sort と TreeMap",
+    lang: "java",
+    code: `
+      import java.util.*;
+      public class Main {
+          public static void main(String[] args) {
+              Scanner sc = new Scanner(System.in);
+              int n = sc.nextInt();
+              int[] a = new int[n];
+              for (int i = 0; i < n; i++) a[i] = sc.nextInt();
+              Arrays.sort(a);
+              TreeMap<Integer, Integer> mp = new TreeMap<>();
+              for (int i = 0; i < n; i++) mp.put(a[i], i);
+              System.out.println(mp.size());
+          }
+      }`,
+    time: "O(N log N)",
+    space: "O(N)",
+  },
+  {
+    id: "C#: テンプレート(A+B)",
+    lang: "csharp",
+    code: `
+      using System;
+      class Program {
+          static void Main() {
+              var s = Console.ReadLine().Split();
+              int a = int.Parse(s[0]), b = int.Parse(s[1]);
+              Console.WriteLine(a + b);
+          }
+      }`,
+    time: "O(1)",
+    space: "O(1)",
+    noWarn: true,
+  },
+  {
+    id: "72 C#: for × foreach(a の長さは先に読んだ n)",
+    lang: "csharp",
+    code: `
+      using System;
+      using System.Linq;
+      class Program {
+          static void Main() {
+              int n = int.Parse(Console.ReadLine());
+              var a = Console.ReadLine().Split().Select(int.Parse).ToArray();
+              long s = 0;
+              for (int i = 0; i < n; i++)
+                  foreach (var x in a) s += x;
+              Console.WriteLine(s);
+          }
+      }`,
+    time: "O(N²)",
+    space: "O(N)",
+  },
+  {
+    id: "Rust: テンプレート(proconio)",
+    lang: "rust",
+    code: `
+      use proconio::input;
+      fn main() {
+          input! { a: i64, b: i64 }
+          println!("{}", a + b);
+      }`,
+    time: "O(1)",
+    space: "O(1)",
+    noWarn: true,
+  },
+  {
+    id: "Rust: テンプレート(read_line)",
+    lang: "rust",
+    code: `
+      use std::io::*;
+      fn main() {
+          let mut s = String::new();
+          stdin().read_line(&mut s).unwrap();
+          let v: Vec<i64> = s.split_whitespace().map(|x| x.parse().unwrap()).collect();
+          println!("{}", v[0] + v[1]);
+      }`,
+    time: "O(1)",
+    space: "O(1)",
+    noWarn: true,
+  },
+  {
+    id: "57 Rust: while let Some(v) = q.pop_front() の BFS",
+    lang: "rust",
+    code: `
+      use proconio::input;
+      use std::collections::VecDeque;
+      fn main() {
+          input! { n: usize, m: usize, e: [(usize, usize); m] }
+          let mut g = vec![vec![]; n];
+          for &(a, b) in &e { g[a].push(b); g[b].push(a); }
+          let mut dist = vec![usize::MAX; n];
+          let mut q = VecDeque::new();
+          dist[0] = 0;
+          q.push_back(0);
+          while let Some(v) = q.pop_front() {
+              for &to in &g[v] {
+                  if dist[to] == usize::MAX { dist[to] = dist[v] + 1; q.push_back(to); }
+              }
+          }
+      }`,
+    time: "O(N + M)",
+    space: "O(N + M)",
+  },
+  {
+    id: "Go: テンプレート(A+B)",
+    lang: "go",
+    code: `
+      package main
+      import "fmt"
+      func main() {
+          var a, b int
+          fmt.Scan(&a, &b)
+          fmt.Println(a + b)
+      }`,
+    time: "O(1)",
+    space: "O(1)",
+    noWarn: true,
+  },
+  {
+    id: "56 Go: for len(q) > 0 の BFS",
+    lang: "go",
+    code: `
+      package main
+      import "fmt"
+      func main() {
+          var n, m int
+          fmt.Scan(&n, &m)
+          g := make([][]int, n)
+          for i := 0; i < m; i++ {
+              var a, b int
+              fmt.Scan(&a, &b)
+              g[a] = append(g[a], b)
+              g[b] = append(g[b], a)
+          }
+          dist := make([]int, n)
+          for i := range dist {
+              dist[i] = -1
+          }
+          dist[0] = 0
+          q := []int{0}
+          for len(q) > 0 {
+              v := q[0]
+              q = q[1:]
+              for _, to := range g[v] {
+                  if dist[to] == -1 {
+                      dist[to] = dist[v] + 1
+                      q = append(q, to)
+                  }
+              }
+          }
+          fmt.Println(dist[n-1])
+      }`,
+    time: "O(N + M)",
+    space: "O(N + M)",
+  },
+  {
+    id: "JS: テンプレート(A+B)",
+    lang: "js",
+    code: `
+      const [a, b] = require("fs").readFileSync("/dev/stdin", "utf8").trim().split(" ").map(Number);
+      console.log(a + b);`,
+    time: "O(1)",
+    space: "O(1)",
+    noWarn: true,
+  },
+  {
+    id: "70 JS: for × for-of と sort(a の長さは先に読んだ n)",
+    lang: "js",
+    code: `
+      const lines = require("fs").readFileSync(0, "utf8").split("\\n");
+      const n = Number(lines[0]);
+      const a = lines[1].split(" ").map(Number);
+      let s = 0;
+      for (let i = 0; i < n; i++) for (const x of a) s += x;
+      a.sort((x, y) => x - y);
+      console.log(s);`,
+    time: "O(N²)",
+    space: "O(N)",
+  },
+  {
+    id: "TS: テンプレート(A+B)",
+    lang: "ts",
+    code: `
+      const input: string[] = require("fs").readFileSync("/dev/stdin", "utf8").split("\\n");
+      const [a, b]: number[] = input[0].split(" ").map(Number);
+      console.log(a + b);`,
+    time: "O(1)",
+    space: "O(1)",
+    noWarn: true,
+  },
+  {
+    id: "71 TS: forEach のコールバックの中のループは要素数ぶん",
+    lang: "ts",
+    code: `
+      const [n, ...a]: number[] = require("fs").readFileSync(0, "utf8").trim().split(/\\s+/).map(Number);
+      let s = 0;
+      a.forEach((x: number) => {
+        for (let j = 0; j < n; j++) s += x * j;
+      });
+      console.log(s);`,
+    time: "O(N·|a|)",
+    space: "O(|a|)",
+  },
+  {
+    id: "D: テンプレート(A+B)",
+    lang: "d",
+    code: `
+      import std.stdio, std.conv, std.string, std.array;
+      void main() {
+          auto ab = readln.split.to!(int[]);
+          writeln(ab[0] + ab[1]);
+      }`,
+    time: "O(1)",
+    space: "O(1)",
+    noWarn: true,
+  },
+  {
+    id: "73 D: foreach (i; 0 .. n) の二重ループ",
+    lang: "d",
+    code: `
+      import std.stdio, std.conv, std.string, std.array;
+      void main() {
+          auto nm = readln.split.to!(int[]);
+          int n = nm[0], m = nm[1];
+          long s = 0;
+          foreach (i; 0 .. n)
+              foreach (j; 0 .. m) s += i * j;
+          writeln(s);
+      }`,
+    time: "O(N·M)",
+    space: "O(1)",
   },
 ];
 

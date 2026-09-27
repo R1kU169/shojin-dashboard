@@ -414,6 +414,11 @@ export class Analyzer {
       case "stmt":
         return empty();
       case "input": {
+        // 読んだ順に記号を並べる(n, m, e: [(…); m] なら N, M の順。配列の長さの別名より先に)
+        for (const s of n.scalars) {
+          const sy = this.symbolOf(s);
+          if (this.pass === 2 && !this.symbolOrder.includes(sy)) this.symbolOrder.push(sy);
+        }
         // 入力で読んだ配列の領域
         let alloc: Expr = ONE;
         for (const a of n.arrays) if (!this.declOf(a)?.dims.length) alloc = add(alloc, this.sizeSym(a));
@@ -613,7 +618,8 @@ export class Analyzer {
       if (args !== null || !recv) return this.userCall(user, argv, env, line);
     }
     // 組み込み
-    if (reading && READ_FUNCS.has(name)) return empty();
+    // 入力の読み取り(cin / input() / sc.nextInt() / fmt.Scan …)とその変換は数えない(I1)
+    if (this.spec.inputMarkers.has(name) || (reading && READ_FUNCS.has(name))) return empty();
     let rule: BuiltinRule | null = null;
     let kind: ContainerKind = "unknown";
     let target: SExpr | null = recv;
@@ -982,18 +988,29 @@ export class Analyzer {
     }
     // (b) 成長だけでサイズが決まるコンテナ
     for (const [name, g] of this.growRecord) setAlias(name, g);
-    this.growTotals = new Map(this.growRecord);
     // 別名の中の別名を解く
     for (let it = 0; it < 3; it++) {
-      for (const [k, v] of this.aliases) {
-        let e = v;
-        for (const x of vars(v)) {
-          const a = this.aliases.get(x);
-          if (a && x !== k) e = rename(e, x, a);
-        }
-        this.aliases.set(k, e);
-      }
+      for (const [k, v] of this.aliases) this.aliases.set(k, this.resolveAliases(v, k));
     }
+    // 成長の合計(辺の数など)も別名を解いた形で持つ
+    this.growTotals = new Map([...this.growRecord].map(([k, v]) => [k, this.resolveAliases(v, `|${k}|`)]));
+  }
+
+  /** 式の中の別名のある記号を置き換える(self は自分自身の別名で置き換えない) */
+  resolveAliases(e: Expr, self: string): Expr {
+    let out = e;
+    for (let it = 0; it < 3; it++) {
+      let changed = false;
+      for (const x of vars(out)) {
+        const a = this.aliases.get(x);
+        if (a && x !== self) {
+          out = rename(out, x, a);
+          changed = true;
+        }
+      }
+      if (!changed) break;
+    }
+    return out;
   }
 
   /** ちょうど1回だけ = で値を決める変数と、その値(ループ変数・引数・入力・複合代入・++ は除く) */

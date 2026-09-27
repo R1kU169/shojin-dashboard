@@ -104,9 +104,10 @@ test("深い入れ子(括弧1万段・min 1万段)でも固まらず、例外も
   const mins = "min(a, ".repeat(10000) + "b" + ")".repeat(10000);
   for (const code of [deep, mins]) {
     const toks = tokenize(code, cppSpec.lex).tokens;
-    const t0 = performance.now();
+    const c0 = process.cpuUsage();
     assert.doesNotThrow(() => parseTokens(toks, cppSpec.dialect));
-    assert.ok(performance.now() - t0 < 1000, "1秒以内");
+    const d = process.cpuUsage(c0);
+    assert.ok((d.user + d.system) / 1000 < 1000, "CPU 時間で1秒以内");
   }
 });
 

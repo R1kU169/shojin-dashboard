@@ -3,21 +3,27 @@
 import type { LangSpec } from "./spec.ts";
 import { cSpec, cppSpec } from "./langs/cpp.ts";
 import { pypySpec, pythonSpec } from "./langs/python.ts";
+import { javaSpec } from "./langs/java.ts";
+import { csharpSpec } from "./langs/csharp.ts";
+import { rustSpec } from "./langs/rust.ts";
+import { goSpec } from "./langs/go.ts";
+import { jsSpec, tsSpec } from "./langs/js.ts";
+import { dSpec } from "./langs/d.ts";
 
 export const LANG_SPECS: Record<string, LangSpec | null> = {
   cpp: cppSpec,
   python: pythonSpec,
   pypy: pypySpec,
-  java: null,
+  java: javaSpec,
   c: cSpec,
-  csharp: null,
-  rust: null,
-  go: null,
-  js: null,
-  ts: null,
+  csharp: csharpSpec,
+  rust: rustSpec,
+  go: goSpec,
+  js: jsSpec,
+  ts: tsSpec,
   ruby: null,
   haskell: null,
-  d: null,
+  d: dSpec,
   nim: null,
   julia: null,
   perl: null,

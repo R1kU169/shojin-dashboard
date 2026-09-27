@@ -133,8 +133,8 @@ function inputOf(e: SExpr, ctx: LowerCtx): InputFound | null {
         return false;
       }
     }
-    // scanf("%d", &n) / fmt.Scan(&n, &m) / fscanf(STDIN, "%d", $n) / readf(" %d", &n)
-    if ((x.kind === "call" || x.kind === "member") && ["scanf", "Scan", "Scanln", "Fscan", "Fscanln", "readf", "fscanf", "Scanf", "Fscanf", "sscanf"].includes(x.name)) {
+    // scanf("%d", &n) / fmt.Scan(&n, &m) / fscanf(STDIN, "%d", $n) / readf(" %d", &n) / stdin().read_line(&mut s)
+    if ((x.kind === "call" || x.kind === "member") && ["scanf", "Scan", "Scanln", "Fscan", "Fscanln", "readf", "fscanf", "Scanf", "Fscanf", "sscanf", "read_line", "read_to_string"].includes(x.name)) {
       const args = x.kind === "call" ? x.args : (x.args ?? []);
       for (const a of args) {
         const t = a.kind === "un" ? a.e : a;
@@ -351,7 +351,9 @@ function trackConst(name: string, value: SExpr | null, ctx: LowerCtx, line = 0):
  * 代入を IR にする。入力の読み取り・ラムダの代入(関数として扱う)・確保(宣言として扱う)・
  * 定数の記録をまとめて行う。declared は typedDecl から来た(宣言は出力済み)か
  */
-function finishAssign(e: SExpr & { kind: "assign" }, toks: readonly Tok[], ctx: LowerCtx, declared = false): IrNode[] {
+function finishAssign(e0: SExpr & { kind: "assign" }, toks: readonly Tok[], ctx: LowerCtx, declared = false): IrNode[] {
+  // Go の x := … は宣言つきの代入。以降は = と同じに扱う
+  const e: SExpr & { kind: "assign" } = e0.op === ":=" && e0.target.kind !== "index" ? { ...e0, op: "=" } : e0;
   const out: IrNode[] = [];
   const l = loc(toks);
   const src = tokText(toks);

@@ -1,5 +1,7 @@
 // 性能のテスト。大きな入力で固まらないこと(正規表現の暴走や2乗の走査のような桁違いの遅さ)を捕まえる。
 // CI の揺れで落ちないよう上限は各1秒にしている(手元の目安は 200ms 程度)。
+// 経過時間は他の処理で機械が混んでいると何倍にも揺れるので、このプロセスが使った CPU 時間で測り、
+// 2回測って少ない方で判定する(1回目は JIT の準備を含む)。
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { analyzeCode } from "../../src/lib/complexity/index.ts";
@@ -7,9 +9,15 @@ import { analyzeCode } from "../../src/lib/complexity/index.ts";
 const LIMIT_MS = 1000;
 
 function timed(code: string, lang: string): { ms: number; text: string } {
-  const t0 = performance.now();
-  const r = analyzeCode(code, lang);
-  return { ms: performance.now() - t0, text: r.time.text };
+  let ms = Infinity;
+  let text = "";
+  for (let k = 0; k < 2; k++) {
+    const c0 = process.cpuUsage();
+    text = analyzeCode(code, lang).time.text;
+    const d = process.cpuUsage(c0);
+    ms = Math.min(ms, (d.user + d.system) / 1000);
+  }
+  return { ms, text };
 }
 
 test("1万行の for の連なり(C++)", () => {

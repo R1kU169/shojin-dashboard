@@ -316,6 +316,9 @@ export function format(e: Expr, order: readonly string[]): string {
   return terms.map((t) => termText(t, order)).join(" + ");
 }
 
+/** O(…) の表記。COEF_KEEP 未満の定数だけの式は O(1)(O(2) や O(4) は書かない。2·N を N と書くのと同じ) */
 export function formatO(e: Expr, order: readonly string[]): string {
+  const c = constValue(e);
+  if (c !== null && c < COEF_KEEP) return "O(1)";
   return `O(${format(e, order)})`;
 }

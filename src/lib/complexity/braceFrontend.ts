@@ -92,12 +92,14 @@ export class BraceParser {
     }
     const start = this.i;
     let depth = 0;
+    // Go の見出しは ; を含む(for i := 0; i < n; i++ { / if x := f(); x > 0 {)
+    const semiEnds = this.spec.key !== "go";
     while (this.i < this.t.length) {
       const x = this.t[this.i];
       if (x.k === "op") {
         if (x.v === "(" || x.v === "[") depth++;
         else if (x.v === ")" || x.v === "]") depth--;
-        else if (depth <= 0 && (x.v === "{" || x.v === ";")) break;
+        else if (depth <= 0 && (x.v === "{" || (x.v === ";" && semiEnds))) break;
         else if (x.v === "{") {
           const c = matchClose(this.t, this.i);
           this.i = c < 0 ? this.t.length : c + 1;

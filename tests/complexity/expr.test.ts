@@ -7,6 +7,7 @@ import {
   factOf,
   format,
   formatNumber,
+  formatO,
   lit,
   logOf,
   logOfExpr,
@@ -86,4 +87,12 @@ test("rename: 記号への式の代入と再正規化", () => {
   assert.equal(show(rename(sym("K"), "K", N)), "N");
   assert.equal(show(rename(exp2Of("K"), "K", N)), "2^N");
   assert.equal(show(rename(mul(N, sym("K")), "K", lit(1000))), "1000·N");
+});
+
+test("O(…) の表記: 10未満の定数だけなら O(1)、10以上はそのまま", () => {
+  assert.equal(formatO(lit(2), []), "O(1)");
+  assert.equal(formatO(lit(9), []), "O(1)");
+  assert.equal(formatO(lit(10), []), "O(10)");
+  assert.equal(formatO(lit(1000), []), "O(1000)");
+  assert.equal(formatO(mul(lit(4), N), ["N"]), "O(N)");
 });
