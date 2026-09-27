@@ -268,7 +268,7 @@ a:hover {
   .app-header nav {
     order: 3;
     flex: none;
-    /* 幅360pxでも4項目が横スクロールなしで収まる詰め方 */
+    /* 4項目なら360pxでも収まる詰め方。5項目(計算量)は約410px以上で収まり、それ未満は横スクロール */
     gap: 14px;
     /* 横スクロール用のクリップ境界がリンクに接するとフォーカスリング(outline 2px +
        offset 2px)とactiveの下線が切れる。左右4pxだけヘッダーの外へ出し、その分を
@@ -929,6 +929,12 @@ button.member-card {
   filter: brightness(1.08);
   transform: translateY(-1px);
 }
+.run-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+  filter: none;
+}
 .editor-hint {
   font-size: 12px;
 }
@@ -1388,7 +1394,8 @@ button.member-card {
 :root[data-theme="dark"] .token.variable {
   color: #e06c75;
 }
-.editor-io .io-area {
+.editor-io .io-area,
+.cx-code {
   width: 100%;
   min-height: 140px;
   border: 1px solid var(--border);
@@ -1467,6 +1474,197 @@ button.member-card {
 }
 :root[data-theme="dark"] .exit-chip.ng {
   color: #ff7a79;
+}
+/* 注意(推定: 中 / 厳しい)。.io-warn と同じ琥珀色 */
+.exit-chip.warn {
+  color: #a15c00;
+  background: color-mix(in srgb, #e0a34a 18%, transparent);
+}
+:root[data-theme="dark"] .exit-chip.warn {
+  color: #e0a34a;
+}
+:root[data-theme="dark"] .error-text {
+  color: #ff7a79;
+}
+
+/* ---------- 計算量 ---------- */
+
+/* グリッドの項目は既定で中身より狭くならない(min-width: auto)ので、表が広いと
+   スマホでページごと横に広がる。0 にして表は .table-scroll の中だけで横スクロールさせる */
+.cx-cols > .card {
+  min-width: 0;
+}
+/* 貼り付け専用なのでハイライトは重ねず、素の textarea を等幅で折り返さずに出す */
+.cx-code {
+  display: block;
+  min-height: 260px;
+  overflow: auto;
+  tab-size: 4;
+  white-space: pre;
+}
+.cx-msg {
+  margin: 0 0 10px;
+  font-size: 13px;
+}
+.cx-empty {
+  margin: 0;
+  font-size: 13px;
+}
+.cx-stats .stat-value {
+  font-family: var(--font-mono);
+  font-variant-ligatures: none;
+  font-feature-settings: "liga" 0, "calt" 0;
+  font-size: clamp(20px, 5vw, 28px);
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+.cx-warn-list {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #a15c00;
+}
+:root[data-theme="dark"] .cx-warn-list {
+  color: #e0a34a;
+}
+.cx-warn-list .info {
+  color: var(--muted);
+}
+.cx-warn-list li + li {
+  margin-top: 4px;
+}
+.cx-warn-list .linklike {
+  color: inherit;
+}
+.card-head .cx-clear {
+  font-size: 12px;
+}
+.cx-range-table td {
+  vertical-align: middle;
+}
+.cx-var {
+  font-weight: 700;
+}
+.cx-origin {
+  margin-top: 2px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--muted);
+}
+.cx-origin .linklike {
+  text-align: left;
+}
+.cx-bound {
+  width: 120px;
+  font: inherit;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 4px 8px;
+}
+.cx-tl {
+  width: 64px;
+}
+.cx-bound[aria-invalid="true"],
+.cx-bound-bad {
+  border-color: #d03b3b;
+  color: #d03b3b;
+}
+:root[data-theme="dark"] .cx-bound[aria-invalid="true"],
+:root[data-theme="dark"] .cx-bound-bad {
+  border-color: #ff7a79;
+  color: #ff7a79;
+}
+.cx-restored {
+  display: block;
+  font-size: 11px;
+}
+.cx-hint {
+  margin: 8px 0 0;
+  font-size: 12px;
+}
+.cx-total-row {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--grid);
+}
+.cx-total {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 10px 0 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+.cx-breakdown {
+  font-size: 13px;
+}
+.cx-breakdown td {
+  vertical-align: top;
+}
+.cx-kind {
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--muted);
+}
+.cx-label {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+  min-width: 140px;
+}
+.cx-term {
+  font-family: var(--font-mono);
+  white-space: nowrap;
+}
+.cx-reason {
+  font-size: 12px;
+  color: var(--muted);
+  min-width: 160px;
+}
+.cx-unused {
+  margin-top: 12px;
+  font-size: 13px;
+}
+.cx-unused summary {
+  cursor: pointer;
+  color: var(--muted);
+}
+/* エディターのツールバーからの導線 */
+.editor-cx-link {
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+@media (max-width: 560px) {
+  /* 後ろの .stat-grid の2列指定より強くするため2クラスで書く */
+  .stat-grid.cx-stats {
+    grid-template-columns: 1fr;
+  }
+  /* iOS が入力時にズームしないよう 16px にする */
+  .cx-bound {
+    width: 88px;
+    font-size: 16px;
+  }
+  .cx-tl {
+    width: 56px;
+  }
 }
 
 /* ---------- ユーザーページ ---------- */

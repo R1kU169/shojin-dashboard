@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { NavLink, Route, Routes } from "react-router-dom";
 import { ClubPage } from "./pages/ClubPage";
 import { EditorPage } from "./pages/EditorPage";
@@ -5,6 +6,9 @@ import { Home } from "./pages/Home";
 import { UserPage } from "./pages/UserPage";
 import { MyPage } from "./pages/MyPage";
 import { ThemeProvider, useTheme } from "./theme";
+
+// 計算量タブは解析器(約6,000行)ごと別のチャンクにして、ほかのページの読み込みを重くしない
+const ComplexityPage = lazy(() => import("./pages/ComplexityPage").then((m) => ({ default: m.ComplexityPage })));
 
 function ThemeToggle() {
   const { pref, cycle } = useTheme();
@@ -44,6 +48,7 @@ export default function App() {
             <span className="nav-long">クラブ内</span>ランキング
           </NavLink>
           <NavLink to="/editor">エディター</NavLink>
+          <NavLink to="/complexity">計算量</NavLink>
           <a
             className="nav-ext"
             href="https://mocaluna0117.github.io/ds-club-web"
@@ -62,6 +67,14 @@ export default function App() {
           <Route path="/u/:userId" element={<UserPage />} />
           <Route path="/club" element={<ClubPage />} />
           <Route path="/editor" element={<EditorPage />} />
+          <Route
+            path="/complexity"
+            element={
+              <Suspense fallback={<p className="muted">読み込み中…</p>}>
+                <ComplexityPage />
+              </Suspense>
+            }
+          />
         </Routes>
       </main>
       <footer className="app-footer">

@@ -1206,7 +1206,9 @@ export class Analyzer {
     const order = [...this.symbolOrder.filter((s) => s !== "?" && plain(s)), ...this.symbolOrder.filter((s) => s !== "?" && !plain(s))];
     const items = this.items.map((it) => {
       const expr = fix(it.expr);
-      return { ...it, expr, text: it.kind === "loop" ? `×${format(expr, order)}` : formatO(expr, order) };
+      // 表示は総計と同じく支配される項を落とす(main(…) が O(N² + N) ではなく O(N²) になる)
+      const shown = simplify(expr);
+      return { ...it, expr, text: it.kind === "loop" ? `×${format(shown, order)}` : formatO(shown, order) };
     });
     const tExpr = simplify(time);
     const sExpr = simplify(space);

@@ -125,7 +125,7 @@ export function expandMacros(toks: Tok[], rules: LexRules, d: Dialect, warn: (w:
             continue;
           }
           count++;
-          res.push(...expand(mac.body.map((b) => ({ ...b, line: t.line })), depth + 1, new Set([...active, t.v])));
+          res.push(...expand(withLead(mac.body.map((b) => ({ ...b, line: t.line })), t), depth + 1, new Set([...active, t.v])));
           continue;
         }
         if (callArgs && !mac.variadic) {
@@ -136,11 +136,12 @@ export function expandMacros(toks: Tok[], rules: LexRules, d: Dialect, warn: (w:
             const body: Tok[] = [];
             for (const b of mac.body) {
               const pi = b.k === "ident" ? mac.params.indexOf(b.v) : -1;
-              if (pi >= 0) body.push(...(args[pi] ?? []).map((a) => ({ ...a, line: t.line })));
+              // 引数の先頭の字句は、置き換える仮引数の前の空白を引き継ぐ(内訳の表示が rep(j, m) の書き方に引きずられない)
+              if (pi >= 0) (args[pi] ?? []).forEach((a, k) => body.push(k === 0 ? { ...a, line: t.line, sp: b.sp, nl: false } : { ...a, line: t.line }));
               else if (b.k === "op" && (b.v === "#" || b.v === "##")) continue;
               else body.push({ ...b, line: t.line });
             }
-            res.push(...expand(body, depth + 1, new Set([...active, t.v])));
+            res.push(...expand(withLead(body, t), depth + 1, new Set([...active, t.v])));
             i = c;
             continue;
           }
@@ -163,6 +164,8 @@ export function expandMacros(toks: Tok[], rules: LexRules, d: Dialect, warn: (w:
     }
     return res;
   };
+  /** 展開の先頭の字句は、マクロ名の前の空白と行頭かどうかを引き継ぐ */
+  const withLead = (body: Tok[], at: Tok): Tok[] => (body.length ? [{ ...body[0], sp: at.sp, nl: at.nl }, ...body.slice(1)] : body);
   const expanded = expand(out, 0, new Set());
   if (count >= MAX_EXPANSIONS) warn({ line: 1, code: "macro-limit", message: "マクロの展開が多すぎるので途中で打ち切りました" });
   return { toks: expanded, consts };
