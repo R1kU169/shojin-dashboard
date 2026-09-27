@@ -332,7 +332,15 @@ function keywordDecl(toks: readonly Tok[], ctx: LowerCtx): IrNode[] {
       if (nameTok && nameTok.k === "ident") names.push(nameTok);
       // Go の配列型 [N]T / Rust・TS の型注釈の中の配列 [T; N]
       const typePart = colon >= 0 ? part.slice(colon + 1) : part.slice(1);
-      if (isOp(typePart[0], "[") && !isOp(typePart[1], "]")) {
+      // Nim の array[N, T] / array[0..N-1, T]
+      if (isWord(typePart[0], "array") && isOp(typePart[1], "[")) {
+        const c = matchClose(typePart, 1);
+        const size = splitTop(typePart.slice(2, c < 0 ? typePart.length : c), ",")[0] ?? [];
+        if (size.length) {
+          const e = parseTokens(size, ctx.d);
+          goArrayDims.push(e.kind === "range" ? e.to : e);
+        }
+      } else if (isOp(typePart[0], "[") && !isOp(typePart[1], "]")) {
         const c = matchClose(typePart, 0);
         const inner = typePart.slice(1, c);
         const semi = splitTop(inner, ";");
@@ -449,8 +457,8 @@ export function lowerStmt(toks: readonly Tok[], ctx: LowerCtx): IrNode[] {
     const value = toks.length > 1 ? parseStatement(toks.slice(1), ctx.d) : null;
     return [{ kind: "return", value, loc: l }];
   }
-  // my ($a, $b) = … の my ( は宣言(ほかの言語の let( / var( は呼び出しとして読む)
-  if (first.k === "ident" && !first.sigil && spec.declWords.has(first.v) && (!isOp(toks[1], "(") || ["my", "our", "state"].includes(first.v)) && !isOp(toks[1], ".")) {
+  // let (a, b) = … / my ($a, $b) = … の ( は分割代入の宣言(Go の var ( … ) はまとめた宣言なので除く)
+  if (first.k === "ident" && !first.sigil && spec.declWords.has(first.v) && (!isOp(toks[1], "(") || spec.key !== "go") && !isOp(toks[1], ".")) {
     return keywordDecl(toks, ctx);
   }
   if (spec.typedDecls) {

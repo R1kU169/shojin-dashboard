@@ -68,6 +68,8 @@ export interface Dialect {
   bracketGenerics: boolean;
   /** 式の中の { } はハッシュ・集合のリテラル(Python / Ruby / JS)。C 系の初期化子リストとは区別する */
   braceHash?: boolean;
+  /** 範囲演算子の結合力(既定 6: 比較より弱い)。Nim は比較より強い(x in 0..<n) */
+  rangeBp?: number;
   /** ラムダの本体(文の並び)をブロック木にする。フロントエンドが与える */
   parseBody?: (toks: Tok[]) => IrNode[];
 }
@@ -352,13 +354,14 @@ class Parser {
       const b = this.expr(3);
       return { kind: "cond", c, a: left, b };
     }
-    if ((v in d.ranges || (v === ":" && d.colonRange)) && minBp < 6) {
+    const rbp = d.rangeBp ?? 6;
+    if ((v in d.ranges || (v === ":" && d.colonRange)) && minBp < rbp) {
       this.i++;
       const inclusive = v === ":" ? true : d.ranges[v];
       if (this.done() || this.isOp(")") || this.isOp("]") || this.isOp(",")) {
         return { kind: "range", from: left, to: unknown("∞"), step: null, inclusive };
       }
-      let to = this.expr(6);
+      let to = this.expr(rbp);
       let step: SExpr | null = null;
       if (v === ":" && this.isOp(":")) {
         // Julia の a:s:b

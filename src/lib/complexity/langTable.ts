@@ -15,6 +15,7 @@ import { juliaSpec } from "./langs/julia.ts";
 import { bashSpec } from "./langs/bash.ts";
 import { phpSpec } from "./langs/php.ts";
 import { perlSpec } from "./langs/perl.ts";
+import { nimSpec } from "./langs/nim.ts";
 
 export const LANG_SPECS: Record<string, LangSpec | null> = {
   cpp: cppSpec,
@@ -30,7 +31,7 @@ export const LANG_SPECS: Record<string, LangSpec | null> = {
   ruby: rubySpec,
   haskell: null,
   d: dSpec,
-  nim: null,
+  nim: nimSpec,
   julia: juliaSpec,
   perl: perlSpec,
   php: phpSpec,

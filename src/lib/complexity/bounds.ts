@@ -509,12 +509,20 @@ function findInit(init: SExpr, v: string): SExpr | null {
 // ---------------------------------------------------------------------------
 // while
 
+/** Nim の inc x / dec x / inc(x, k) は x += 1 / x -= 1 / x += k */
+function incDec(e: SExpr): SExpr {
+  if (e.kind === "call" && (e.name === "inc" || e.name === "dec") && e.args[0]?.kind === "sym") {
+    return { kind: "assign", op: e.name === "inc" ? "+=" : "-=", target: e.args[0], value: e.args[1] ?? { kind: "num", value: 1 } };
+  }
+  return e;
+}
+
 /** 本体の直下(分岐の中を含み、子のループと関数は含まない)の代入と式 */
 function flatBody(nodes: readonly IrNode[]): SExpr[] {
   const out: SExpr[] = [];
   for (const n of nodes) {
     if (n.kind === "assign") out.push({ kind: "assign", op: n.op, target: n.target, value: n.value });
-    else if (n.kind === "expr") out.push(n.e);
+    else if (n.kind === "expr") out.push(incDec(n.e));
     else if (n.kind === "decl" && n.init) out.push({ kind: "assign", op: "=", target: { kind: "sym", name: n.name }, value: n.init });
     else if (n.kind === "return" && n.value) out.push(n.value);
     else if (n.kind === "branch") {
@@ -715,11 +723,25 @@ function whileLoop(loop: LoopNode, env: BoundEnv): LoopFactor {
     }
   }
 
+  /** 上限の変数が本体(入れ子のループを含む)で書き換わるなら(while p * p <= x: x = x div p)、最初の値を上限にする */
+  const limitBound = (E: SExpr): Bound | null => {
+    if (E.kind === "sym" && writesDeep(loop.body, E.name)) {
+      const init = env.initialValue(E.name, loop);
+      const b = init ? boundOf(init, env) : null;
+      if (b) return b;
+    }
+    return boundOf(E, env);
+  };
   // L13 / L13' x を1ずつ動かす(償却でない)
   for (const { x } of steppers) {
     const lim = limitOf(cond, x);
+    // while d * d <= n: d += 1 は √N 回
+    if (lim && lim.kind === "sqrt") {
+      const E = limitBound(lim.E);
+      if (E) return { expr: powExpr(E.expr, 0.5), conf: "high", reason: `${x}² ≤ ${sexprText(lim.E)}` };
+    }
     if (lim && lim.kind === "lt") {
-      const E = boundOf(lim.E, env);
+      const E = limitBound(lim.E);
       if (E) return { expr: E.expr, conf: "high", reason: `${x} を ${sexprText(lim.E)} まで進める` };
     }
     const init = env.initialValue(x, loop);
@@ -753,6 +775,20 @@ function whileLoop(loop: LoopNode, env: BoundEnv): LoopFactor {
   if (env.isInput(cond)) return { expr: env.named("N", `入力の行数(${line}行目)`, line), conf: "medium", reason: "入力を読み切るまで" };
 
   return fallback("条件の形が分からない");
+}
+
+/** name への代入が本体のどこか(入れ子のループ・分岐を含む)にあるか */
+function writesDeep(nodes: readonly IrNode[], name: string): boolean {
+  for (const n of nodes) {
+    if (n.kind === "assign" && targetNames(n.target).includes(name) && n.target.kind !== "index") return true;
+    if (n.kind === "expr") {
+      const e = incDec(n.e);
+      if (e.kind === "assign" && targetNames(e.target).includes(name)) return true;
+    }
+    if (n.kind === "loop" && writesDeep(n.body, name)) return true;
+    if (n.kind === "branch" && n.branches.some((b) => writesDeep(b, name))) return true;
+  }
+  return false;
 }
 
 function isMidExpr(e: SExpr): boolean {

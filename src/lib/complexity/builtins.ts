@@ -153,6 +153,8 @@ export const UNKNOWN_METHODS: Record<string, BuiltinRule> = {
   ...table([
     ["push_back emplace_back push append pop_back pop back front first last size length len empty isEmpty is_empty top peek get at add offer poll popleft appendleft push_front pop_front begin end clear << key? has_key? include_key?", r(one)],
     ["insert erase find count remove lower_bound upper_bound contains containsKey has discard delete", r(logS, { conf: "medium", warn: "型が分からないので set/map と仮定しました" })],
+    ["lowerBound upperBound binarySearch bsearch bsearch_index searchsortedfirst searchsortedlast", r(logS)],
+    ["sortedByIt sortedBy sorted", r(SlogS, { cmpArg: 0 })],
     ["sort sort! sorted sort_unstable Sort", r(SlogS, { cmpArg: 0 })],
     ["index indexOf reverse sum max min join copy includes include? Contains dup clone to_a uniq", r(S)],
   ]),

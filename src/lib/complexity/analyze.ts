@@ -77,7 +77,7 @@ interface WalkEnv {
 const NAMESPACES = new Set(["std", "ranges", "views", "atcoder", "heapq", "bisect", "math", "itertools", "collections", "functools", "sys", "operator", "string", "Arrays", "Collections", "Math", "Integer", "Long", "String", "System", "Objects", "Character", "Double", "Stream", "IntStream", "Enumerable", "Console", "Convert", "Array", "Object", "Number", "JSON", "BigInt", "strings", "sort", "strconv", "fmt", "slices", "maps", "os", "bufio", "io", "table", "utf8", "Base", "Iterators", "DataStructures", "sequtils", "algorithm", "strutils", "std::cmp", "cmp", "mem", "iter", "Vec", "HashMap", "HashSet", "BTreeMap", "BTreeSet", "VecDeque", "BinaryHeap", "Set", "Hash", "List", "Util", "Data", "M", "S", "V", "IM", "IS", "SplFixedArray"]);
 
 /** 未知でも黙って O(1) にしてよい呼び出し(出力・変換など) */
-const QUIET = new Set(["print", "println", "printf", "puts", "p", "echo", "say", "write", "writeln", "writefln", "Println", "Printf", "Print", "WriteLine", "Write", "log", "cout", "endl", "flush", "format", "sprintf", "String", "str", "int", "float", "parseInt", "Number", "chr", "ord", "abs", "min", "max", "exit", "assert", "eprintln", "dbg!", "println!", "print!", "write!", "writeln!", "format!", "vec!", "assert!", "assert_eq!", "panic!", "unreachable!", "debug_assert!", "to_string", "toString", "valueOf", "toFixed", "parse", "unwrap", "expect", "ok", "clone", "into", "from", "new", "as_str", "setrecursionlimit", "Some", "Ok", "Err", "None", "chomp", "die", "require", "local", "defined", "ref", "bless", "sprintf", "sizeof", "alignof", "decltype", "typeid", "stack_size", "start", "setDaemon", "daemon", "Thread", "sync_with_stdio", "tie", "to_i", "to_s", "to_f", "to_sym", "to_r", "chr", "ord", "even?", "odd?", "zero?", "nil?", "positive?", "negative?", "succ", "pred", "freeze", "frozen?", "is_a?", "kind_of?", "respond_to?", "inspect", "object_id", "tap", "then", "divmod", "fdiv", "floor", "ceil", "round", "truncate", "between?", "clamp", "class", "if", "unless", "case", "while", "switch", "lambda", "proc", "rand", "srand", "exit!", "abort", "sleep", "Integer", "Float", "Rational", "Complex", "chomp", "chop", "strip", "empty?", "to_a", "eof?", "eof", "combination", "permutation", "repeated_permutation", "repeated_combination", "each_slice", "each_cons", "lazy", "each_entry"]);
+const QUIET = new Set(["print", "println", "printf", "puts", "p", "echo", "say", "write", "writeln", "writefln", "Println", "Printf", "Print", "WriteLine", "Write", "log", "cout", "endl", "flush", "format", "sprintf", "String", "str", "int", "float", "parseInt", "Number", "chr", "ord", "abs", "min", "max", "exit", "assert", "eprintln", "dbg!", "println!", "print!", "write!", "writeln!", "format!", "vec!", "assert!", "assert_eq!", "panic!", "unreachable!", "debug_assert!", "to_string", "toString", "valueOf", "toFixed", "parse", "unwrap", "expect", "ok", "clone", "into", "from", "new", "as_str", "setrecursionlimit", "Some", "Ok", "Err", "None", "chomp", "die", "require", "local", "defined", "ref", "bless", "sprintf", "sizeof", "alignof", "decltype", "typeid", "stack_size", "start", "setDaemon", "daemon", "Thread", "sync_with_stdio", "tie", "to_i", "to_s", "to_f", "to_sym", "to_r", "chr", "ord", "even?", "odd?", "zero?", "nil?", "positive?", "negative?", "succ", "pred", "freeze", "frozen?", "is_a?", "kind_of?", "respond_to?", "inspect", "object_id", "tap", "then", "divmod", "fdiv", "floor", "ceil", "round", "truncate", "between?", "clamp", "class", "if", "unless", "case", "while", "switch", "lambda", "proc", "rand", "srand", "exit!", "abort", "sleep", "Integer", "Float", "Rational", "Complex", "chomp", "chop", "strip", "empty?", "to_a", "eof?", "eof", "combination", "permutation", "repeated_permutation", "repeated_combination", "each_slice", "each_cons", "lazy", "each_entry", "inc", "dec", "discard", "echo", "parseInt", "parseFloat", "newSeq", "newSeqWith", "newSeqOfCap", "newString", "initHashSet", "initTable", "initCountTable", "initDeque", "initHeapQueue", "toHashSet", "toTable", "high", "low", "succ", "pred", "quit"]);
 
 /** 受け手の要素数を保つ(以下にする)メソッド: a.keys() / a.map(f) / a.iter().rev() */
 const SIZE_KEEPING_MEMBERS = new Set(["keys", "values", "items", "iter", "chars", "bytes", "entries", "to_a", "clone", "copy", "dup", "rev", "reverse", "sorted", "into_iter", "begin", "end", "rbegin", "map", "filter", "select", "reject", "collect", "to_vec", "cloned", "copied", "enumerate", "sort_by", "uniq", "compact", "each_with_index", "with_index", "filter_map", "iter_mut", "Select", "Where", "ToList", "ToArray", "toList", "toSeq", "mapIt", "filterIt", "reversed", "slice", "to_owned", "as_slice", "values_mut", "keySet", "entrySet", "stream", "boxed"]);
@@ -643,10 +643,10 @@ export class Analyzer {
     } else {
       rule = lookupFree(this.lang, name);
       target = argv[0] ?? null;
-      // UFCS(D / Nim / Julia の a.sort と sort(a))
+      // UFCS(D / Nim / Julia の a.sort と sort(a))。Nim / D は型が分からなくてもメソッドの既定で引く
       if (!rule && argv[0] && argv[0].kind !== "lambda") {
         const k = this.kindOf(argv[0]);
-        if (k !== "unknown" && k !== "scalar") {
+        if ((k !== "unknown" && k !== "scalar") || (k === "unknown" && (this.lang === "nim" || this.lang === "d"))) {
           rule = lookupMethod(k, name);
           kind = k;
           if (rule) return this.applyRule(rule, name, argv[0], argv.slice(1), kind, env, line);
@@ -1290,7 +1290,7 @@ function copySource(e: SExpr): string | null {
     const src = [...e.args].reverse().find((a) => a.kind === "sym");
     if (src && src.kind === "sym") return src.name;
   }
-  if (e.kind === "member" && ["copy", "clone", "dup", "to_vec", "to_owned", "sorted", "reversed", "slice", "concat", "to_a"].includes(e.name) && e.of.kind === "sym") return e.of.name;
+  if (e.kind === "member" && ["copy", "clone", "dup", "to_vec", "to_owned", "sorted", "reversed", "slice", "concat", "to_a", "sortedByIt", "sortedBy", "mapIt", "deduplicate", "toSeq", "map", "sort_by", "sort"].includes(e.name) && e.of.kind === "sym") return e.of.name;
   if (e.kind === "slice" && e.of.kind === "sym") return e.of.name;
   return null;
 }

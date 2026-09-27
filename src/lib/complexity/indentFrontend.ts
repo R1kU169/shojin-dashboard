@@ -77,6 +77,8 @@ class IndentParser {
       if (eq > 0) return { kw: "func", head: toks.slice(k, eq), inline: toks.slice(eq + 1) };
     }
     if (p.sectionWords.has(word) && toks.length === k + 1) return { kw: "section", head: [], inline: [] };
+    // Nim の case x(行末に : を書かない形。of の行が続く)
+    if (word === "case" && this.spec.key === "nim" && !isOp(last, ":")) return { kw: "case", head: toks.slice(k + 1), inline: [] };
     // 最初のトップレベルの : で見出しと本体を分ける
     const colon = findTop(toks, (x) => isOp(x, ":"));
     if (colon < 0) return null;
