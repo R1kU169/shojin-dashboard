@@ -5,6 +5,7 @@ import { tokenize } from "./lexer.ts";
 import type { Dialect } from "./sexpr.ts";
 import { parseBrace } from "./braceFrontend.ts";
 import { parseIndent } from "./indentFrontend.ts";
+import { parseHaskell } from "./haskellFrontend.ts";
 import { lowerList } from "./lower.ts";
 import type { LowerCtx } from "./lower.ts";
 import type { LangSpec, Raw } from "./spec.ts";
@@ -48,6 +49,11 @@ export function parseProgram(code: string, spec: LangSpec): Program {
       const r = spec.postTokenize(toks, warn);
       toks = r.toks;
       consts = r.consts;
+    }
+    // Haskell は専用のフロントエンドで IR を直接作る
+    if (spec.family === "haskell") {
+      const prog = parseHaskell(toks, warn, lineCount);
+      return { ...prog, warnings };
     }
     const parser = PARSERS[spec.family];
     if (!parser) {

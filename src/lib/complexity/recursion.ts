@@ -16,6 +16,32 @@ export interface SelfCall {
   insideLoop: boolean;
   /** 隣接リストの走査の中での自己呼び出し(グラフの DFS) */
   insideAdjacency: boolean;
+  /** 分岐の経路(分岐の番号:枝の番号)。別の枝にある呼び出しは同時には起きない */
+  path?: string[];
+}
+
+/** 2つの呼び出しが同じ実行で両方起こりうるか(同じ分岐の別の枝にあれば起こらない) */
+function together(a: SelfCall, b: SelfCall): boolean {
+  const pa = new Map((a.path ?? []).map((x) => x.split(":") as [string, string]));
+  for (const x of b.path ?? []) {
+    const [id, k] = x.split(":");
+    const other = pa.get(id);
+    if (other !== undefined && other !== k) return false;
+  }
+  return true;
+}
+
+/** 1回の実行で同時に起こりうる自己呼び出しの最大の組(二分探索の if / else は1本) */
+function liveCalls(calls: SelfCall[]): SelfCall[] {
+  if (calls.length <= 1 || calls.length > 12) return calls;
+  let best: SelfCall[] = [];
+  const n = calls.length;
+  for (let mask = 1; mask < 1 << n; mask++) {
+    const pick = calls.filter((_, i) => mask & (1 << i));
+    if (pick.length <= best.length) continue;
+    if (pick.every((a, i) => pick.every((b, j) => i >= j || together(a, b)))) best = pick;
+  }
+  return best;
 }
 
 export interface RecInput {
@@ -152,7 +178,17 @@ function memoTable(fn: RecInput["fn"]): { table: string | null; source: "decorat
           dict = true;
         }
       });
-      if (table) return { table, source: dict ? "dict" : "array" };
+      // 表を見て返す分岐(if (dp[i] != -1) return dp[i];)だけがメモ化。if (a[m] <= x) return f(m, r) は違う
+      const t = table as string | null;
+      const returnsTable = n.branches[i].some((b) => {
+        if (b.kind !== "return" || !b.value) return false;
+        let hit = false;
+        walk(b.value, (x) => {
+          if (x.kind === "sym" && x.name === t) hit = true;
+        });
+        return hit;
+      });
+      if (t && returnsTable) return { table: t, source: dict ? "dict" : "array" };
     }
   }
   return null;
@@ -197,7 +233,9 @@ function hasVisitedCheck(fn: RecInput["fn"], graphArgs: SExpr[]): boolean {
 }
 
 export function estimateRecursion(inp: RecInput): RecEstimate {
-  const { fn, selfCalls, body, env } = inp;
+  const { fn, body, env } = inp;
+  // 分岐の別々の枝にある自己呼び出し(二分探索の lo / hi)は1回の実行で1本だけ
+  const selfCalls = liveCalls(inp.selfCalls);
   const params = fn.params;
   const mids = midVars(fn.body);
   const arrays = (name: string) => env.kindOf({ kind: "sym", name }) === "array" || env.kindOf({ kind: "sym", name }) === "unknown";
@@ -275,7 +313,9 @@ export function estimateRecursion(inp: RecInput): RecEstimate {
   // R3' / R3 / R2 半分にする
   const halves = classes.filter((c) => c.cls === "half");
   if (halves.length > 0) {
-    const pos = Math.max(...halves.map((h) => h.pos));
+    // 半分にする引数の位置は、別の枝の呼び出しも含めて一番後ろ(f(lo, mid) / f(mid, hi) なら hi)
+    const allHalves = inp.selfCalls.map((c) => callClass(c, params, mids, arrays)).filter((c) => c.cls === "half");
+    const pos = Math.max(...allHalves.map((h) => h.pos));
     const N = paramSym(pos);
     const logN = logOfExpr(N);
     if (halves.length === 1) return { time: mul(logN, body), depth: logN, calls: logN, conf: "high", reason: "半分にしていく再帰" };

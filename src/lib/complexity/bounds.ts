@@ -86,6 +86,9 @@ export function boundOf(e: SExpr | null, env: BoundEnv, depth = 0): Bound | null
       const o = [...env.outer].reverse().find((s) => s.var === e.name);
       if (o) return { expr: o.bound };
       if (NULLISH.has(e.name)) return { expr: ONE };
+      // リストや配列そのものを数として渡した(Haskell の go 0 xs)なら要素数
+      const k = env.kindOf(e);
+      if (k === "array" || k === "string" || k === "deque" || k === "linkedlist") return { expr: env.sizeOf(e) };
       return { expr: env.sym(e.name) };
     }
     case "size":
@@ -228,11 +231,15 @@ export interface IterCount {
 const WRAP_CALLS = new Set(["axes", "enumerate", "reversed", "sorted", "set", "list", "tuple", "iter", "frozenset", "deque", "zip", "Counter", "sorted_by", "each_with_index", "pairs", "ipairs", "keys", "values", "eachindex", "collect", "items", "reverse", "rev", "Reverse", "chain", "sort", "uniq", "unique", "withIndex", "entries", "Object.entries", "Object.keys", "Object.values"]);
 const WRAP_MEMBERS = new Set(["items", "keys", "values", "iter", "into_iter", "iter_mut", "chars", "bytes", "rev", "reverse", "reversed", "enumerate", "each", "each_with_index", "entries", "copied", "cloned", "to_a", "with_index", "each_char", "each_key", "each_value", "pairs", "mpairs", "mitems", "items", "keySet", "entrySet", "AsEnumerable", "Keys", "Values", "sorted", "uniq", "zip", "windows", "chunks", "to_vec", "toList", "toSeq", "lines", "split", "split_whitespace", "Split", "sort", "values_mut", "enumerated"]);
 
+/** 最後の引数がコレクションの関数(Haskell の map f xs / filter p xs / nub xs / sortOn f xs) */
+const WRAP_LAST = new Set(["nub", "nubBy", "sortOn", "sortBy", "filter", "map", "mapMaybe", "takeWhile", "dropWhile", "group", "groupBy", "tails", "inits", "zip", "zip3", "concat", "concatMap", "M.toList", "M.keys", "M.elems", "M.assocs", "S.toList", "S.elems", "V.toList", "elems", "assocs", "indices"]);
+
 export function iterCount(coll: SExpr, env: BoundEnv, loop: LoopNode): IterCount {
   let e = coll;
   // 包み(enumerate(a) / a.items() / reversed(a) / a[::-1] / &a)を剥がす
   for (let guard = 0; guard < 8; guard++) {
-    if (e.kind === "call" && WRAP_CALLS.has(e.name) && e.args.length >= 1) e = e.args[0];
+    if (e.kind === "call" && WRAP_LAST.has(e.name) && e.args.length >= 1) e = e.args[e.args.length - 1];
+    else if (e.kind === "call" && WRAP_CALLS.has(e.name) && e.args.length >= 1) e = e.args[0];
     else if (e.kind === "member" && WRAP_MEMBERS.has(e.name) && (e.args === null || e.args.length <= 1) && !(e.name === "split" && env.isInput(e))) e = e.of;
     else if (e.kind === "slice") e = e.of;
     else if (e.kind === "un") e = e.e;

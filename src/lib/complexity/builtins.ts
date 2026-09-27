@@ -319,6 +319,27 @@ const PERL_FREE = table([
 ]);
 PERL_FREE.push = r(one, { grows: true });
 
+// Haskell(関数は最後の引数がリスト: map f xs / foldl' f z xs / elem x xs)
+/** Map / Set の操作は log(要素数)。畳み込みの途中の map(foldl' の acc)は大きさが分からないので主記号の log */
+const logMain = (): Expr => logOfExpr([{ coef: 1, factors: [{ v: "?", pow: 1, log: 0, exp: 0, fact: 0 }] }]);
+const HASKELL_FREE = table([
+  ["sort sortBy sortOn M.fromList M.fromListWith S.fromList", r(lastCollLog, { cmpArg: 0 })],
+  ["map filter foldl foldl' foldr foldl1 foldr1 sum product length maximum minimum maximumBy minimumBy reverse concat concatMap and or any all scanl scanl' scanr takeWhile dropWhile span break partition zip zip3 zipWith zipWith3 unzip group groupBy lookup elem notElem !! words lines unwords unlines mapMaybe catMaybes M.toList M.elems M.keys M.toAscList M.foldr M.foldl M.foldrWithKey M.map M.filter M.union M.unionWith S.toList S.elems S.union V.fromList V.toList V.map V.sum V.maximum A.elems A.assocs listArray accumArray elems assocs BS.words BS.lines transpose isPrefixOf isSuffixOf", r(lastColl, { loopArg: 0 })],
+  ["length", r(lastColl)],
+  ["nub nubBy \\\\ isInfixOf union intersect", r((c) => {
+    const s = lastColl(c);
+    return mul(s, s);
+  }, { warn: "nub / \\ / isInfixOf はリストの長さの2乗の時間です" })],
+  ["++ !!", r(A(0))],
+  ["take drop splitAt replicate V.replicate V.generate newArray newListArray", r(B(0))],
+  ["M.insert M.insertWith M.lookup M.member M.notMember M.findWithDefault M.adjust M.alter M.update M.delete M.lookupMin M.lookupMax M.findMin M.findMax M.deleteMin M.deleteMax M.lookupLT M.lookupGT M.lookupLE M.lookupGE M.split M.elemAt S.insert S.member S.notMember S.delete S.findMin S.findMax S.deleteMin S.deleteMax S.lookupLT S.lookupGT S.lookupLE S.lookupGE S.split", r(logMain)],
+  ["print putStrLn putStr show read fromIntegral toInteger fromEnum toEnum fst snd head last tail init null abs max min gcd lcm div mod quot rem even odd not succ pred cons fromJust fromMaybe maybe either id const flip when unless return pure mempty M.size M.empty M.singleton M.null S.size S.empty S.singleton S.null V.length V.head V.last readArray writeArray modifyArray unsafeRead unsafeWrite bounds BS.readInt BS.pack BS.unpack runST runSTUArray runSTArray newSTRef readSTRef writeSTRef modifySTRef modifySTRef' newIORef readIORef writeIORef modifyIORef modifyIORef' replicateM iterate cycle repeat seq", r(one)],
+]);
+HASKELL_FREE.permutations = r((c) => {
+  const s = lastColl(c);
+  return s;
+}, { warn: "permutations はリストの長さの階乗の個数を作ります" });
+
 /** 8言語の表は langs/*.ts から登録する(循環を避けるため後から入れる) */
 export const FREE: Record<FreeTable, Record<string, BuiltinRule>> = {
   cpp: CPP_FREE,
@@ -330,7 +351,7 @@ export const FREE: Record<FreeTable, Record<string, BuiltinRule>> = {
   julia: JULIA_FREE,
   bash: BASH_FREE,
   nim: {},
-  haskell: {},
+  haskell: HASKELL_FREE,
   perl: PERL_FREE,
   php: PHP_FREE,
 };

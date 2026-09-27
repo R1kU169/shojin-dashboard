@@ -71,6 +71,8 @@ interface WalkEnv {
   before: Frame[];
   /** 自己呼び出しを見つけたときの文脈 */
   inAdjacency: boolean;
+  /** いま歩いている分岐の経路(分岐の番号:枝の番号)。別の枝の自己呼び出しは同時には起きない */
+  path?: string[];
 }
 
 /** 名前空間とみなす受け手(std::sort / Arrays.sort / heapq.heappush / math.gcd …) */
@@ -107,6 +109,16 @@ export class Analyzer {
   /** 1回目で集めた成長(ローカルのコンテナが関数やループを抜ける前の値) */
   private growRecord = new Map<string, Expr>();
   private seenWarn = new Set<string>();
+  private branchIds = new WeakMap<object, number>();
+  private nextBranch = 0;
+  branchId(n: object): number {
+    let id = this.branchIds.get(n);
+    if (id === undefined) {
+      id = this.nextBranch++;
+      this.branchIds.set(n, id);
+    }
+    return id;
+  }
   /** 1回目に記録した記号の由来(2回目に別名経由でしか出てこない記号に使う) */
   private pass1Origins = new Map<string, { origin: string; line: number }>();
   private stringConcatWarned = false;
@@ -273,6 +285,15 @@ export class Analyzer {
       case "bin":
         if (e.op === "+") return add(this.sizeOf(e.l, env), this.sizeOf(e.r, env));
         return this.sizeOf(e.l, env);
+      case "comp": {
+        // [e | x <- xs, y <- ys, 条件] の要素数は生成の積(条件は上界として無視)
+        let v: Expr = ONE;
+        for (const g of e.gens) {
+          const r = rangeOf(g.iter);
+          v = mul(v, r ? (boundOf(r.to, this.boundEnv(env))?.expr ?? Q) : this.sizeOf(g.iter, env));
+        }
+        return v;
+      }
       default: {
         const al = allocOf(e, this.spec.typeKind);
         if (al && al.dims.length) return boundOf(al.dims[0], this.boundEnv(env))?.expr ?? Q;
@@ -443,7 +464,10 @@ export class Analyzer {
         let c = empty();
         for (const cond of n.conds) if (cond) c = plus(c, this.exprCost(cond, env, false, n.loc.line));
         let br = empty();
-        for (const b of n.branches) br = plus(br, this.walkNodes(b, env));
+        const id = this.branchId(n);
+        n.branches.forEach((b, k) => {
+          br = plus(br, this.walkNodes(b, { ...env, path: [...(env.path ?? []), `${id}:${k}`] }));
+        });
         return plus(c, br);
       }
       case "loop":
@@ -568,8 +592,12 @@ export class Analyzer {
         const c = plus(sub(e.value), this.targetCost(e.target, e.op, e.value, env, line));
         return c;
       }
-      case "cond":
-        return plus(sub(e.c), plus(sub(e.a), sub(e.b)));
+      case "cond": {
+        // c ? f(l, m) : f(m, r) の2つの枝は同時には通らない
+        const id = this.branchId(e);
+        const arm = (x: SExpr, k: number) => this.exprCost(x, { ...env, path: [...(env.path ?? []), `${id}:${k}`] }, reading, line);
+        return plus(sub(e.c), plus(arm(e.a, 0), arm(e.b, 1)));
+      }
       case "list":
         return e.items.reduce((acc, x) => plus(acc, sub(x)), empty());
       case "range":
@@ -608,7 +636,9 @@ export class Analyzer {
     for (const c of e.conds) body = plus(body, this.exprCost(c, inner, reading, line));
     const total = mul(factor, body.time);
     if (!reading) this.item({ axis: "time", kind: "loop", loc: { line, endLine: line }, label: "内包表記", expr: factor, text: "", reason: "内包表記のループ", conf: "high" });
-    return { time: add(pre.time, total), alloc: add(pre.alloc, factor), grow: addGrow(pre.grow, mulGrow(body.grow, factor)), specials: [] };
+    // Haskell のリストは遅延なので、length [ … ] のように作ったそばから消費するなら領域はとらない
+    const alloc = this.lang === "haskell" ? pre.alloc : add(pre.alloc, factor);
+    return { time: add(pre.time, total), alloc, grow: addGrow(pre.grow, mulGrow(body.grow, factor)), specials: [] };
   }
 
   // ---- 呼び出し -----------------------------------------------------------------
@@ -622,7 +652,7 @@ export class Analyzer {
     // 自己呼び出し(再帰)
     const selfRecv = !recv || (recv.kind === "sym" && ["this", "self", "$this", "Self"].includes(recv.name));
     if (selfRecv && env.selfNames.has(name) && env.selfCalls) {
-      env.selfCalls.push({ args: argv, line, insideLoop: env.outer.length > 0, insideAdjacency: env.inAdjacency });
+      env.selfCalls.push({ args: argv, line, insideLoop: env.outer.length > 0, insideAdjacency: env.inAdjacency, path: env.path ?? [] });
       return empty();
     }
     // ユーザー定義の関数・メソッド(組み込みより優先)

@@ -1347,6 +1347,26 @@ const CASES: Golden[] = [
     time: "O(N·M)",
     space: "O(1)",
   },
+  {
+    id: "追加8 別々の枝の自己呼び出しは1本(再帰の二分探索)",
+    lang: "cpp",
+    code: `
+      vector<int> a;
+      int bs(int l, int r, int x) {
+          if (r - l <= 1) return l;
+          int m = (l + r) / 2;
+          if (a[m] <= x) return bs(m, r, x);
+          else return bs(l, m, x);
+      }
+      int main() {
+          int n, q; cin >> n >> q;
+          a.resize(n);
+          for (int i = 0; i < n; i++) cin >> a[i];
+          for (int i = 0; i < q; i++) { int x; cin >> x; cout << bs(0, n, x) << endl; }
+      }`,
+    time: "O(Q log N + N)",
+    space: "O(N)",
+  },
 ];
 
 for (const g of CASES) test(g.id, () => void check(g));
