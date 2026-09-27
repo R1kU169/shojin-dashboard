@@ -1367,6 +1367,116 @@ const CASES: Golden[] = [
     time: "O(Q log N + N)",
     space: "O(N)",
   },
+  {
+    // ABC477 D の解説の解法。for i in s のあとで s を空にするので、外側のループ全体で s に入った要素の数(N + Q)だけ回る
+    id: "追加9 回したあとで空にするコレクションは償却(ABC477 D)",
+    lang: "python",
+    code: `
+      n, q = map(int, input().split())
+
+      qry = [(2, "a")]
+      tile = [0] * n
+      for i in range(q):
+          t, x = input().split()
+          if t == "1":
+              x = int(x) - 1
+              tile[x] ^= 1
+              qry.append((1, x))
+          else:
+              qry.append((2, x))
+
+      s = set(i for i in range(n) if tile[i] == 0)
+      ans = [""] * n
+      for t, x in reversed(qry):
+          if t == 1:
+              if tile[x] == 0 and ans[x] == "":
+                  s.remove(x)
+              if tile[x] and ans[x] == "":
+                  s.add(x)
+              tile[x] ^= 1
+          else:
+              for i in s:
+                  ans[i] = x
+              s.clear()
+
+      print("".join(ans))`,
+    time: "O(N + Q)",
+    space: "O(N + Q)",
+    conf: "medium",
+  },
+  {
+    id: "追加10 空にしないなら償却しない(ABC477 D から s.clear() を除いた形)",
+    lang: "python",
+    code: `
+      n, q = map(int, input().split())
+      qry = [(2, "a")]
+      tile = [0] * n
+      for i in range(q):
+          t, x = input().split()
+          qry.append((1, int(x)))
+      s = set(i for i in range(n) if tile[i] == 0)
+      ans = [""] * n
+      for t, x in reversed(qry):
+          if t == 1:
+              s.add(x)
+          else:
+              for i in s:
+                  ans[i] = x
+      print("".join(ans))`,
+    time: "O(N·Q + Q²)",
+    space: "O(N + Q)",
+  },
+  {
+    id: "追加11 C++: 貯めてから回して clear する",
+    lang: "cpp",
+    code: `
+      int main() {
+          int q; cin >> q;
+          vector<int> buf;
+          long long s = 0;
+          for (int i = 0; i < q; i++) {
+              int t, x; cin >> t >> x;
+              if (t == 1) buf.push_back(x);
+              else {
+                  for (int v : buf) s += v;
+                  buf.clear();
+              }
+          }
+          cout << s << endl;
+      }`,
+    time: "O(Q)",
+    space: "O(Q)",
+  },
+  {
+    id: "追加12 毎回作り直すなら償却しない",
+    lang: "python",
+    code: `
+      n, q = map(int, input().split())
+      s = 0
+      for _ in range(q):
+          cur = list(range(n))
+          for x in cur:
+              s += x
+          cur = []
+      print(s)`,
+    time: "O(N·Q)",
+    space: "O(N)",
+  },
+  {
+    id: "追加13 初期サイズ + 追加の数",
+    lang: "cpp",
+    code: `
+      int main() {
+          int n, q; cin >> n >> q;
+          vector<int> v(n);
+          for (int i = 0; i < q; i++) v.push_back(i);
+          long long s = 0;
+          for (int x : v) s += x;
+          cout << s << endl;
+      }`,
+    time: "O(N + Q)",
+    space: "O(N + Q)",
+  },
 ];
 
 for (const g of CASES) test(g.id, () => void check(g));

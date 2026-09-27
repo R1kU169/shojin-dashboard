@@ -227,6 +227,10 @@ export function allocOf(e: SExpr, typeKind: Readonly<Record<string, ContainerKin
       if (n === "newSeqWith" && a.length === 2) return { container: "array", dims: [a[0], ...nested(a[1])], costsTime: true };
       if (n === "Repeat" && e.ns === "Enumerable" && a.length === 2) return { container: "array", dims: [a[1]], costsTime: true };
       const kind = kindOf(n, typeKind);
+      // set(xs) / deque(xs) / Counter(xs) / frozenset(xs) は xs の要素数から始まる
+      if (kind && ["hset", "hmap", "deque", "oset", "omap", "pq", "array"].includes(kind) && a.length === 1 && a[0].kind !== "num" && a[0].kind !== "lambda" && ["set", "frozenset", "deque", "Counter", "SortedList", "SortedSet", "heapify"].includes(n)) {
+        return { container: kind, dims: [countOf(a[0])], costsTime: true };
+      }
       if (kind && kind !== "scalar" && kind !== "user" && kind !== "unknown") return { container: kind, dims: [], costsTime: false };
       return null;
     }

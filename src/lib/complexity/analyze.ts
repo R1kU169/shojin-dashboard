@@ -109,6 +109,8 @@ export class Analyzer {
   /** 1回目で集めた成長(ローカルのコンテナが関数やループを抜ける前の値) */
   private growRecord = new Map<string, Expr>();
   private seenWarn = new Set<string>();
+  /** 要素そのものを足したコンテナ(s.add(x) / v.push_back(x) / d[k] = v)。g[u].append(v) の g は含めない */
+  private directGrowth = new Set<string>();
   private branchIds = new WeakMap<object, number>();
   private nextBranch = 0;
   branchId(n: object): number {
@@ -517,6 +519,7 @@ export class Analyzer {
         // $g[] = str_split($line) のように配列を足すなら、足した配列の大きさぶん増える(S4')
         const pushArr = target.idx.length === 0 && value && (allocOf(value, this.spec.typeKind) !== null || (value.kind === "call" && ["str_split", "explode", "preg_split", "array_fill", "range", "array_map"].includes(value.name)));
         g.set(name, pushArr && value ? this.sizeOf(value, env) : ONE);
+        if (target.of.kind === "sym") this.directGrowth.add(name);
       }
       return plus(idxCost, { time, alloc: ONE, grow: g, specials: [] });
     }
@@ -724,6 +727,7 @@ export class Analyzer {
       let base: SExpr = recv;
       while (base.kind === "index" || base.kind === "member") base = base.kind === "index" ? base.of : base.of.kind === "sym" && ["this", "self"].includes(base.of.name) ? { kind: "sym", name: base.name } : base.of;
       if (base.kind === "sym") grow.set(base.name, add(grow.get(base.name) ?? ONE, ONE));
+      if (base.kind === "sym" && recv.kind === "sym") this.directGrowth.add(base.name);
     }
     if (rule.warn) this.warn(`${line}行目: ${rule.warn}`, "warn", line);
     if (name === "lower_bound" || name === "upper_bound") {
@@ -865,9 +869,35 @@ export class Analyzer {
 
   // ---- ループ -------------------------------------------------------------------
 
+  /**
+   * for x in c: … の後に同じ繰り返しの中で c を空にする形(c.clear() / c = [])なら、外側のループ全体で
+   * c に入った要素の数(最初の大きさ + 追加の回数)しか回らない(償却)。そのときの全体の回数。
+   * 外側のループの中で c に空でない値を入れ直す(c = list(range(n)))なら償却にしない
+   */
+  drainTotal(loop: LoopNode, env: WalkEnv): { name: string; total: Expr } | null {
+    const b = loop.bound;
+    if (b.form !== "for-in" || env.outer.length === 0) return null;
+    let c = b.coll;
+    if (c.kind === "member" && ["items", "keys", "values", "iter"].includes(c.name) && (c.args === null || c.args.length === 0)) c = c.of;
+    if (c.kind !== "sym") return null;
+    const name = c.name;
+    const frame = env.before[env.before.length - 1];
+    if (!frame || !frame.list.slice(frame.upto + 1).some((n) => emptiesNode(n, name))) return null;
+    const outer = env.outer[env.outer.length - 1].node;
+    if (refills(outer.body, name)) return null;
+    return { name, total: this.sizeOf(c, env) };
+  }
+
   loopCost(loop: LoopNode, env: WalkEnv): Cost {
     const benv = this.boundEnv(env);
-    const F = inferLoop(loop, benv);
+    let F = inferLoop(loop, benv);
+    if (!F.special) {
+      const d = this.drainTotal(loop, env);
+      if (d) {
+        const outerVar = env.outer[env.outer.length - 1].var ?? "";
+        F = { ...F, expr: d.total, conf: "medium", reason: `${d.name} を回したあと空にするので、全体で ${d.name} に入った要素の数(償却)`, special: { kind: "amortized", anchor: outerVar, total: d.total }, info: `${loop.loc.line}行目: ${d.name} を回したあとで空にしているので、外側のループ全体で ${d.name} に入った要素の数だけ回るとみなしました(償却)` };
+      }
+    }
     const b = loop.bound;
     const line = loop.loc.line;
     let once = empty();
@@ -947,7 +977,9 @@ export class Analyzer {
       const d = list.find((x) => x.costsTime && x.dims.length > 0);
       if (d) {
         const b = boundOf(d.dims[0], benv);
-        if (b && !(isConst(b.expr) && this.growRecord.has(name))) setAlias(name, b.expr);
+        // 最初の大きさ + 後から足した回数(s = set(…) の後に s.add(x) / vector<int> v(n) の後に push_back)
+        const g = this.directGrowth.has(name) ? this.growRecord.get(name) : undefined;
+        if (b && !(isConst(b.expr) && this.growRecord.has(name))) setAlias(name, g ? add(b.expr, g) : b.expr);
       }
     }
     // resize(n) / assign(n, x) で大きさを決めたコンテナ
@@ -1310,6 +1342,43 @@ export class Analyzer {
       symbolOrder: order,
     };
   }
+}
+
+/** 空のコンテナの値(set() / [] / {} / new Set() / dict())か */
+function isEmptyValue(e: SExpr | null): boolean {
+  if (!e) return false;
+  if (e.kind === "list") return e.items.length === 0;
+  if (e.kind === "call") return e.args.length === 0 && ["set", "list", "dict", "deque", "Set", "Map", "Array", "defaultdict", "Counter", "frozenset", "vector", "HashSet", "HashMap"].includes(e.name);
+  if (e.kind === "new") return e.args.length === 0 && e.dims.length === 0;
+  if (e.kind === "member") return (e.name === "new" || e.name === "default") && (e.args?.length ?? 0) === 0;
+  if (e.kind === "slice") return !!e.to && e.to.kind === "num" && e.to.value === 0 && !e.from;
+  if (e.kind === "sym") return e.name === "nil";
+  return false;
+}
+
+/** この文が name を空にするか(name.clear() / name = [] / name = set() / name.length = 0) */
+function emptiesNode(n: IrNode, name: string): boolean {
+  if (n.kind === "expr") {
+    const e = n.e;
+    return e.kind === "member" && ["clear", "Clear", "removeAll"].includes(e.name) && e.of.kind === "sym" && e.of.name === name && (e.args?.length ?? 0) === 0;
+  }
+  if (n.kind === "assign" && n.op === "=") {
+    if (n.target.kind === "sym" && n.target.name === name) return isEmptyValue(n.value);
+    // JS の a.length = 0
+    if (n.target.kind === "member" && n.target.name === "length" && n.target.of.kind === "sym" && n.target.of.name === name && n.value?.kind === "num" && n.value.value === 0) return true;
+  }
+  return false;
+}
+
+/** ループの本体(入れ子を含む)で name に空でない値を入れ直すか */
+function refills(nodes: readonly IrNode[], name: string): boolean {
+  for (const n of nodes) {
+    if (n.kind === "assign" && n.op === "=" && n.target.kind === "sym" && n.target.name === name && !isEmptyValue(n.value)) return true;
+    if (n.kind === "decl" && n.name === name && n.dims.length > 0) return true;
+    if (n.kind === "loop" && refills(n.body, name)) return true;
+    if (n.kind === "branch" && n.branches.some((b) => refills(b, name))) return true;
+  }
+  return false;
 }
 
 /** b = a / b = sorted(a) / b = a[:] / b = a.copy() の写し元 */
