@@ -12,6 +12,8 @@ AtCoderの提出履歴から精進の記録を可視化し、いまの実力に�
 |---|---|
 | `#/u/<AtCoder ID>` | 個人ダッシュボード: 累計AC・今週の新規AC・ストリーク・GitHub風精進ヒートマップ(26週)・難易度帯別AC数(AtCoder色)・累計AC推移・**実力推定つき問題レコメンド** |
 | `#/club` | 部内ランキング: 今週AC / 累計AC / ストリーク / 推定内部レート |
+| `#/editor` | コードエディター: 19言語をブラウザから実行(Wandbox)・問題の連携・補完・提出ページへのコピー |
+| `#/complexity` | 計算量: 貼り付けたコードの時間・領域計算量をブラウザ内の静的解析で推定し、変数の範囲から演算回数と TLE の目安を出す(19言語。コードは送信しない) |
 | `#/` | ID入力 + 部員一覧(前回見たIDを記憶) |
 
 ライト/ダークテーマ対応(OS追従 + 手動切り替え)。
@@ -32,6 +34,21 @@ AtCoder Problemsの難易度データ(`problem-models.json`)には、各問題�
 
 レート情報はAPIに含まれないため、この推定値が「内部レート換算」の代わりになる。
 
+## 計算量の推定(`#/complexity`)
+
+コードを実行せず、ループ・再帰・既知の関数の規則表から最悪時間計算量と領域計算量を式で出す
+(設計は [docs/complexity-analyzer-plan.md](docs/complexity-analyzer-plan.md))。
+上限がリテラルなら `O(1000)`、記号なら `O(N)` の形で出し、変数ごとに範囲を入れると演算回数を概算する。
+解析は `src/lib/complexity`(言語ごとの定義は `langs/`)で、ページは別のチャンクとして遅延読み込みする。
+
+既知の限界:
+
+- 篩は上界 N log N(真は N log log N)、部分集合の列挙は 4^N 表示(真は 3^N)
+- unordered_map / dict は平均 O(1)。Python / Java の文字列の `+=` は O(1) として数え、警告を出す
+- スコープを見ない(同名の変数は同じもの)。入力配列の長さの推定は外れることがあり、そのときは解析メモに出る
+- 入力の読み取り(1行の分割・数値変換)そのものは時間に数えない。マルチテストの ΣN 制約は反映しない
+- Haskell と Bash は簡易対応(Haskell は確からしさを低で固定)
+
 ## 技術スタック
 
 - React 19 + TypeScript + Vite(完全静的・APIキー不要)
@@ -44,6 +61,7 @@ AtCoder Problemsの難易度データ(`problem-models.json`)には、各問題�
 npm install
 npm run dev        # http://localhost:5173
 npm run build      # 型チェック + 本番ビルド (dist/)
+npm test           # 計算量解析のテスト(node --test。ゴールデン・単体・性能)
 node scripts/smoke.mjs <atcoder_id>   # 実APIに対するロジックのスモークテスト
 ```
 

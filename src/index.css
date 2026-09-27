@@ -1116,12 +1116,17 @@ button.member-card {
   overflow: hidden;
   position: relative;
 }
-/* コードエリア右上に浮かせる「テンプレートに戻す」 */
-.tpl-reset {
+/* コードエリア右上に浮かせる操作(「計算量を調べる」「テンプレートに戻す」) */
+.editor-card-actions {
   position: absolute;
   top: 8px;
   right: 12px;
   z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.tpl-reset {
   font: inherit;
   font-size: 11px;
   color: var(--muted);
@@ -1636,10 +1641,22 @@ button.member-card {
   color: var(--muted);
 }
 /* エディターのツールバーからの導線 */
+/* エディターから計算量タブへの導線(テンプレートに戻すと同じ浮いたピルで、色だけ強める) */
 .editor-cx-link {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
   white-space: nowrap;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--surface) 85%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  border-radius: 999px;
+  padding: 3px 10px;
+  opacity: 0.9;
+}
+.editor-cx-link:hover {
+  opacity: 1;
+  text-decoration: none;
+  border-color: var(--accent);
 }
 .visually-hidden {
   position: absolute;

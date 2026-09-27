@@ -5,7 +5,7 @@ import type {
   PointerEvent as ReactPointerEvent,
   UIEvent,
 } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { AcPopup } from "../components/AcPopup";
 import { ProblemSearch } from "../components/ProblemSearch";
 import { toggleLineComment } from "../lib/comment";
@@ -772,14 +772,33 @@ export function EditorPage() {
       </div>
 
       <section className="card editor-card">
-        <button
-          type="button"
-          className="tpl-reset"
-          onClick={resetTemplate}
-          title="コードをこの言語のテンプレートに戻す"
-        >
-          ↺ テンプレートに戻す
-        </button>
+        {/* コード欄の右上に浮かせる操作。ツールバーに足すと問題連携が2行目に落ちるので、コードに対する操作はここに置く */}
+        <div className="editor-card-actions">
+          {/* 計算量タブへ。入力の途中(400msの保存待ち)でも今のコードを渡せるよう、移動の前に保存する */}
+          <Link
+            className="editor-cx-link"
+            to="/complexity?from=editor"
+            onClick={() => {
+              try {
+                localStorage.setItem(CODE_KEY(langKey), code);
+                localStorage.setItem(LANG_KEY, langKey);
+              } catch {
+                // 保存できなくても移動はする(計算量タブ側でエラーを出す)
+              }
+            }}
+            title="このコードの計算量を計算量タブで調べます(コードは送信しません)"
+          >
+            計算量を調べる →
+          </Link>
+          <button
+            type="button"
+            className="tpl-reset"
+            onClick={resetTemplate}
+            title="コードをこの言語のテンプレートに戻す"
+          >
+            ↺ テンプレートに戻す
+          </button>
+        </div>
         <div className="editor-wrap" ref={wrapRef}>
           <div className="editor-lines" ref={linesRef} aria-hidden="true">
             {Array.from({ length: lineCount }, (_, i) => (
