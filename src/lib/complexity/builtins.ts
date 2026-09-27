@@ -255,6 +255,33 @@ LUA_FREE.insert = r((c) => (c.args.length >= 3 ? c.size(c.args[0] ?? null) : ONE
 LUA_FREE.remove = r((c) => (c.args.length >= 2 ? c.size(c.args[0] ?? null) : ONE));
 LUA_FREE.sub = r(substr(1));
 
+// Julia(map(f, a) / map(a) do x … end / sum(f, a) は最後のコレクションの引数を回す)
+const lastColl = (c: CallCtx): Expr => {
+  const xs = c.args.filter((a) => a.kind !== "lambda" && !(a.kind === "assign" && a.value?.kind === "lambda"));
+  return c.size(xs[xs.length - 1] ?? null);
+};
+const JULIA_FREE = table([
+  ["sort sort! sortperm sortperm! unique partialsort partialsort!", r(AlogA(0), { cmpArg: 1 })],
+  ["searchsortedfirst searchsortedlast searchsorted insorted", r(logA(0))],
+  ["map map! filter filter! foreach count sum prod maximum minimum any all findfirst findlast findall reduce mapreduce foldl foldr extrema argmax argmin accumulate cumsum cumprod mapfoldl mapfoldr", r(lastColl, { loopArg: 0 })],
+  ["reverse reverse! copy deepcopy join split replace unique! collect fill! circshift vcat hcat union intersect setdiff symdiff enumerate zip lstrip rstrip strip uppercase lowercase", r(A(0))],
+  ["pushfirst! popfirst! deleteat! splice! insert!", r(A(0))],
+  ["pop! length size isempty first last lastindex firstindex haskey get delete! div mod rem gcd lcm abs floor ceil round trunc sqrt isqrt cbrt min max println print parse string typemax typemin zero one eltype keys values pairs ntuple rand randn exp log log2 log10 sin cos tan zeros ones fill falses trues similar Vector Matrix Array Dict Set Int Int64 Float64 Char tuple repr show isdigit isletter isspace sizehint!", r(one)],
+  ["powermod digits ndigits bitstring", r((c) => logOfExpr(c.bound(c.args[c.args.length - 1] ?? null)))],
+]);
+JULIA_FREE["push!"] = r(one, { grows: true });
+JULIA_FREE["append!"] = r(A(1), { grows: true });
+JULIA_FREE["get!"] = r(one, { grows: true });
+JULIA_FREE.occursin = r(A(1));
+JULIA_FREE.in = r(A(1));
+
+// Bash(canonBash が作る呼び出し: パイプの sort / フィルタ / head、コマンド置換の中の外部コマンド)
+const BASH_FREE = table([
+  ["sort", r(AlogA(0))],
+  ["scan_words replace", r(A(0))],
+  ["head echo printf read readarray read_all len substr date bc expr test true false", r(one)],
+]);
+
 /** 8言語の表は langs/*.ts から登録する(循環を避けるため後から入れる) */
 export const FREE: Record<FreeTable, Record<string, BuiltinRule>> = {
   cpp: CPP_FREE,
@@ -263,8 +290,8 @@ export const FREE: Record<FreeTable, Record<string, BuiltinRule>> = {
   other: OTHER_FREE,
   ruby: {},
   lua: LUA_FREE,
-  julia: {},
-  bash: {},
+  julia: JULIA_FREE,
+  bash: BASH_FREE,
   nim: {},
   haskell: {},
   perl: {},

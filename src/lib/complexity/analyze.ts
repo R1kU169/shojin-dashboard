@@ -261,9 +261,10 @@ export class Analyzer {
       case "call": {
         const r = rangeOf(e);
         if (r) return boundOf(r.to, this.boundEnv(env))?.expr ?? Q;
-        if (["sorted", "list", "reversed", "set", "enumerate", "tuple", "zip", "deque", "frozenset", "Counter"].includes(e.name) && e.args[0]) return this.sizeOf(e.args[0], env);
-        // map(f, a) / filter(f, a) は a の要素数(以下)
-        if ((e.name === "map" || e.name === "filter") && e.args.length >= 2) return this.sizeOf(e.args[1], env);
+        if (["sorted", "list", "reversed", "set", "enumerate", "tuple", "zip", "deque", "frozenset", "Counter", "sort", "scan_words"].includes(e.name) && e.args[0]) return this.sizeOf(e.args[0], env);
+        if (e.name === "head" && this.lang === "bash") return ONE;
+        // map(f, a) / filter(f, a) / Julia の parse.(Int, xs) は最後の引数の要素数(以下)
+        if ((e.name === "map" || e.name === "filter") && e.args.length >= 2) return this.sizeOf(e.args[e.args.length - 1], env);
         if (this.isInputExpr(e, env)) return this.named("N", "入力の要素数", 0);
         return this.named(`|${sexprText(e, 24)}|`, `${sexprText(e, 24)} の要素数`, 0);
       }
@@ -943,6 +944,11 @@ export class Analyzer {
       const pending: string[] = [];
       for (const n of nodes) {
         if (n.kind === "input") {
+          // b = line.split() の line は b の中身そのもの(長さではない)
+          if (n.refs) for (const r of n.refs) {
+            const k = pending.indexOf(r);
+            if (k >= 0) pending.splice(k, 1);
+          }
           for (const a of n.arrays) {
             if (this.aliases.has(`|${a}|`) || n.lens[a]) continue;
             const s = pending.shift();
@@ -1256,7 +1262,7 @@ export class Analyzer {
 /** b = a / b = sorted(a) / b = a[:] / b = a.copy() の写し元 */
 function copySource(e: SExpr): string | null {
   if (e.kind === "sym") return e.name;
-  if (e.kind === "call" && ["sorted", "list", "reversed", "copy", "deepcopy", "tuple"].includes(e.name) && e.args[0]?.kind === "sym") return e.args[0].name;
+  if (e.kind === "call" && ["sorted", "list", "reversed", "copy", "deepcopy", "tuple", "sort", "scan_words"].includes(e.name) && e.args[0]?.kind === "sym") return e.args[0].name;
   if (e.kind === "member" && ["copy", "clone", "dup", "to_vec", "to_owned", "sorted", "reversed", "slice", "concat", "to_a"].includes(e.name) && e.of.kind === "sym") return e.of.name;
   if (e.kind === "slice" && e.of.kind === "sym") return e.of.name;
   return null;

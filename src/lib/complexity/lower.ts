@@ -257,6 +257,17 @@ function perlParams(body: readonly IrNode[]): string[] {
   return out;
 }
 
+/** Bash の関数の仮引数を本体の local n=$1 / x=$2 から取る(位置の順に並べる) */
+function bashParams(body: readonly IrNode[]): string[] {
+  const out: string[] = [];
+  for (const n of body.slice(0, 8)) {
+    if (n.kind !== "assign" || n.target.kind !== "sym" || !n.value || n.value.kind !== "sym") continue;
+    const m = /^__arg(\d)$/.exec(n.value.name);
+    if (m) out[Number(m[1]) - 1] = n.target.name;
+  }
+  return Array.from(out, (x, i) => x ?? `__arg${i + 1}`);
+}
+
 function lowerFunc(r: RawBlock, ctx: LowerCtx): IrNode {
   const h = funcHead(r.head, ctx);
   const inner: LowerCtx = { ...ctx, top: false };
@@ -269,7 +280,7 @@ function lowerFunc(r: RawBlock, ctx: LowerCtx): IrNode {
     if (args.length === 0) continue;
     pre.push({ kind: "decl", name: it.name, typeName: "", container: kind, dims: [args[0]], init: null, isGlobal: false, costsTime: true, loc: { line: r.line, endLine: r.line } });
   }
-  const params = h.params.length === 0 && ctx.spec.key === "perl" ? perlParams(body) : h.params;
+  const params = h.params.length === 0 && ctx.spec.key === "perl" ? perlParams(body) : h.params.length === 0 && ctx.spec.key === "bash" ? bashParams(body) : h.params;
   return { kind: "func", name: h.name, params, decorators: r.decorators ?? [], body: [...pre, ...body], loc: { line: r.line, endLine: r.endLine }, isLambda: false, selfParam: h.selfParam };
 }
 

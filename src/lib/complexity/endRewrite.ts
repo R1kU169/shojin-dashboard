@@ -17,6 +17,8 @@ export interface EndRules {
   headerEnd: ReadonlySet<string>;
   /** 見出しが行末でも終わる(Ruby / Julia)。Lua は then / do が必須 */
   headerAtNewline: boolean;
+  /** ; で見出しが終わる(既定 true)。Bash は for i = 0; i < n; i++ の ; を含むので false */
+  semiEndsHeader?: boolean;
   /** else if の語(elsif / elseif) */
   elif: ReadonlySet<string>;
   /** 定義の語 → 種類(def / function / class / module / struct) */
@@ -34,8 +36,16 @@ export interface EndRules {
   clauses?: ReadonlySet<string>;
   /** 文の途中の語が本当にブロックを開くか(Ruby の修飾子 if / while を除く)。無ければ常に開く */
   opens?: (toks: readonly Tok[], i: number) => boolean;
-  /** [ ] の中では end を閉じ語として扱わない(Julia の a[end]) */
+  /** 括弧の中では end を閉じ語として扱わない(Julia の a[end] や、括弧の中の x -> begin … end) */
   endInBrackets?: boolean;
+  /** for i in 1:n, j in 1:m のように1つの for に複数のループを書ける(Julia)。入れ子のループにする */
+  multiFor?: boolean;
+  /** do の後ろの仮引数に | が無い(Julia の map(a) do x … end)。{ |x| … } に直す */
+  bareDoParams?: boolean;
+  /** 文頭の f(x) = expr を関数の定義として読む(Julia の短縮形) */
+  shortFunc?: boolean;
+  /** 括弧の中ではブロックを開かない語(Julia の内包表記・ジェネレータの for / if) */
+  topLevelOnly?: ReadonlySet<string>;
 }
 
 type FrameKind = "if" | "loop" | "func" | "class" | "plain" | "block" | "case" | "begin" | "repeat" | "endless" | "tail";
@@ -50,6 +60,8 @@ interface Frame {
   paren: boolean;
   /** 開き括弧を出した out の位置(begin … end while の書き換え用) */
   open: number;
+  /** for i in 1:n, j in 1:m で足した入れ子のループの数(end で余分に閉じる) */
+  extra: number;
 }
 
 /** 行頭にあっても前の行の続きになる記号 */
@@ -68,12 +80,29 @@ function endsExpr(t: Tok | undefined): boolean {
 export function rewriteEnd(src: readonly Tok[], rules: EndRules, warn: (w: FrontWarning) => void): Tok[] {
   const out: Tok[] = [];
   const stack: Frame[] = [];
-  let bracket = 0;
   const op = (v: string, like: Tok, nl = false): Tok => ({ k: "op", v, line: like.line, col: like.col, sp: true, nl });
   const word = (v: string, like: Tok, nl = false): Tok => ({ k: "ident", v, line: like.line, col: like.col, sp: true, nl });
   const emit = (...ts: Tok[]) => out.push(...ts);
   const top = (): Frame | undefined => stack[stack.length - 1];
-  const push = (kind: FrameKind, header: Frame["header"]) => stack.push({ kind, header, depth: 0, paren: false, open: out.length });
+  const push = (kind: FrameKind, header: Frame["header"]) => stack.push({ kind, header, depth: 0, paren: false, open: out.length, extra: 0 });
+  /** 入力の括弧の深さ(内包表記の for / if を見分ける) */
+  let nest = 0;
+  /** f(x) = expr の = の位置(Julia の短縮形の定義を読んでいる途中) */
+  let shortEq = -1;
+  /** src の i の開き括弧に対応する閉じ括弧 */
+  const closeOf = (i: number): number => {
+    let d = 0;
+    for (let j = i; j < src.length; j++) {
+      const x = src[j];
+      if (x.k !== "op") continue;
+      if (x.v === "(" || x.v === "[" || x.v === "{") d++;
+      else if (x.v === ")" || x.v === "]" || x.v === "}") {
+        d--;
+        if (d === 0) return j;
+      }
+    }
+    return -1;
+  };
   const last = () => out[out.length - 1];
 
   /** 見出しを閉じる(if (c) { / case x : / def f(a) { / until (c)) */
@@ -105,12 +134,21 @@ export function rewriteEnd(src: readonly Tok[], rules: EndRules, warn: (w: Front
       }
     }
     const h = top();
+    if (h && h.header === "cond" && rules.multiFor && h.kind === "loop" && h.depth <= 0 && t.k === "op" && t.v === ",") {
+      const a = src[i + 1];
+      const b = src[i + 2];
+      if (a && a.k === "ident" && b && ((b.k === "ident" && b.v === "in") || (b.k === "op" && (b.v === "=" || b.v === "∈")))) {
+        emit(op(")", t), op("{", t), word("for", t), op("(", t));
+        h.extra++;
+        continue;
+      }
+    }
     if (h && (h.header === "cond" || h.header === "when")) {
       if (h.depth <= 0 && t.k === "ident" && !t.sigil && rules.headerEnd.has(t.v)) {
         closeHeader(h, t);
         continue;
       }
-      if (h.depth <= 0 && semi) {
+      if (h.depth <= 0 && semi && rules.semiEndsHeader !== false) {
         closeHeader(h, t);
         continue;
       }
@@ -134,20 +172,48 @@ export function rewriteEnd(src: readonly Tok[], rules: EndRules, warn: (w: Front
       emit(op("}", last() ?? t));
       stack.pop();
     }
+    if (i === shortEq) {
+      shortEq = -1;
+      const nx = src[i + 1];
+      if (nx && nx.k === "ident" && nx.v === "begin") {
+        // f(x) = begin … end は普通の定義
+        push("func", null);
+        emit(op("{", t));
+        i++;
+      } else {
+        push("endless", null);
+        emit(op("{", t), word("return", t));
+      }
+      continue;
+    }
+    // 文頭の f(x) = expr / f(x)::T = expr(Julia の短縮形の定義)
+    if (rules.shortFunc && shortEq < 0 && t.k === "ident" && nest === 0 && (i === 0 || t.nl || (src[i - 1].k === "op" && src[i - 1].v === ";")) && src[i + 1]?.k === "op" && src[i + 1].v === "(" && !src[i + 1].sp) {
+      let j = closeOf(i + 1) + 1;
+      while (j > 0 && j < src.length && !src[j].nl && src[j].k !== "op") j++;
+      if (j > 0 && src[j] && src[j].k === "op" && src[j].v === "::") {
+        j++;
+        while (j < src.length && !src[j].nl && !(src[j].k === "op" && src[j].v === "=")) j = src[j].k === "op" && src[j].v === "{" ? closeOf(j) + 1 : j + 1;
+      }
+      const eq = src[j];
+      if (j > 0 && eq && eq.k === "op" && eq.v === "=" && !eq.nl && !(src[j + 1]?.k === "op" && src[j + 1].v === "=")) {
+        shortEq = j;
+        emit(word("function", t, t.nl), { ...t, nl: false });
+        continue;
+      }
+    }
 
     // ---- 括弧 ----
     if (t.k === "op" && (t.v === "(" || t.v === "[" || t.v === "{" || t.v === ")" || t.v === "]" || t.v === "}")) {
       const x = top();
       const tracked = !!x && (!!x.header || x.kind === "endless");
+      nest = Math.max(0, nest + (t.v === "(" || t.v === "[" || t.v === "{" ? 1 : -1));
       if (t.v === "(" || t.v === "[" || t.v === "{") {
         if (x && x.header === "def" && x.kind === "func" && t.v === "(" && x.depth <= 0 && !x.paren) x.paren = true;
         if (tracked) x.depth++;
-        if (t.v === "[") bracket++;
         emit(t);
         continue;
       }
       if (tracked) x.depth--;
-      if (t.v === "]") bracket = Math.max(0, bracket - 1);
       emit(t);
       // def f(a, b) の閉じ括弧で見出しが終わる。直後が = なら1行の定義(Ruby の def f(x) = expr)
       if (x && x.header === "def" && x.paren && x.depth <= 0 && t.v === ")") {
@@ -178,10 +244,10 @@ export function rewriteEnd(src: readonly Tok[], rules: EndRules, warn: (w: Front
       emit(t);
       continue;
     }
-    const opens = () => rules.opens?.(src, i) ?? true;
+    const opens = () => (rules.opens?.(src, i) ?? true) && !(nest > 0 && rules.topLevelOnly?.has(t.v));
     const v = t.v;
 
-    if (v === "end" && !(rules.endInBrackets && bracket > 0)) {
+    if (v === "end" && !(rules.endInBrackets && nest > 0)) {
       let cur = top();
       if (cur && cur.kind === "tail") {
         closeHeader(cur, t);
@@ -204,6 +270,7 @@ export function rewriteEnd(src: readonly Tok[], rules: EndRules, warn: (w: Front
         continue;
       }
       emit(op("}", t, t.nl));
+      for (let k = 0; k < cur.extra; k++) emit(op("}", t));
       continue;
     }
     const cur = top();
@@ -265,6 +332,12 @@ export function rewriteEnd(src: readonly Tok[], rules: EndRules, warn: (w: Front
       const block = rules.doKind === "block";
       push(block ? "block" : "plain", null);
       emit(op("{", t, block ? false : t.nl));
+      if (rules.bareDoParams && src[i + 1] && !src[i + 1].nl) {
+        // Julia の do x, y → { |x, y|
+        emit(op("|", t));
+        while (i + 1 < src.length && !src[i + 1].nl) emit(src[++i]);
+        emit(op("|", t));
+      }
       continue;
     }
     if (rules.plain.has(v) && opens()) {
@@ -292,6 +365,7 @@ export function rewriteEnd(src: readonly Tok[], rules: EndRules, warn: (w: Front
     stack.pop();
     if (fr.kind !== "endless") unclosed++;
     emit(op("}", endTok));
+    for (let k = 0; k < fr.extra; k++) emit(op("}", endTok));
   }
   if (unclosed > 0) warn({ line: endTok?.line ?? 1, code: "unbalanced", message: `end が ${unclosed} 個足りません` });
   return out;

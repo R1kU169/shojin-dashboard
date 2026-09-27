@@ -81,11 +81,25 @@ function pureConversion(e: SExpr | null): boolean {
   return ok;
 }
 
+/** 読み取りの元になった入力の名前(split(line) / s.split() / b = line の line)。回数(range(n) の n)は含めない */
+function sourceRefs(e: SExpr | null, ctx: LowerCtx): string[] {
+  const out = new Set<string>();
+  const add = (x: SExpr | undefined) => {
+    if (x && x.kind === "sym" && ctx.inputNames.has(x.name)) out.add(x.name);
+  };
+  if (e && e.kind === "sym") add(e);
+  walk(e, (x) => {
+    if (x.kind === "call" && READ_FUNCS.has(x.name)) x.args.forEach(add);
+    if (x.kind === "member" && READ_FUNCS.has(x.name)) add(x.of);
+  });
+  return [...out];
+}
+
 /** 右辺が配列を作る形か(split / map / collect / ToArray …) */
 function looksArray(e: SExpr): boolean {
   let arr = false;
   walk(e, (x) => {
-    if (x.kind === "call" && ["split", "map", "list", "collect", "words", "lines", "explode", "preg_split", "str_split", "array_map", "readlines", "split_whitespace", "Split", "ToArray", "ToList", "tuple", "sorted", "readLines", "mapIt"].includes(x.name)) arr = true;
+    if (x.kind === "call" && ["split", "map", "list", "collect", "words", "lines", "explode", "preg_split", "str_split", "array_map", "readlines", "split_whitespace", "Split", "ToArray", "ToList", "tuple", "sorted", "readLines", "mapIt", "readarray", "read_all"].includes(x.name)) arr = true;
     if (x.kind === "member" && ["split", "map", "collect", "split_whitespace", "Split", "ToArray", "ToList", "readlines", "chars", "bytes", "to_vec", "each_char", "lines", "toList", "readLines", "mapIt", "splitWhitespace"].includes(x.name)) arr = true;
     if (x.kind === "comp") arr = true;
     return !arr;
@@ -365,7 +379,8 @@ function finishAssign(e0: SExpr & { kind: "assign" }, toks: readonly Tok[], ctx:
   }
   const inp = inputOf(e, ctx);
   if (inp) {
-    out.push({ kind: "input", scalars: inp.scalars, arrays: inp.arrays, lens: inp.lens, loc: l, via: src });
+    const refs = sourceRefs(value, ctx);
+    out.push({ kind: "input", scalars: inp.scalars, arrays: inp.arrays, lens: inp.lens, loc: l, via: src, refs: refs.length ? refs : undefined });
     for (const n of [...inp.scalars, ...inp.arrays]) {
       ctx.inputNames.add(n);
       delete ctx.consts[n];

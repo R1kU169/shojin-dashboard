@@ -225,7 +225,7 @@ export interface IterCount {
   special?: Special;
 }
 
-const WRAP_CALLS = new Set(["enumerate", "reversed", "sorted", "set", "list", "tuple", "iter", "frozenset", "deque", "zip", "Counter", "sorted_by", "each_with_index", "pairs", "ipairs", "keys", "values", "eachindex", "collect", "items", "reverse", "rev", "Reverse", "chain", "sort", "uniq", "unique", "withIndex", "entries", "Object.entries", "Object.keys", "Object.values"]);
+const WRAP_CALLS = new Set(["axes", "enumerate", "reversed", "sorted", "set", "list", "tuple", "iter", "frozenset", "deque", "zip", "Counter", "sorted_by", "each_with_index", "pairs", "ipairs", "keys", "values", "eachindex", "collect", "items", "reverse", "rev", "Reverse", "chain", "sort", "uniq", "unique", "withIndex", "entries", "Object.entries", "Object.keys", "Object.values"]);
 const WRAP_MEMBERS = new Set(["items", "keys", "values", "iter", "into_iter", "iter_mut", "chars", "bytes", "rev", "reverse", "reversed", "enumerate", "each", "each_with_index", "entries", "copied", "cloned", "to_a", "with_index", "each_char", "each_key", "each_value", "pairs", "mpairs", "mitems", "items", "keySet", "entrySet", "AsEnumerable", "Keys", "Values", "sorted", "uniq", "zip", "windows", "chunks", "to_vec", "toList", "toSeq", "lines", "split", "split_whitespace", "Split", "sort", "values_mut", "enumerated"]);
 
 export function iterCount(coll: SExpr, env: BoundEnv, loop: LoopNode): IterCount {
@@ -239,6 +239,11 @@ export function iterCount(coll: SExpr, env: BoundEnv, loop: LoopNode): IterCount
     else break;
   }
   const r = rangeOf(e);
+  // 'a':'z' / 'a'..'z' のような文字の範囲は文字数
+  if (r && r.from && r.from.kind === "str" && r.to.kind === "str" && r.from.value.length === 1 && r.to.value.length === 1) {
+    const n = r.to.value.charCodeAt(0) - r.from.value.charCodeAt(0) + (r.inclusive ? 1 : 0);
+    return { expr: lit(Math.max(1, n)), conf: "high", reason: `文字 ${r.from.value} から ${r.to.value} まで` };
+  }
   if (r) {
     const b = boundOf(r.to, env);
     if (b) return { expr: b.expr, conf: "high", reason: `範囲 ${sexprText(r.to)} まで` };
@@ -416,6 +421,11 @@ export function inferLoop(loop: LoopNode, env: BoundEnv): LoopFactor {
     return { expr: x.expr, conf: "high", reason: `${sexprText(b.count)} 回` };
   }
   if (b.form === "for-range") {
+    // 'a':'z' / 'a'..'z' のような文字の範囲は文字数
+    if (b.from && b.from.kind === "str" && b.to.kind === "str" && b.from.value.length === 1 && b.to.value.length === 1) {
+      const n = b.to.value.charCodeAt(0) - b.from.value.charCodeAt(0) + (b.inclusive ? 1 : 0);
+      return { expr: lit(Math.max(1, n)), conf: "high", reason: `文字 ${b.from.value} から ${b.to.value} まで` };
+    }
     if (env.isInput(b.to)) {
       return { expr: env.named("T", `入力で読む回数(${line}行目)`, line), conf: "medium", reason: "入力で読んだ回数", info: "マルチテストです。範囲指定の N は1ケースあたりの値にしてください" };
     }

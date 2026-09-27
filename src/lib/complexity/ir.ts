@@ -138,7 +138,8 @@ export type IrNode =
     }
   | { kind: "return"; value: SExpr | null; loc: Loc }
   /** 入力の読み取り。scalars はスカラ、arrays は配列として読んだ変数。lens は長さが分かる配列 */
-  | { kind: "input"; scalars: string[]; arrays: string[]; lens: Record<string, SExpr>; loc: Loc; via: string }
+  /** refs: 読み取りの式が使っている、前に読んだ入力の名前(b = line.split() の line)。配列の長さの推定から外す */
+  | { kind: "input"; scalars: string[]; arrays: string[]; lens: Record<string, SExpr>; loc: Loc; via: string; refs?: string[] }
   | { kind: "stmt"; loc: Loc };
 
 export interface FrontWarning {
