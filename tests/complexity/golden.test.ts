@@ -1477,6 +1477,105 @@ const CASES: Golden[] = [
     time: "O(N + Q)",
     space: "O(N + Q)",
   },
+  {
+    // 足してすぐ取り除くので s はずっと3〜4個。ループの中の sort は O(1)
+    id: "追加14 足してすぐ取り除くコンテナは大きくならない(上位3つ)",
+    lang: "python",
+    code: `
+      n = int(input())
+      a = list(map(int, input().split()))
+      s = a[:3]
+      s.sort(reverse=True)
+      print(s[2])
+      for k in range(3, n):
+          s.append(a[k])
+          s.sort(reverse=True)
+          s.pop()
+          print(s[2])`,
+    time: "O(N)",
+    space: "O(N)",
+  },
+  {
+    id: "追加15 取り除かなければ増え続ける",
+    lang: "python",
+    code: `
+      n = int(input())
+      a = list(map(int, input().split()))
+      s = a[:3]
+      for k in range(3, n):
+          s.append(a[k])
+          s.sort()
+      print(s)`,
+    time: "O(N² log N)",
+    space: "O(N)",
+  },
+  {
+    id: "追加16 大きさが k を超えたら取り除くヒープは k 個まで",
+    lang: "python",
+    code: `
+      import heapq
+      n, k = map(int, input().split())
+      a = list(map(int, input().split()))
+      h = []
+      for x in a:
+          heapq.heappush(h, x)
+          if len(h) > k:
+              heapq.heappop(h)
+      print(h[0])`,
+    time: "O(N log K)",
+    space: "O(N + K)",
+  },
+  {
+    id: "追加17 C++: pq.size() > k なら pop",
+    lang: "cpp",
+    code: `
+      int main() {
+          int n, k; cin >> n >> k;
+          priority_queue<int> pq;
+          for (int i = 0; i < n; i++) {
+              int x; cin >> x;
+              pq.push(x);
+              if ((int)pq.size() > k) pq.pop();
+          }
+          cout << pq.top() << endl;
+      }`,
+    time: "O(N log K)",
+    space: "O(K)",
+  },
+  {
+    id: "追加18 2つ足して1つ取り除くなら増え続ける",
+    lang: "python",
+    code: `
+      import heapq
+      n, k = map(int, input().split())
+      a = list(map(int, input().split()))
+      h = []
+      for x in a:
+          heapq.heappush(h, x)
+          heapq.heappush(h, -x)
+          if len(h) > k:
+              heapq.heappop(h)
+      print(h[0])`,
+    time: "O(N log N)",
+    space: "O(N)",
+  },
+  {
+    id: "追加19 C++: push_back → sort → pop_back",
+    lang: "cpp",
+    code: `
+      int main() {
+          int n; cin >> n;
+          vector<int> st;
+          for (int i = 0; i < n; i++) {
+              st.push_back(i);
+              sort(st.begin(), st.end());
+              st.pop_back();
+          }
+          cout << st.size() << endl;
+      }`,
+    time: "O(N)",
+    space: "O(1)",
+  },
 ];
 
 for (const g of CASES) test(g.id, () => void check(g));

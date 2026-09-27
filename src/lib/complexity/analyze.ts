@@ -243,6 +243,18 @@ export class Analyzer {
     return "unknown";
   }
 
+  /**
+   * スライスの長さが元の長さより短いと分かるとき、その長さ。a[:3] / a[-3:] は定数、先頭からの a[:k] は K。
+   * それ以外(a[l:r] / a[1:])は null(元の長さを上界にする)
+   */
+  sliceLen(e: Extract<SExpr, { kind: "slice" }>, benv: BoundEnv): Expr | null {
+    const k = constSliceLen(e);
+    if (k !== null) return lit(Math.max(1, k));
+    const fromZero = !e.from || (e.from.kind === "num" && e.from.value === 0);
+    if (!fromZero || !e.to || e.to.kind === "un" || (e.to.kind === "num" && e.to.value < 0)) return null;
+    return boundOf(e.to, benv)?.expr ?? null;
+  }
+
   sizeOf(e: SExpr | null, env: WalkEnv | null): Expr {
     if (!e) return Q;
     switch (e.kind) {
@@ -264,7 +276,7 @@ export class Analyzer {
       case "list":
         return lit(Math.max(1, e.items.length));
       case "slice":
-        return this.sizeOf(e.of, env);
+        return this.sliceLen(e, this.boundEnv(env)) ?? this.sizeOf(e.of, env);
       case "size":
         return this.sizeOf(e.of, env);
       case "member":
@@ -570,7 +582,7 @@ export class Analyzer {
       }
       case "slice": {
         const c = plus(sub(e.of), plus(sub(e.from), sub(e.to)));
-        if (this.lang === "python" || this.lang === "pypy") return plus(c, { ...empty(), time: this.sizeOf(e.of, env) });
+        if (this.lang === "python" || this.lang === "pypy") return plus(c, { ...empty(), time: this.sizeOf(e, env) });
         return c;
       }
       case "bin": {
@@ -888,6 +900,80 @@ export class Analyzer {
     return { name, total: this.sizeOf(c, env) };
   }
 
+  /**
+   * ループを回しても大きさが増え続けないコンテナと、ループ全体でのその増え方。
+   * - 1回の中で足した数以上を取り除く(s.append(x); s.sort(); s.pop())なら、増えるのは1回ぶんまで
+   * - 大きさが上限を超えたら取り除く(if len(h) > k: heappop(h) / while (pq.size() > k) pq.pop())なら、上限まで
+   * 取り除くのは、ループの本体の直下の文(上限の形は直下の if / while の中)に限る。
+   * if で1つ取り除くだけなら、1回に足す数がそれ以下のときに限る(2つ足して1つ取り除くと増え続ける)
+   */
+  boundedGrowth(loop: LoopNode, grow: Map<string, Expr>, env: WalkEnv): Map<string, Expr> {
+    const out = new Map<string, Expr>();
+    for (const [name, g] of grow) {
+      if (constValue(g) === null) continue;
+      const pushes = this.pushesIn(loop.body, name);
+      if (pushes === 0 || pushes === Infinity) continue;
+      const pops = loop.body.reduce((acc, n) => acc + popsIn(n, name), 0);
+      if (pops >= pushes) {
+        out.set(name, g);
+        continue;
+      }
+      const cap = this.capOf(loop.body, name, pushes, env);
+      if (cap) out.set(name, cap);
+    }
+    return out;
+  }
+
+  /** 本体(条件の中も含む。内側のループは数えきれないので Infinity)で name に要素を足す呼び出しの数 */
+  pushesIn(nodes: readonly IrNode[], name: string): number {
+    let c = 0;
+    for (const n of nodes) {
+      if (n.kind === "loop" || n.kind === "func") {
+        if (this.pushesIn(n.body, name) > 0) return Infinity;
+        continue;
+      }
+      if (n.kind === "branch") {
+        for (const b of n.branches) c += this.pushesIn(b, name);
+        continue;
+      }
+      for (const e of stmtExprs(n)) {
+        walk(e, (x) => {
+          if (x.kind === "lambda") return false;
+          if (x.kind === "member" && x.args !== null && x.of.kind === "sym") {
+            // heapq.heappush(h, x) のような名前空間つきの関数
+            if (NAMESPACES.has(x.of.name) && x.args[0]?.kind === "sym" && x.args[0].name === name && lookupFree(this.lang, x.name)?.grows) c++;
+            else if (x.of.name === name && (PUSH_METHODS.has(x.name) || lookupMethod(this.kindOf(x.of), x.name)?.grows)) c++;
+          } else if (x.kind === "call" && x.args[0]?.kind === "sym" && x.args[0].name === name && lookupFree(this.lang, x.name)?.grows) c++;
+          else if (x.kind === "bin" && x.op === "<<" && this.lang === "ruby" && x.l.kind === "sym" && x.l.name === name) c++;
+          else if (x.kind === "assign" && x.target.kind === "index" && x.target.of.kind === "sym" && x.target.of.name === name) c++;
+        });
+      }
+    }
+    return c;
+  }
+
+  /** 本体の直下の if / while で「name の大きさが E を超えたら取り除く」なら E の上界(1回に足す数は pushes) */
+  capOf(nodes: readonly IrNode[], name: string, pushes: number, env: WalkEnv): Expr | null {
+    for (const n of nodes) {
+      let cond: SExpr | null = null;
+      let need = 1;
+      let arm: readonly IrNode[] = [];
+      if (n.kind === "branch" && n.conds[0]) {
+        cond = n.conds[0];
+        arm = n.branches[0] ?? [];
+        need = pushes;
+      } else if (n.kind === "loop" && n.bound.form === "while" && n.bound.cond) {
+        cond = n.bound.cond;
+        arm = n.body;
+      }
+      if (!cond || arm.reduce((acc, x) => acc + popsIn(x, name), 0) < need) continue;
+      const lim = sizeLimit(cond, name);
+      const b = lim ? boundOf(lim, this.boundEnv(env)) : null;
+      if (b) return b.expr;
+    }
+    return null;
+  }
+
   loopCost(loop: LoopNode, env: WalkEnv): Cost {
     const benv = this.boundEnv(env);
     let F = inferLoop(loop, benv);
@@ -915,7 +1001,10 @@ export class Analyzer {
     const body = this.walkNodes(loop.body, inner);
     const perIter = add(body.time, head.time);
     let total = mul(F.expr, perIter);
-    let grow = mulGrow(addGrow(body.grow, head.grow), F.expr);
+    // 大きさが増え続けないコンテナは、ループの回数を掛けずに1回ぶん(または上限)だけ増えるとみなす
+    const bounded = this.boundedGrowth(loop, body.grow, env);
+    const bodyGrow = new Map([...body.grow].filter(([k]) => !bounded.has(k)));
+    let grow = addGrow(mulGrow(addGrow(bodyGrow, head.grow), F.expr), bounded);
     const up: SpecialCost[] = [];
     for (const sc of body.specials) {
       const sp = sc.sp;
@@ -959,8 +1048,8 @@ export class Analyzer {
     if (F.info) this.warn(F.info, "info", line);
     this.item({ axis: "time", kind: "loop", loc: loop.loc, label: loop.src || "ループ", expr: F.expr, text: "", reason: `${F.reason}${loop.hasBreak ? "(break / return あり。最悪は変わらない)" : ""}`, conf: F.conf });
     if (F.special) {
-      const specialGrow = mulGrow(addGrow(body.grow, head.grow), F.special.total);
-      return { time: once.time, alloc: add(once.alloc, alloc), grow: once.grow, specials: [...up, { sp: F.special, body: perIter, fallback: total, grow: specialGrow }] };
+      const specialGrow = mulGrow(addGrow(bodyGrow, head.grow), F.special.total);
+      return { time: once.time, alloc: add(once.alloc, alloc), grow: addGrow(once.grow, bounded), specials: [...up, { sp: F.special, body: perIter, fallback: total, grow: specialGrow }] };
     }
     return { time: add(once.time, total), alloc: add(once.alloc, alloc), grow: addGrow(once.grow, grow), specials: up };
   }
@@ -1055,10 +1144,15 @@ export class Analyzer {
         const target = n.kind === "assign" && n.op === "=" && n.target.kind === "sym" ? n.target.name : n.kind === "decl" ? n.name : null;
         const value = n.kind === "assign" ? n.value : n.kind === "decl" ? n.init : null;
         if (target && value) {
-          const src = copySource(value);
+          // 後から要素を足したなら、最初の大きさ + 足した回数(s = a[:3] の後に s.append(x))
+          const g = this.directGrowth.has(target) ? this.growRecord.get(target) : undefined;
+          const withGrowth = (x: Expr) => (g ? add(x, g) : x);
+          const len = value.kind === "slice" ? this.sliceLen(value, benv) : null;
+          if (len) setAlias(target, withGrowth(len));
+          const src = len ? null : copySource(value);
           if (src && src !== target) {
             const s = this.aliases.get(`|${src}|`);
-            setAlias(target, s ?? sym(`|${src}|`));
+            setAlias(target, withGrowth(s ?? sym(`|${src}|`)));
           }
           if (value.kind === "size" && value.of.kind === "sym") setAlias(value.of.name, this.named(this.symbolOf(target), `変数 ${target}(${value.of.name} の長さ)`, n.loc.line));
         }
@@ -1344,6 +1438,57 @@ export class Analyzer {
   }
 }
 
+/** a[:3] / a[2:5] / a[-3:] のように長さが定数のスライスの長さ(分からなければ null) */
+function constSliceLen(e: Extract<SExpr, { kind: "slice" }>): number | null {
+  const num = (x: SExpr): number | null => (x.kind === "num" ? x.value : x.kind === "un" && x.op === "-" && x.e.kind === "num" ? -x.e.value : null);
+  const from = e.from ? num(e.from) : 0;
+  if (from === null) return null;
+  if (!e.to) return from < 0 ? -from : null;
+  const to = num(e.to);
+  if (to === null || to < 0 || from < 0) return null;
+  return Math.max(0, to - from);
+}
+
+/** 要素を足すメソッド(組み込みの表の grows に加えて見る) */
+const PUSH_METHODS = new Set(["append", "push", "push_back", "emplace_back", "emplace", "push_front", "appendleft", "insert", "add", "offer", "unshift", "Add", "Enqueue", "Push", "addFirst", "addLast", "offerFirst", "offerLast", "incl", "push!", "pushfirst!"]);
+/** 要素を1つ取り除くメソッド(s.pop() / q.popleft() / pq.poll())と関数(heappop(h) / pop @a / array_pop($a)) */
+const POP_METHODS = new Set(["pop", "pop_back", "pop_front", "popleft", "popFirst", "popLast", "popFront", "popBack", "poll", "pollFirst", "pollLast", "removeFirst", "removeLast", "shift", "dequeue", "Dequeue", "Pop", "RemoveAt", "pop!", "popfirst!", "extract"]);
+const POP_FUNCS = new Set(["heappop", "pop", "shift", "array_pop", "array_shift", "pop!", "popfirst!", "popFirst", "popLast"]);
+
+/** 文が持つ式 */
+function stmtExprs(n: IrNode): SExpr[] {
+  if (n.kind === "expr") return [n.e];
+  if (n.kind === "assign") return n.value ? [n.target, n.value] : [n.target];
+  if (n.kind === "decl") return n.init ? [n.init] : [];
+  if (n.kind === "return") return n.value ? [n.value] : [];
+  return [];
+}
+
+/** この文(条件やループの中は見ない)で name から要素を取り除く回数 */
+function popsIn(n: IrNode, name: string): number {
+  const isName = (x: SExpr | undefined) => !!x && x.kind === "sym" && x.name === name;
+  let c = 0;
+  for (const e of stmtExprs(n)) {
+    walk(e, (x) => {
+      if (x.kind === "lambda") return false;
+      if (x.kind === "member" && x.args !== null && POP_METHODS.has(x.name) && isName(x.of)) c++;
+      // heapq.heappop(h) / table.remove(t)
+      else if (x.kind === "member" && x.args !== null && (POP_FUNCS.has(x.name) || (x.name === "remove" && x.of.kind === "sym" && x.of.name === "table")) && isName(x.args[0])) c++;
+      else if (x.kind === "call" && (POP_FUNCS.has(x.name) || (x.name === "remove" && x.ns === "table")) && isName(x.args[0])) c++;
+    });
+  }
+  return c;
+}
+
+/** 条件が「name の大きさが E を超えた」(len(h) > k / pq.size() >= k / k < len(h))なら E */
+function sizeLimit(cond: SExpr, name: string): SExpr | null {
+  const isSize = (x: SExpr) => x.kind === "size" && x.of.kind === "sym" && x.of.name === name;
+  if (cond.kind !== "cmp") return null;
+  if ([">", ">=", "=="].includes(cond.op) && isSize(cond.l)) return cond.r;
+  if (["<", "<=", "=="].includes(cond.op) && isSize(cond.r)) return cond.l;
+  return null;
+}
+
 /** 空のコンテナの値(set() / [] / {} / new Set() / dict())か */
 function isEmptyValue(e: SExpr | null): boolean {
   if (!e) return false;
@@ -1390,7 +1535,7 @@ function copySource(e: SExpr): string | null {
     if (src && src.kind === "sym") return src.name;
   }
   if (e.kind === "member" && ["copy", "clone", "dup", "to_vec", "to_owned", "sorted", "reversed", "slice", "concat", "to_a", "sortedByIt", "sortedBy", "mapIt", "deduplicate", "toSeq", "map", "sort_by", "sort"].includes(e.name) && e.of.kind === "sym") return e.of.name;
-  if (e.kind === "slice" && e.of.kind === "sym") return e.of.name;
+  if (e.kind === "slice" && e.of.kind === "sym" && constSliceLen(e) === null) return e.of.name;
   return null;
 }
 

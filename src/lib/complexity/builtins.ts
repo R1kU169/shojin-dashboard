@@ -210,7 +210,9 @@ const PY_FREE = table([
   ["len abs print input int float str ord chr divmod range bin hex oct round isinstance type id hash bool iter next open exit quit sqrt isqrt floor ceil log log2 log10 exp comb perm factorial setrecursionlimit", r(one)],
   ["gcd lcm", r((c) => logOfExpr(c.bound(c.args[1] ?? c.args[0] ?? null)), { conf: "medium" })],
   ["pow", r((c) => (c.args.length === 3 ? logOfExpr(c.bound(c.args[1])) : ONE))],
-  ["heappush heappushpop heapreplace", r(logA(0), { grows: true })],
+  ["heappush", r(logA(0), { grows: true })],
+  // 1つ入れて1つ出すので大きさは変わらない
+  ["heappushpop heapreplace", r(logA(0))],
   ["heappop", r(logA(0))],
   ["heapify nlargest nsmallest deepcopy copy", r(A(0))],
   ["bisect_left bisect_right bisect", r(logA(0))],
