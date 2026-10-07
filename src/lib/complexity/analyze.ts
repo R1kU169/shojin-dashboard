@@ -114,6 +114,8 @@ export class Analyzer {
    * ループ i の1回ごとの大きさなので、i のループ全体では t への追加の総数に置き換える(Σ|t[i]| = 総数)
    */
   private bucketSyms = new Map<string, { name: string; idx: string }>();
+  /** d = max(d, i) / u = min(u, i) で更新する変数 → 更新に使った値の上限の和(分からない値があれば null) */
+  private extremeBounds = new Map<string, Expr | null>();
   /** 1回目の走査で要素の総数がまだ分からず Σ|t[]| のまま使ったバケツ(for r in t の t) */
   private bucketPlaceholders = new Set<string>();
   /** 1回目の走査で辺の数がまだ分からず Σ|g[]| のまま使った隣接リスト */
@@ -276,8 +278,12 @@ export class Analyzer {
     const k = constSliceLen(e);
     if (k !== null) return lit(Math.max(1, k));
     const fromZero = !e.from || (e.from.kind === "num" && e.from.value === 0);
-    if (!fromZero || !e.to || e.to.kind === "un" || (e.to.kind === "num" && e.to.value < 0)) return null;
-    return boundOf(e.to, benv)?.expr ?? null;
+    if (!e.to || e.to.kind === "un" || (e.to.kind === "num" && e.to.value < 0)) return null;
+    const to = boundOf(e.to, benv)?.expr ?? null;
+    if (fromZero) return to;
+    // グリッドの行の C[i][l:r + 1] の長さは r + 1 以下(行の長さは記号 |C[]| にしかならないので、終わりの上限が分かればそれを使う)。
+    // a[l:r] のように元が変数なら、クエリの r より |a| のほうが分かりやすいので従来どおり
+    return e.of.kind === "index" && to && !vars(to).some((v) => v.startsWith("|")) ? to : null;
   }
 
   sizeOf(e: SExpr | null, env: WalkEnv | null): Expr {
@@ -521,6 +527,7 @@ export class Analyzer {
       case "return":
         return n.value ? this.exprCost(n.value, env, false, n.loc.line) : empty();
       case "assign": {
+        if (this.pass === 1) this.recordExtreme(n.target, n.value, env);
         const c = n.value ? this.exprCost(n.value, env, !!n.reading, n.loc.line) : empty();
         return plus(c, this.targetCost(n.target, n.op, n.value, env, n.loc.line));
       }
@@ -1310,6 +1317,19 @@ export class Analyzer {
       const b = boundOf(value, benv);
       if (b && !vars(b.expr).includes(s)) this.aliases.set(s, b.expr);
     }
+    // (i) d = max(d, i) / u = min(u, i) と初期値(u = H / d = -1)だけで決まる変数の上限は、それらの値の上限の和
+    for (const [name, b] of this.extremeBounds) {
+      const s = this.symbolOf(name);
+      if (!b || this.aliases.has(s) || this.sharesSymbol(name)) continue;
+      const inits = extremeInits(this.prog.nodes, name);
+      if (!inits) continue;
+      let total: Expr | null = b;
+      for (const v of inits) {
+        const x = boundOf(v, benv);
+        total = total && x ? add(total, x.expr) : null;
+      }
+      if (total && !vars(total).includes(s)) this.aliases.set(s, total);
+    }
     // (b) 成長だけでサイズが決まるコンテナ
     for (const [name, g] of this.growRecord) setAlias(name, g);
     // 1回目に Σ|t[]| で置いたバケツの要素の総数は t への追加の総数。追加が無ければ(バケツでなければ)|t|·|t[]|
@@ -1328,6 +1348,22 @@ export class Analyzer {
     }
     // 成長の合計(辺の数など)も別名を解いた形で持つ
     this.growTotals = new Map([...this.growRecord].map(([k, v]) => [k, this.resolveAliases(v, `|${k}|`)]));
+  }
+
+  /** d = max(d, i) / u, d = min(u, i), max(d, i) の更新に使った値の上限を覚える(i はその場のループの上限で読む) */
+  recordExtreme(target: SExpr, value: SExpr | null, env: WalkEnv): void {
+    if (!value) return;
+    const pairs: [SExpr, SExpr][] = target.kind === "list" && value.kind === "list" && target.items.length === value.items.length ? target.items.map((t, i) => [t, (value as Extract<SExpr, { kind: "list" }>).items[i]]) : [[target, value]];
+    for (const [t, v] of pairs) {
+      if (t.kind !== "sym" || v.kind !== "call" || (v.name !== "max" && v.name !== "min") || !v.args.some((x) => x.kind === "sym" && x.name === t.name)) continue;
+      let acc: Expr | null = this.extremeBounds.has(t.name) ? this.extremeBounds.get(t.name)! : ONE;
+      for (const x of v.args) {
+        if (x.kind === "sym" && x.name === t.name) continue;
+        const b = boundOf(x, this.boundEnv(env));
+        acc = acc && b ? add(acc, b.expr) : null;
+      }
+      this.extremeBounds.set(t.name, acc);
+    }
   }
 
   bucketSym(name: string, idx: string): Expr {
@@ -1511,7 +1547,8 @@ export class Analyzer {
   entryCost(): { cost: Cost; entries: string[] } {
     const env: WalkEnv = { outer: [], params: new Set(), func: null, selfNames: new Set(), selfCalls: null, before: [], inAdjacency: false };
     const moduleNodes = this.prog.nodes.filter((n) => n.kind !== "func");
-    const hasWork = moduleNodes.some((n) => n.kind !== "decl" && n.kind !== "stmt" && n.kind !== "input");
+    // 確保や定数の代入(E = [] / tin = [-1] * n)だけならトップレベルの処理は無い(関数の断片が貼られている)
+    const hasWork = moduleNodes.some((n) => n.kind !== "decl" && n.kind !== "stmt" && n.kind !== "input" && !(n.kind === "assign" && isPlainInit(n.value, this.spec.typeKind)));
     const main = this.funcs.get("main") ?? this.funcs.get("Main");
     const module: FuncNode = { kind: "func", name: "<module>", params: [], decorators: [], body: moduleNodes, loc: { line: 1, endLine: this.prog.lineCount }, isLambda: false, selfParam: null };
     let cost = settle(this.walkNodes(module.body, env));
@@ -1830,4 +1867,59 @@ function isConcat(e: SExpr, kindOf: (x: SExpr) => ContainerKind): boolean {
   if (e.kind === "slice") return true;
   if (e.kind === "sym") return ["array", "string", "deque"].includes(kindOf(e));
   return false;
+}
+
+/** 確保かリテラルだけの値(呼び出しを含まない)か */
+function isPlainInit(value: SExpr | null, typeKind: Readonly<Record<string, ContainerKind>>): boolean {
+  if (!value) return true;
+  if (value.kind === "num" || value.kind === "str") return true;
+  if (value.kind === "list") return value.items.every((x) => isPlainInit(x, typeKind));
+  return allocOf(value, typeKind) !== null && !(value.kind === "call" || value.kind === "member");
+}
+
+/**
+ * name への代入が「自分を含む max / min」か「初期値」だけなら、初期値の並び。ほかの代入(d += 1 / ループ変数)があれば null
+ */
+function extremeInits(nodes: readonly IrNode[], name: string): SExpr[] | null {
+  const inits: SExpr[] = [];
+  let ok = true;
+  const def = (t: SExpr, v: SExpr | null) => {
+    if (t.kind !== "sym" || t.name !== name) return;
+    if (v && v.kind === "call" && (v.name === "max" || v.name === "min") && v.args.some((x) => x.kind === "sym" && x.name === name)) return;
+    if (v && !symbolsIn(v).has(name)) inits.push(v);
+    else ok = false;
+  };
+  const visit = (ns: readonly IrNode[]) => {
+    for (const [i, n] of ns.entries()) {
+      if (!ok) return;
+      if (n.kind === "assign") {
+        const prev = ns[i - 1];
+        if (prev && prev.kind === "decl" && n.target.kind === "sym" && prev.name === n.target.name && prev.init === n.value) continue;
+        if (n.op !== "=") {
+          if (targetNames(n.target).includes(name) && n.target.kind !== "index") ok = false;
+          continue;
+        }
+        if (n.target.kind === "list" && n.value && n.value.kind === "list" && n.target.items.length === n.value.items.length) n.target.items.forEach((t, k) => def(t, (n.value as Extract<SExpr, { kind: "list" }>).items[k]));
+        else if (n.target.kind === "list" && targetNames(n.target).includes(name)) ok = false;
+        else def(n.target, n.value);
+      } else if (n.kind === "decl" && n.name === name) {
+        if (n.init) def({ kind: "sym", name }, n.init);
+      } else if (n.kind === "input" && [...n.scalars, ...n.arrays].includes(name)) {
+        // u, d = H, -1 は入力の値を写すだけ(直後の代入を初期値として見る)。cin >> d のように読むなら上限は分からない
+        const next = ns[i + 1];
+        if (!(next && next.kind === "assign" && targetNames(next.target).includes(name))) ok = false;
+      }
+      else if (n.kind === "loop") {
+        const b = n.bound;
+        if (b.form !== "while" && b.form !== "count" && b.var === name) ok = false;
+        visit(n.body);
+      } else if (n.kind === "branch") n.branches.forEach(visit);
+      else if (n.kind === "func") {
+        if (n.params.includes(name)) ok = false;
+        visit(n.body);
+      }
+    }
+  };
+  visit(nodes);
+  return ok && inits.length > 0 ? inits : null;
 }

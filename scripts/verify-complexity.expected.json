@@ -396,7 +396,7 @@
       "source": "manual",
       "time": "O(H·W)",
       "accept": [],
-      "note": "TODO: d = max(d, i) で更新する変数の上限(H)を追わず記号 D になる"
+      "note": "u, d = min(u, i), max(d, i) で更新する d の上限は H(i の上限)。行のスライス C[i][l:r + 1] の長さは r + 1 ≤ W"
     },
     "abc464_b@22268#1": {
       "lang": "cpp",
@@ -405,7 +405,7 @@
       "source": "manual",
       "time": "O(H·W)",
       "accept": [],
-      "note": "TODO: 同上(D, R)"
+      "note": "d = max(d, i) / r = max(r, j) で更新する変数の上限は H / W"
     },
     "abc464_b@22268#2": {
       "lang": "python",
@@ -1445,10 +1445,8 @@
       "stated": null,
       "source": "manual",
       "time": "O(N + M)",
-      "accept": [
-        "O(M)"
-      ],
-      "note": "TODO: 関数の断片(dfs を呼ぶ処理が無い)。トップレベルが初期化だけなら関数を入口として評価したい。g が未定義なので辺の数は記号 M"
+      "accept": [],
+      "note": "関数の断片(dfs を呼ぶ処理が無い)。トップレベルが初期化だけなので関数を入口として評価する(以前は O(1))。g が未定義なので辺の数は記号 M"
     },
     "abc478_a@26498#0": {
       "lang": "python",

@@ -2083,6 +2083,58 @@ const CASES: Golden[] = [
       }`,
     time: "O(N log N + 30·N)",
   },
+  {
+    id: "追加48 初期化と関数だけの断片は関数を入口として評価する(ABC477 G)",
+    lang: "python",
+    code: `
+      order = []
+      tin = [-1] * N
+
+      def dfs(c, p):
+          tin[c] = len(order)
+          order.append(c)
+          for d in g[c]:
+              if d == p:
+                  continue
+              dfs(d, c)`,
+    time: "O(N + M)",
+    warn: /個別に評価/,
+  },
+  {
+    id: "追加49 max / min で更新する変数の上限は更新に使った値の上限(ABC464 B)",
+    lang: "python",
+    code: `
+      H, W = map(int, input().split())
+      C = [input() for _ in range(H)]
+      u, d = H, -1
+      l, r = W, -1
+      for i in range(H):
+          for j in range(W):
+              if C[i][j] == "#":
+                  u, d = min(u, i), max(d, i)
+                  l, r = min(l, j), max(r, j)
+      for i in range(u, d + 1):
+          print(C[i][l:r + 1])`,
+    time: "O(H·W)",
+  },
+  {
+    id: "追加50 C++: max / min で更新する変数の上限(ABC464 B)",
+    lang: "cpp",
+    code: `
+      int main() {
+          int H, W; cin >> H >> W;
+          vector<string> C(H);
+          for (int i = 0; i < H; i++) cin >> C[i];
+          int u = H, d = -1, l = W, r = -1;
+          for (int i = 0; i < H; i++) for (int j = 0; j < W; j++)
+              if (C[i][j] == '#') { u = min(u, i); d = max(d, i); l = min(l, j); r = max(r, j); }
+          for (int i = u; i <= d; i++) {
+              for (int j = l; j <= r; j++) cout << C[i][j];
+              cout << endl;
+          }
+      }`,
+    time: "O(H·W)",
+  },
 ];
 
 for (const g of CASES) test(g.id, () => void check(g));
