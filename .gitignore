@@ -25,3 +25,6 @@ public/snapshot
 *.njsproj
 *.sln
 *.sw?
+
+# 計算量チェッカーの検証で取得した AtCoder の HTML(解説のコードを含むのでコミットしない)
+.cache

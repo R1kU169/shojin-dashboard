@@ -1,0 +1,1521 @@
+{
+  "contests": [
+    "abc459",
+    "abc460",
+    "abc461",
+    "abc462",
+    "abc463",
+    "abc464",
+    "abc465",
+    "abc466",
+    "abc467",
+    "abc468",
+    "abc469",
+    "abc470",
+    "abc471",
+    "abc472",
+    "abc473",
+    "abc474",
+    "abc475",
+    "abc476",
+    "abc477",
+    "abc478"
+  ],
+  "cases": {
+    "abc459_a@20921#0": {
+      "lang": "python",
+      "hash": "c5ed5843",
+      "stated": null,
+      "source": "manual",
+      "time": "O(10)",
+      "accept": [],
+      "note": "10 文字の固定ループ"
+    },
+    "abc459_a@20921#1": {
+      "lang": "cpp",
+      "hash": "d21aabbd",
+      "stated": null,
+      "source": "manual",
+      "time": "O(1)",
+      "accept": [],
+      "note": ""
+    },
+    "abc459_b@20977#0": {
+      "lang": "cpp",
+      "hash": "4615a8f2",
+      "stated": null,
+      "source": "manual",
+      "time": "O(N)",
+      "accept": [],
+      "note": ""
+    },
+    "abc459_b@20977#1": {
+      "lang": "cpp",
+      "hash": "8c329152",
+      "stated": null,
+      "source": "manual",
+      "time": "O(N + 27)",
+      "accept": [],
+      "note": "表を作る 9×3 回の固定ループ(係数 10 以上の定数項は残す規則)"
+    },
+    "abc459_b@20977#2": {
+      "lang": "python",
+      "hash": "0dcf6fc9",
+      "stated": null,
+      "source": "manual",
+      "time": "O(N)",
+      "accept": [],
+      "note": ""
+    },
+    "abc459_c@20978#0": {
+      "lang": "cpp",
+      "hash": "c41570ce",
+      "stated": "O(N + Q)",
+      "source": "editorial",
+      "time": "O(Q + 3×10^5)",
+      "accept": [],
+      "note": "配列を上限 3×10^5 で確保している(解説の N にあたる)"
+    },
+    "abc459_d@20973#0": {
+      "lang": "python",
+      "hash": "995be3c6",
+      "stated": "O(σ|S|)",
+      "source": "editorial",
+      "time": "O(26·Σ|S|)",
+      "accept": [
+        "O(26·T·N)"
+      ],
+      "values": {
+        "T": 1,
+        "N": 1000000
+      },
+      "note": "マルチテストの総和制約は見ない(既知の限界)。while True は |S| 回"
+    },
+    "abc459_e@20979#0": {
+      "lang": "cpp",
+      "hash": "fd7c921e",
+      "stated": "O(N + ΣD)",
+      "source": "editorial",
+      "time": "O(N + ΣD)",
+      "accept": [],
+      "note": "TODO: 添字で回す木の DFS(dfs(e[k][i]))が再帰と認識されない"
+    },
+    "abc459_f@20507#0": {
+      "lang": "python",
+      "hash": "cc692fbf",
+      "stated": "O(N)",
+      "source": "editorial",
+      "time": "O(ΣN)",
+      "accept": [],
+      "values": {
+        "T": 1,
+        "N": 600000
+      },
+      "note": "TODO: テストケースごとに作り直す d の大きさが T·N になる。for i in range(len) は Σlen = N(要素の値で回すループ)"
+    },
+    "abc460_a@21025#0": {
+      "lang": "cpp",
+      "hash": "4edf6bdb",
+      "stated": null,
+      "source": "manual",
+      "time": "O(log M)",
+      "accept": [],
+      "note": "互除法"
+    },
+    "abc460_b@21008#0": {
+      "lang": "cpp",
+      "hash": "4f025335",
+      "stated": null,
+      "source": "manual",
+      "time": "O(T)",
+      "accept": [],
+      "note": ""
+    },
+    "abc460_c@21026#0": {
+      "lang": "cpp",
+      "hash": "a9db7076",
+      "stated": "O(N log N + M log M)",
+      "source": "editorial",
+      "time": "O(N log N + M log M)",
+      "accept": [],
+      "note": ""
+    },
+    "abc460_d@21027#0": {
+      "lang": "cpp",
+      "hash": "1c68f18e",
+      "stated": "O(HW)",
+      "source": "editorial",
+      "time": "O(N·M)",
+      "accept": [],
+      "values": {
+        "N": 1000,
+        "M": 1000
+      },
+      "note": "コードでは H, W を n, m で読む(H×W ≤ 10^6)"
+    },
+    "abc460_e@21009#0": {
+      "lang": "cpp",
+      "hash": "f2fceca8",
+      "stated": null,
+      "source": "manual",
+      "time": "O(19·T log M)",
+      "accept": [],
+      "note": "桁数 19 の固定ループ × gcd"
+    },
+    "abc461_a@21021#0": {
+      "lang": "python",
+      "hash": "5ad510bb",
+      "stated": null,
+      "source": "manual",
+      "time": "O(1)",
+      "accept": [],
+      "note": ""
+    },
+    "abc461_a@21021#1": {
+      "lang": "python",
+      "hash": "86d7cfb9",
+      "stated": null,
+      "source": "manual",
+      "time": "O(1)",
+      "accept": [],
+      "note": ""
+    },
+    "abc461_a@21021#2": {
+      "lang": "python",
+      "hash": "ba1a219a",
+      "stated": null,
+      "source": "manual",
+      "time": "O(1)",
+      "accept": [],
+      "note": ""
+    },
+    "abc461_a@21021#3": {
+      "lang": "python",
+      "hash": "635ba715",
+      "stated": null,
+      "source": "manual",
+      "time": "O(1)",
+      "accept": [],
+      "note": ""
+    },
+    "abc461_a@21021#4": {
+      "lang": "cpp",
+      "hash": "b719909d",
+      "stated": null,
+      "source": "manual",
+      "time": "O(1)",
+      "accept": [],
+      "note": ""
+    },
+    "abc461_a@21021#5": {
+      "lang": "cpp",
+      "hash": "d1d3a36d",
+      "stated": null,
+      "source": "manual",
+      "time": "O(1)",
+      "accept": [],
+      "note": ""
+    },
+    "abc461_c@21020#0": {
+      "lang": "python",
+      "hash": "e1510502",
+      "stated": "O(N log N)",
+      "source": "editorial",
+      "time": "O(N log N + K + M)",
+      "accept": [],
+      "note": "TODO: バケツ t の各 r を回す(Σ|r| = N)と、tail += r[1:] による成長"
+    },
+    "abc461_d@20145#0": {
+      "lang": "cpp",
+      "hash": "200f1967",
+      "stated": "O(H²W)",
+      "source": "editorial",
+      "time": "O(H²·W)",
+      "accept": [],
+      "note": "TODO: r1 = max(r1, l+1) は振り出しに戻さない(尺取りの償却)。関数内の n = a.size() を |a| として呼び出し側で置き換える"
+    },
+    "abc461_e@21023#0": {
+      "lang": "python",
+      "hash": "0e091fbb",
+      "stated": "O(Q log Q + N)",
+      "source": "editorial",
+      "time": "O(Q log Q + N)",
+      "accept": [],
+      "note": "TODO: FenwickTree のリストの要素の .sum を Python の sum(O(Q))と取り違えて TLE 判定"
+    },
+    "abc462_a@21397#0": {
+      "lang": "python",
+      "hash": "37996bbb",
+      "stated": null,
+      "source": "manual",
+      "time": "O(|s|)",
+      "accept": [],
+      "note": ""
+    },
+    "abc462_a@21397#1": {
+      "lang": "python",
+      "hash": "9efcf0cd",
+      "stated": null,
+      "source": "manual",
+      "time": "O(|S|)",
+      "accept": [
+        "O(1)"
+      ],
+      "note": "入力の文字列をその場で filter する処理は読み取りとして数えない(入力を読む時間以下)"
+    },
+    "abc462_b@21457#0": {
+      "lang": "python",
+      "hash": "08b6c922",
+      "stated": null,
+      "source": "manual",
+      "time": "O(N·|a|)",
+      "accept": [],
+      "note": "TODO: for i in range(n) の中の ans[i] の大きさは全体で追加の総数(N·|a|)。|a| は K_i(≤ N-1)"
+    },
+    "abc462_c@21406#0": {
+      "lang": "python",
+      "hash": "91ab9bfb",
+      "stated": "O(N log N)",
+      "source": "editorial",
+      "time": "O(N log N)",
+      "accept": [],
+      "note": ""
+    },
+    "abc462_d@21022#0": {
+      "lang": "python",
+      "hash": "e55d2f80",
+      "stated": "O(N + M)",
+      "source": "editorial",
+      "time": "O(N + 10^6)",
+      "accept": [],
+      "note": "M = 10^6 を定数で持つ"
+    },
+    "abc462_e@21400#0": {
+      "lang": "python",
+      "hash": "ff51ab84",
+      "stated": "O(1)/ケース",
+      "source": "editorial",
+      "time": "O(T)",
+      "accept": [],
+      "note": ""
+    },
+    "abc462_f@16164#0": {
+      "lang": "cpp",
+      "hash": "57976936",
+      "stated": "O(NK)",
+      "source": "editorial",
+      "time": "O(K·Σ|S|)",
+      "accept": [
+        "O(T·K·N)"
+      ],
+      "values": {
+        "T": 1,
+        "N": 300000,
+        "K": 10
+      },
+      "note": "マルチテストの総和制約は見ない(既知の限界)"
+    },
+    "abc463_a@21926#0": {
+      "lang": "python",
+      "hash": "ee755f11",
+      "stated": null,
+      "source": "manual",
+      "time": "O(1)",
+      "accept": [],
+      "note": ""
+    },
+    "abc463_b@21927#0": {
+      "lang": "python",
+      "hash": "743c32bc",
+      "stated": null,
+      "source": "manual",
+      "time": "O(N)",
+      "accept": [],
+      "note": ""
+    },
+    "abc463_b@21927#1": {
+      "lang": "cpp",
+      "hash": "4ea4397b",
+      "stated": null,
+      "source": "manual",
+      "time": "O(N)",
+      "accept": [],
+      "note": ""
+    },
+    "abc463_c@21941#0": {
+      "lang": "cpp",
+      "hash": "e56614e0",
+      "stated": "O(N + Q log N)",
+      "source": "editorial",
+      "time": "O(Q log N + N)",
+      "accept": [],
+      "note": ""
+    },
+    "abc463_d@21942#0": {
+      "lang": "cpp",
+      "hash": "3f2a0846",
+      "stated": null,
+      "source": "manual",
+      "time": "O(N log N + 30·N)",
+      "accept": [],
+      "note": "TODO: ranges::partition_point(views::iota(0, 10^9), f) の二分探索 × f の O(N) を数えていない(過小)"
+    },
+    "abc463_e@21940#0": {
+      "lang": "cpp",
+      "hash": "98ef27b0",
+      "stated": null,
+      "source": "manual",
+      "time": "O((N + M) log (N + M))",
+      "accept": [],
+      "note": "TODO: const auto [dist, now]{pq.top()} の構造化束縛を取り出した頂点と認識できず、edges[now] を毎回全体の辺数と数えて TLE 判定"
+    },
+    "abc463_f@21939#0": {
+      "lang": "cpp",
+      "hash": "4a42bc07",
+      "stated": null,
+      "source": "manual",
+      "time": "O(N)",
+      "accept": [],
+      "note": "TODO: inclusive_scan(rbegin(x), rend(x)) の長さ、views::iota(a, b) の回数"
+    },
+    "abc464_a@22254#0": {
+      "lang": "cpp",
+      "hash": "f90fc5bd",
+      "stated": null,
+      "source": "manual",
+      "time": "O(|s|)",
+      "accept": [],
+      "note": ""
+    },
+    "abc464_b@22268#0": {
+      "lang": "python",
+      "hash": "a21d1b30",
+      "stated": null,
+      "source": "manual",
+      "time": "O(H·W)",
+      "accept": [],
+      "note": "TODO: d = max(d, i) で更新する変数の上限(H)を追わず記号 D になる"
+    },
+    "abc464_b@22268#1": {
+      "lang": "cpp",
+      "hash": "5523868f",
+      "stated": null,
+      "source": "manual",
+      "time": "O(H·W)",
+      "accept": [],
+      "note": "TODO: 同上(D, R)"
+    },
+    "abc464_b@22268#2": {
+      "lang": "python",
+      "hash": "cbff0282",
+      "stated": null,
+      "source": "manual",
+      "time": "O(H² + H·|C[]|)",
+      "accept": [],
+      "note": "TODO: zip(*a[::-1]) の大きさが記号 |*a[:]| になる。|C[]| は入力の行の長さ(W)"
+    },
+    "abc464_b@22268#3": {
+      "lang": "cpp",
+      "hash": "972fa8b5",
+      "stated": null,
+      "source": "manual",
+      "time": "O(H·|C[]| + H² + H·W)",
+      "accept": [],
+      "note": "|C[]| は入力の行の長さ(W)。while (true) の理由が「キュー true」になる"
+    },
+    "abc464_c@22255#0": {
+      "lang": "cpp",
+      "hash": "a8ad0197",
+      "stated": "O(N + M)",
+      "source": "editorial",
+      "time": "O(N + M)",
+      "accept": [],
+      "note": ""
+    },
+    "abc464_d@22256#0": {
+      "lang": "cpp",
+      "hash": "64884217",
+      "stated": "O(N)",
+      "source": "editorial",
+      "time": "O(ΣN)",
+      "accept": [
+        "O(T·N)"
+      ],
+      "values": {
+        "T": 1,
+        "N": 200000
+      },
+      "note": "マルチテストの総和制約は見ない(既知の限界)"
+    },
+    "abc464_e@22266#0": {
+      "lang": "python",
+      "hash": "c1afa30b",
+      "stated": "O(HW + Q)",
+      "source": "editorial",
+      "time": "O(H·W + Q)",
+      "accept": [],
+      "values": {
+        "H": 1000,
+        "W": 1000
+      },
+      "note": "H×W ≤ 10^6"
+    },
+    "abc464_f@22267#0": {
+      "lang": "python",
+      "hash": "619190cf",
+      "stated": "O(N² 2^(N/2))",
+      "source": "editorial",
+      "time": "O(N²·2^(N/2))",
+      "accept": [],
+      "note": "TODO: 半分全列挙で extend して作るリストの大きさ(2^(N/2))は追えない。extend が未知の関数になる"
+    },
+    "abc464_g@22263#0": {
+      "lang": "cpp",
+      "hash": "f229bbeb",
+      "stated": "O(N log N)",
+      "source": "editorial",
+      "time": "O(ΣN log ΣN)",
+      "accept": [],
+      "values": {
+        "T": 1,
+        "N": 1000000
+      },
+      "note": "TODO: ループ内で宣言した sam の大きさが T·N になる。dl = d.size() の dl が記号のまま"
+    },
+    "abc465_a@22565#0": {
+      "lang": "python",
+      "hash": "981cbdd3",
+      "stated": null,
+      "source": "manual",
+      "time": "O(1)",
+      "accept": [],
+      "note": ""
+    },
+    "abc465_a@22565#1": {
+      "lang": "cpp",
+      "hash": "5ce6a37c",
+      "stated": null,
+      "source": "manual",
+      "time": "O(1)",
+      "accept": [],
+      "note": ""
+    },
+    "abc465_a@22565#2": {
+      "lang": "python",
+      "hash": "331ae276",
+      "stated": null,
+      "source": "manual",
+      "time": "O(1)",
+      "accept": [],
+      "note": ""
+    },
+    "abc465_a@22565#3": {
+      "lang": "cpp",
+      "hash": "fe14cc1e",
+      "stated": null,
+      "source": "manual",
+      "time": "O(1)",
+      "accept": [],
+      "note": ""
+    },
+    "abc465_b@22564#0": {
+      "lang": "cpp",
+      "hash": "25660795",
+      "stated": null,
+      "source": "manual",
+      "time": "O(B)",
+      "accept": [],
+      "note": "B ≤ 23"
+    },
+    "abc465_c@22418#0": {
+      "lang": "python",
+      "hash": "7f4659aa",
+      "stated": "O(N)",
+      "source": "editorial",
+      "time": "O(N)",
+      "accept": [],
+      "note": "TODO: ans = a[::-1] + b の大きさ(|a| + |b|)が記号 |ans| になる"
+    },
+    "abc465_d@22416#0": {
+      "lang": "python",
+      "hash": "43574755",
+      "stated": null,
+      "source": "manual",
+      "time": "O(T log X)",
+      "accept": [],
+      "note": ""
+    },
+    "abc465_e@22563#0": {
+      "lang": "cpp",
+      "hash": "cdb4dbca",
+      "stated": "O(2^D D log N)",
+      "source": "editorial",
+      "time": "O(2.8×10^4·|s|)",
+      "accept": [],
+      "values": {
+        "|s|": 500
+      },
+      "note": "桁 DP。2^10·3·9 ≈ 2.8×10^4、log N は桁数 |s| ≤ 500"
+    },
+    "abc465_f@22562#0": {
+      "lang": "cpp",
+      "hash": "fc842982",
+      "stated": "O(DN + B^D D + Q 2^D D)",
+      "source": "editorial",
+      "time": "O(Q + N + 10^6)",
+      "accept": [],
+      "note": "TODO: for (bi = 0; !(bi >> BITLEN); bi++) は 2^6 回。pow10[BITLEN] は関数で作った表の値(10^6)で max(pow10) になる"
+    },
+    "abc466_a@22625#0": {
+      "lang": "cpp",
+      "hash": "6b239f0b",
+      "stated": null,
+      "source": "manual",
+      "time": "O(N)",
+      "accept": [],
+      "note": ""
+    },
+    "abc466_a@22625#1": {
+      "lang": "python",
+      "hash": "7967bf7b",
+      "stated": null,
+      "source": "manual",
+      "time": "O(N)",
+      "accept": [],
+      "note": ""
+    },
+    "abc466_b@22628#0": {
+      "lang": "cpp",
+      "hash": "f41f39f7",
+      "stated": null,
+      "source": "manual",
+      "time": "O(N + M)",
+      "accept": [],
+      "note": ""
+    },
+    "abc466_c@22627#0": {
+      "lang": "cpp",
+      "hash": "6fa91e07",
+      "stated": null,
+      "source": "manual",
+      "time": "O(N)",
+      "accept": [],
+      "note": "インタラクティブ。l, r を進めるだけ"
+    },
+    "abc466_d@22608#0": {
+      "lang": "cpp",
+      "hash": "4e157f85",
+      "stated": "O(M)",
+      "source": "editorial",
+      "time": "O(M + 3×10^5)",
+      "accept": [],
+      "note": "配列を上限の定数で確保"
+    },
+    "abc466_d@22608#1": {
+      "lang": "cpp",
+      "hash": "b9b3003c",
+      "stated": "O(M)",
+      "source": "editorial",
+      "time": "O(M + 3×10^5)",
+      "accept": [],
+      "note": "配列を上限の定数で確保"
+    },
+    "abc466_f@22630#0": {
+      "lang": "cpp",
+      "hash": "0b233a52",
+      "stated": "O(N log N log X)",
+      "source": "editorial",
+      "time": "O(T·N log N log X)",
+      "accept": [],
+      "values": {
+        "T": 1,
+        "N": 200000
+      },
+      "note": "TODO?: 取り出して2つまで入れ直す while の回数は償却の議論(log X)が要り、静的には推定できない(警告は出る)"
+    },
+    "abc466_f@22630#1": {
+      "lang": "python",
+      "hash": "dc55a191",
+      "stated": "O(N log N log X)",
+      "source": "editorial",
+      "time": "O(T·N log N)",
+      "accept": [],
+      "values": {
+        "T": 1,
+        "N": 200000
+      },
+      "note": "TODO: テストケースごとに作り直す pq の大きさが T·N になり log T が付く"
+    },
+    "abc466_g@22603#0": {
+      "lang": "cpp",
+      "hash": "7895458e",
+      "stated": null,
+      "source": "manual",
+      "time": "O(定数)",
+      "accept": [],
+      "note": "N ≤ 8, M ≤ 36 で全部定数。k(制約の数)・sz などは記号のまま"
+    },
+    "abc467_a@22699#0": {
+      "lang": "cpp",
+      "hash": "b0ddd9ab",
+      "stated": null,
+      "source": "manual",
+      "time": "O(1)",
+      "accept": [],
+      "note": ""
+    },
+    "abc467_a@22699#1": {
+      "lang": "python",
+      "hash": "d87ec7b7",
+      "stated": null,
+      "source": "manual",
+      "time": "O(1)",
+      "accept": [],
+      "note": ""
+    },
+    "abc467_b@23429#0": {
+      "lang": "cpp",
+      "hash": "4df36e73",
+      "stated": null,
+      "source": "manual",
+      "time": "O(N)",
+      "accept": [],
+      "note": ""
+    },
+    "abc467_d@23431#0": {
+      "lang": "cpp",
+      "hash": "0fd0ce55",
+      "stated": null,
+      "source": "manual",
+      "time": "O(T log C)",
+      "accept": [],
+      "values": {
+        "C": 4000000000000000000
+      },
+      "note": "gcd の引数(座標から作る係数 c)の大きさの log"
+    },
+    "abc468_a@23477#0": {
+      "lang": "python",
+      "hash": "03cff688",
+      "stated": null,
+      "source": "manual",
+      "time": "O(N)",
+      "accept": [],
+      "note": ""
+    },
+    "abc468_a@23477#1": {
+      "lang": "cpp",
+      "hash": "a7c313f6",
+      "stated": null,
+      "source": "manual",
+      "time": "O(N)",
+      "accept": [],
+      "note": ""
+    },
+    "abc468_b@23735#0": {
+      "lang": "python",
+      "hash": "a2036400",
+      "stated": null,
+      "source": "manual",
+      "time": "O(M²)",
+      "accept": [],
+      "note": ""
+    },
+    "abc468_c@23508#0": {
+      "lang": "cpp",
+      "hash": "9abd562d",
+      "stated": null,
+      "source": "manual",
+      "time": "O(N·N!)",
+      "accept": [],
+      "note": "全順列"
+    },
+    "abc468_c@23508#1": {
+      "lang": "python",
+      "hash": "918cc827",
+      "stated": null,
+      "source": "manual",
+      "time": "O(N·N!)",
+      "accept": [],
+      "note": "TODO: permutations の要素 a の長さが記号 |a| になる"
+    },
+    "abc468_d@23736#0": {
+      "lang": "python",
+      "hash": "7825a68d",
+      "stated": "O(N²)",
+      "source": "editorial",
+      "time": "O(N²)",
+      "accept": [],
+      "values": {
+        "N": 10000
+      },
+      "note": "n = len(s)"
+    },
+    "abc468_e@23476#0": {
+      "lang": "python",
+      "hash": "48bd5967",
+      "stated": null,
+      "source": "manual",
+      "time": "O(30·N)",
+      "accept": [],
+      "note": "pow(i, MOD-2, MOD) は log MOD ≈ 30"
+    },
+    "abc468_e@23476#1": {
+      "lang": "python",
+      "hash": "77ababc6",
+      "stated": null,
+      "source": "manual",
+      "time": "O(30·N)",
+      "accept": [],
+      "note": "同上"
+    },
+    "abc468_f@23738#0": {
+      "lang": "python",
+      "hash": "40e9785f",
+      "stated": "O(N log N)",
+      "source": "editorial",
+      "time": "O(N log N)",
+      "accept": [],
+      "note": "TODO: input = sys.stdin.readline の input が記号になる。atcoder.segtree の set / prod が未知"
+    },
+    "abc468_f@23738#1": {
+      "lang": "python",
+      "hash": "4dc8b62d",
+      "stated": "O(N log N)",
+      "source": "editorial",
+      "time": "O(N log N)",
+      "accept": [],
+      "note": ""
+    },
+    "abc468_g@23741#0": {
+      "lang": "python",
+      "hash": "07042700",
+      "stated": "O(N²)",
+      "source": "editorial",
+      "time": "O(N² + |s|)",
+      "accept": [],
+      "note": "TODO: s.split(\"o\") が未知の関数で、大きさが記号になる"
+    },
+    "abc469_a@23757#0": {
+      "lang": "cpp",
+      "hash": "4a90cc13",
+      "stated": null,
+      "source": "manual",
+      "time": "O(1)",
+      "accept": [],
+      "note": ""
+    },
+    "abc469_a@23757#1": {
+      "lang": "python",
+      "hash": "b39ac95f",
+      "stated": null,
+      "source": "manual",
+      "time": "O(1)",
+      "accept": [],
+      "note": ""
+    },
+    "abc470_a@23856#0": {
+      "lang": "python",
+      "hash": "bdeaed5a",
+      "stated": null,
+      "source": "manual",
+      "time": "O(N)",
+      "accept": [],
+      "note": ""
+    },
+    "abc470_b@23857#0": {
+      "lang": "python",
+      "hash": "37d7a739",
+      "stated": null,
+      "source": "manual",
+      "time": "O(N)",
+      "accept": [],
+      "note": ""
+    },
+    "abc470_c@23859#0": {
+      "lang": "python",
+      "hash": "0c0e67da",
+      "stated": "O(N + Q)",
+      "source": "editorial",
+      "time": "O(N + Q)",
+      "accept": [],
+      "note": "TODO?: idxs をフィルタで作り直す形の償却(要素の値 a[v] が減って消える)は静的には分からない"
+    },
+    "abc470_d@23875#0": {
+      "lang": "cpp",
+      "hash": "10d2a55e",
+      "stated": null,
+      "source": "manual",
+      "time": "O(N + Q)",
+      "accept": [],
+      "note": ""
+    },
+    "abc470_f@23854#0": {
+      "lang": "cpp",
+      "hash": "3b97fba8",
+      "stated": null,
+      "source": "manual",
+      "time": "O(N + M)",
+      "accept": [
+        "O(N log N + M log N)"
+      ],
+      "note": "Union-Find(経路圧縮 + サイズ)。自作クラスのメソッドは解決されず O(1) 扱い"
+    },
+    "abc470_g@23879#0": {
+      "lang": "cpp",
+      "hash": "c9617d5f",
+      "stated": "O(N log N)",
+      "source": "editorial",
+      "time": "O(N log N)",
+      "accept": [],
+      "note": "TODO: idxs[xi] のバケツの大きさの総和は N。while (true) で slopes から erase し続ける部分は挿入の総数で償却"
+    },
+    "abc471_a@24211#0": {
+      "lang": "python",
+      "hash": "058f8c6d",
+      "stated": null,
+      "source": "manual",
+      "time": "O(1)",
+      "accept": [],
+      "note": ""
+    },
+    "abc471_a@24211#1": {
+      "lang": "cpp",
+      "hash": "e7897221",
+      "stated": null,
+      "source": "manual",
+      "time": "O(1)",
+      "accept": [],
+      "note": ""
+    },
+    "abc471_b@23913#0": {
+      "lang": "cpp",
+      "hash": "5463f42e",
+      "stated": null,
+      "source": "manual",
+      "time": "O(N·|s[]| + N log N)",
+      "accept": [],
+      "values": {
+        "|s[]|": 10
+      },
+      "note": "|s[]| は各文字列の長さ(≤ 10)"
+    },
+    "abc471_b@23913#1": {
+      "lang": "python",
+      "hash": "39f42ddb",
+      "stated": null,
+      "source": "manual",
+      "time": "O(N)",
+      "accept": [],
+      "note": "TODO: input().lower() の大きさを入力の要素数 N とみなして N² になる"
+    },
+    "abc471_c@23911#0": {
+      "lang": "cpp",
+      "hash": "dc2071c6",
+      "stated": null,
+      "source": "manual",
+      "time": "O(N log N)",
+      "accept": [],
+      "note": ""
+    },
+    "abc471_c@23911#1": {
+      "lang": "python",
+      "hash": "696c52e7",
+      "stated": null,
+      "source": "manual",
+      "time": "O(N log N)",
+      "accept": [],
+      "note": ""
+    },
+    "abc471_d@24210#0": {
+      "lang": "cpp",
+      "hash": "f3bcb98e",
+      "stated": "O(Q log Q)",
+      "source": "editorial",
+      "time": "O(Q log Q)",
+      "accept": [],
+      "note": ""
+    },
+    "abc471_g@24208#0": {
+      "lang": "cpp",
+      "hash": "144ad9ad",
+      "stated": "O(N + K² log K)",
+      "source": "editorial",
+      "time": "O(K² log K + N)",
+      "accept": [],
+      "note": "TODO: atcoder::convolution が未知の関数。vector<ll> rarr[k] の要素が配列と分からず assign / resize が未知"
+    },
+    "abc472_a@24786#0": {
+      "lang": "cpp",
+      "hash": "7926bfb6",
+      "stated": null,
+      "source": "manual",
+      "time": "O(|S|)",
+      "accept": [],
+      "note": ""
+    },
+    "abc472_a@24786#1": {
+      "lang": "python",
+      "hash": "13e11b0d",
+      "stated": null,
+      "source": "manual",
+      "time": "O(|S|)",
+      "accept": [],
+      "note": ""
+    },
+    "abc472_a@24786#2": {
+      "lang": "cpp",
+      "hash": "c917d17e",
+      "stated": null,
+      "source": "manual",
+      "time": "O(|S|)",
+      "accept": [],
+      "note": ""
+    },
+    "abc472_a@24786#3": {
+      "lang": "python",
+      "hash": "217248de",
+      "stated": null,
+      "source": "manual",
+      "time": "O(|S|)",
+      "accept": [],
+      "note": ""
+    },
+    "abc472_b@24787#0": {
+      "lang": "cpp",
+      "hash": "056b3281",
+      "stated": null,
+      "source": "manual",
+      "time": "O(N²)",
+      "accept": [],
+      "note": ""
+    },
+    "abc472_b@24787#1": {
+      "lang": "python",
+      "hash": "5eff52e7",
+      "stated": null,
+      "source": "manual",
+      "time": "O(N²)",
+      "accept": [],
+      "note": ""
+    },
+    "abc472_c@24788#0": {
+      "lang": "cpp",
+      "hash": "76b51652",
+      "stated": null,
+      "source": "manual",
+      "time": "O(N)",
+      "accept": [],
+      "note": ""
+    },
+    "abc472_c@24788#1": {
+      "lang": "python",
+      "hash": "12ca0272",
+      "stated": null,
+      "source": "manual",
+      "time": "O(N)",
+      "accept": [],
+      "note": ""
+    },
+    "abc472_d@24427#0": {
+      "lang": "python",
+      "hash": "d419de9b",
+      "stated": null,
+      "source": "manual",
+      "time": "O(H·W)",
+      "accept": [],
+      "values": {
+        "H": 707,
+        "W": 707
+      },
+      "note": "H×W ≤ 5×10^5"
+    },
+    "abc472_e@24429#0": {
+      "lang": "python",
+      "hash": "2e17c0ac",
+      "stated": null,
+      "source": "manual",
+      "time": "O(T·N + T·M)",
+      "accept": [],
+      "values": {
+        "T": 1,
+        "N": 200000,
+        "M": 200000
+      },
+      "note": "TODO: 奇閉路を見つけたら経路を復元して return する分岐(1回だけ)を、隣接走査の回数だけ掛けている。ans = a + [w] + b[::-1] の大きさが記号"
+    },
+    "abc472_g@24419#0": {
+      "lang": "python",
+      "hash": "db3251f4",
+      "stated": null,
+      "source": "manual",
+      "time": "O(H·W + flow)",
+      "accept": [],
+      "note": "TODO: atcoder.maxflow の MFGraph(add_edge / flow)が未知の関数で、最大流を O(1) と数えている(過小)"
+    },
+    "abc473_a@24870#0": {
+      "lang": "cpp",
+      "hash": "4b834968",
+      "stated": null,
+      "source": "manual",
+      "time": "O(N)",
+      "accept": [],
+      "note": ""
+    },
+    "abc473_b@24874#0": {
+      "lang": "cpp",
+      "hash": "e5b05c18",
+      "stated": null,
+      "source": "manual",
+      "time": "O(N²)",
+      "accept": [],
+      "note": "TODO: 見つけたら erase して break する分岐(1回だけ)をループの回数だけ掛けて N³ になる"
+    },
+    "abc473_b@24874#1": {
+      "lang": "python",
+      "hash": "71e5731e",
+      "stated": null,
+      "source": "manual",
+      "time": "O(N²)",
+      "accept": [],
+      "note": ""
+    },
+    "abc473_b@24874#2": {
+      "lang": "cpp",
+      "hash": "f1223f3b",
+      "stated": null,
+      "source": "manual",
+      "time": "O(N + 101)",
+      "accept": [],
+      "note": ""
+    },
+    "abc473_b@24874#3": {
+      "lang": "python",
+      "hash": "64244e8b",
+      "stated": null,
+      "source": "manual",
+      "time": "O(N + 101)",
+      "accept": [],
+      "note": ""
+    },
+    "abc473_c@24875#0": {
+      "lang": "cpp",
+      "hash": "310478ef",
+      "stated": "O(N)",
+      "source": "editorial",
+      "time": "O(N + K)",
+      "accept": [],
+      "note": "K ≤ N"
+    },
+    "abc473_c@24875#1": {
+      "lang": "python",
+      "hash": "168c9d14",
+      "stated": "O(N)",
+      "source": "editorial",
+      "time": "O(N + K)",
+      "accept": [],
+      "note": "K ≤ N"
+    },
+    "abc473_d@24887#0": {
+      "lang": "python",
+      "hash": "1919ea24",
+      "stated": "O(N³ f(N,K))",
+      "source": "editorial",
+      "time": "O(N³·f)",
+      "accept": [],
+      "note": "出力の個数 f(N,K)(≤ 3×10^5)に比例する列挙。静的には分からず指数時間の再帰と出る(既知の限界)"
+    },
+    "abc473_d@24887#1": {
+      "lang": "python",
+      "hash": "ba630d7a",
+      "stated": "O(N³ f(N,K))",
+      "source": "editorial",
+      "time": "O(N³·f)",
+      "accept": [],
+      "note": "同上"
+    },
+    "abc473_d@24887#2": {
+      "lang": "cpp",
+      "hash": "257d4236",
+      "stated": "O(N² f(N,K))",
+      "source": "editorial",
+      "time": "O(N²·f)",
+      "accept": [],
+      "note": "TODO: [..](this auto self, …){ … self(…) … }(…) の再帰を見落として O(N + K)(過小)"
+    },
+    "abc473_d@24887#3": {
+      "lang": "python",
+      "hash": "04a260ae",
+      "stated": "O(N² f(N,K))",
+      "source": "editorial",
+      "time": "O(N²·f)",
+      "accept": [],
+      "note": "出力の個数に比例する列挙(既知の限界)。TLE と出る"
+    },
+    "abc473_e@24877#0": {
+      "lang": "cpp",
+      "hash": "cc0cb436",
+      "stated": null,
+      "source": "manual",
+      "time": "O(N log N)",
+      "accept": [],
+      "note": "TODO: 初期化文つきの範囲 for(for (init; x : views::istream…))の対象が const になる"
+    },
+    "abc473_f@24871#0": {
+      "lang": "cpp",
+      "hash": "31a57902",
+      "stated": "O(N + Q log N)",
+      "source": "editorial",
+      "time": "O(Q log N + N)",
+      "accept": [],
+      "note": ""
+    },
+    "abc473_g@24872#0": {
+      "lang": "cpp",
+      "hash": "03f637c2",
+      "stated": "O(N log² N)",
+      "source": "editorial",
+      "time": "O(N log² N)",
+      "accept": [],
+      "note": "TODO: atcoder::convolution が未知(O(1))で O(N)(過小)。キューの要素の多項式の大きさは追えない"
+    },
+    "abc474_a@25429#0": {
+      "lang": "python",
+      "hash": "a585f5c3",
+      "stated": null,
+      "source": "manual",
+      "time": "O(1)",
+      "accept": [],
+      "note": ""
+    },
+    "abc474_b@25370#0": {
+      "lang": "cpp",
+      "hash": "6db2c1d5",
+      "stated": null,
+      "source": "manual",
+      "time": "O(N)",
+      "accept": [],
+      "note": ""
+    },
+    "abc474_b@25370#1": {
+      "lang": "python",
+      "hash": "5e8370fc",
+      "stated": null,
+      "source": "manual",
+      "time": "O(N)",
+      "accept": [],
+      "note": ""
+    },
+    "abc474_e@25442#0": {
+      "lang": "python",
+      "hash": "7b9637f1",
+      "stated": null,
+      "source": "manual",
+      "time": "O(T·N log N)",
+      "accept": [],
+      "values": {
+        "T": 1,
+        "N": 200000
+      },
+      "note": "TODO: テストケースごとに作り直す diff の大きさが T·N になり T²·N log N で TLE 判定"
+    },
+    "abc474_g@25439#0": {
+      "lang": "python",
+      "hash": "a0c0aa6f",
+      "stated": null,
+      "source": "manual",
+      "time": "O(T·N²)",
+      "accept": [],
+      "values": {
+        "T": 1,
+        "N": 1000
+      },
+      "note": "TODO: t = [… for i in range(m)] の大きさ(M ≒ N/2)が記号 |t| になる"
+    },
+    "abc475_a@25489#0": {
+      "lang": "cpp",
+      "hash": "375f3629",
+      "stated": null,
+      "source": "manual",
+      "time": "O(N)",
+      "accept": [],
+      "values": {
+        "N": 10
+      },
+      "note": "n = s.size()"
+    },
+    "abc475_a@25489#1": {
+      "lang": "python",
+      "hash": "5609092c",
+      "stated": null,
+      "source": "manual",
+      "time": "O(|S|)",
+      "accept": [],
+      "note": "TODO: \"o\".join(S) を区切り文字の長さで数えて O(1)(過小)"
+    },
+    "abc475_b@25491#0": {
+      "lang": "cpp",
+      "hash": "cd5212a1",
+      "stated": null,
+      "source": "manual",
+      "time": "O(N)",
+      "accept": [],
+      "note": ""
+    },
+    "abc475_b@25491#1": {
+      "lang": "python",
+      "hash": "9e4d4e16",
+      "stated": null,
+      "source": "manual",
+      "time": "O(N)",
+      "accept": [],
+      "note": ""
+    },
+    "abc475_c@25534#0": {
+      "lang": "cpp",
+      "hash": "b5f59c98",
+      "stated": "O(N²)",
+      "source": "editorial",
+      "time": "O(N·S)",
+      "accept": [],
+      "note": "S ≤ N"
+    },
+    "abc476_a@25811#0": {
+      "lang": "python",
+      "hash": "6a86a817",
+      "stated": null,
+      "source": "manual",
+      "time": "O(1)",
+      "accept": [],
+      "note": ""
+    },
+    "abc476_a@25811#1": {
+      "lang": "cpp",
+      "hash": "55dd5578",
+      "stated": null,
+      "source": "manual",
+      "time": "O(1)",
+      "accept": [],
+      "note": ""
+    },
+    "abc476_b@25803#0": {
+      "lang": "cpp",
+      "hash": "183975a1",
+      "stated": null,
+      "source": "manual",
+      "time": "O(N)",
+      "accept": [],
+      "note": ""
+    },
+    "abc476_b@25803#1": {
+      "lang": "python",
+      "hash": "564f511b",
+      "stated": null,
+      "source": "manual",
+      "time": "O(N)",
+      "accept": [
+        "O(|T|·|s|)"
+      ],
+      "note": "zip(S, T) の各文字 s の長さが 1 と分からず記号 |s| になる"
+    },
+    "abc476_c@25794#0": {
+      "lang": "python",
+      "hash": "1d4ac6d6",
+      "stated": null,
+      "source": "manual",
+      "time": "O(N)",
+      "accept": [],
+      "note": "大きさ 4 までのリストを毎回ソート"
+    },
+    "abc476_d@25809#0": {
+      "lang": "cpp",
+      "hash": "128d429a",
+      "stated": "O((N+M) log (N+M))",
+      "source": "editorial",
+      "time": "O(N log N + M log M)",
+      "accept": [],
+      "note": "TODO: accum の中の sz = a.size() を呼び出し側の長さに置き換えない。関数内の局所変数 b と大域の b を同じ変数とみなす(既知の限界)"
+    },
+    "abc476_e@25802#0": {
+      "lang": "cpp",
+      "hash": "0b60a050",
+      "stated": "O(N + M log N)",
+      "source": "editorial",
+      "time": "O(M log N + N)",
+      "accept": [],
+      "note": ""
+    },
+    "abc476_f@25806#0": {
+      "lang": "cpp",
+      "hash": "6609f9c5",
+      "stated": null,
+      "source": "manual",
+      "time": "O(N²)",
+      "accept": [],
+      "note": "TODO: const ll nn = 3*n+1 の nn が記号のまま"
+    },
+    "abc476_g@25751#0": {
+      "lang": "python",
+      "hash": "14b26cd9",
+      "stated": "O(log² R)",
+      "source": "editorial",
+      "time": "O(T log² R)",
+      "accept": [],
+      "note": "l += x(x は 2 の冪)で進む while は log R 回だが静的には分からない(既知の限界)。c = x.bit_length() - 1 も記号"
+    },
+    "abc477_a@26404#0": {
+      "lang": "cpp",
+      "hash": "140c2a61",
+      "stated": null,
+      "source": "manual",
+      "time": "O(1)",
+      "accept": [],
+      "note": ""
+    },
+    "abc477_a@26404#1": {
+      "lang": "cpp",
+      "hash": "90e1194b",
+      "stated": null,
+      "source": "manual",
+      "time": "O(1)",
+      "accept": [],
+      "note": ""
+    },
+    "abc477_a@26404#2": {
+      "lang": "python",
+      "hash": "0363c1a6",
+      "stated": null,
+      "source": "manual",
+      "time": "O(1)",
+      "accept": [],
+      "note": ""
+    },
+    "abc477_b@26405#0": {
+      "lang": "cpp",
+      "hash": "41180d8a",
+      "stated": null,
+      "source": "manual",
+      "time": "O(N²)",
+      "accept": [],
+      "note": ""
+    },
+    "abc477_b@26405#1": {
+      "lang": "python",
+      "hash": "d9cf87ab",
+      "stated": null,
+      "source": "manual",
+      "time": "O(N²)",
+      "accept": [],
+      "note": ""
+    },
+    "abc477_d@25849#0": {
+      "lang": "python",
+      "hash": "fb5f37be",
+      "stated": "O(N + Q)",
+      "source": "editorial",
+      "time": "O(N + Q)",
+      "accept": [],
+      "note": "709a643 で直した形"
+    },
+    "abc477_f@26406#0": {
+      "lang": "python",
+      "hash": "225ded5c",
+      "stated": null,
+      "source": "manual",
+      "time": "O(N log M + Q log M + M)",
+      "accept": [],
+      "note": "TODO: atcoder.lazysegtree の apply / prod を正しく数えない。input = sys.stdin.buffer.readline の input が記号になる"
+    },
+    "abc477_g@25886#0": {
+      "lang": "python",
+      "hash": "12bb22d8",
+      "stated": null,
+      "source": "manual",
+      "time": "O(N + M)",
+      "accept": [
+        "O(M)"
+      ],
+      "note": "TODO: 関数の断片(dfs を呼ぶ処理が無い)。トップレベルが初期化だけなら関数を入口として評価したい。g が未定義なので辺の数は記号 M"
+    },
+    "abc478_a@26498#0": {
+      "lang": "python",
+      "hash": "6142ef3b",
+      "stated": null,
+      "source": "manual",
+      "time": "O(N + M)",
+      "accept": [],
+      "note": ""
+    },
+    "abc478_a@26498#1": {
+      "lang": "python",
+      "hash": "48b140be",
+      "stated": null,
+      "source": "manual",
+      "time": "O(N)",
+      "accept": [],
+      "note": ""
+    },
+    "abc478_b@26499#0": {
+      "lang": "python",
+      "hash": "ed3e4d4d",
+      "stated": null,
+      "source": "manual",
+      "time": "O(N³)",
+      "accept": [],
+      "note": ""
+    },
+    "abc478_b@26499#1": {
+      "lang": "python",
+      "hash": "953ba2ad",
+      "stated": null,
+      "source": "manual",
+      "time": "O(N·V + N²)",
+      "accept": [],
+      "values": {
+        "V": 297
+      },
+      "note": "V ≤ 3N - 3"
+    },
+    "abc478_c@26536#0": {
+      "lang": "cpp",
+      "hash": "65be4896",
+      "stated": "O(N)",
+      "source": "editorial",
+      "time": "O(N)",
+      "accept": [],
+      "note": ""
+    },
+    "abc478_d@26537#0": {
+      "lang": "cpp",
+      "hash": "7e95f63e",
+      "stated": null,
+      "source": "manual",
+      "time": "O(Q log Q + N)",
+      "accept": [
+        "O(Q log Q + T)"
+      ],
+      "values": {
+        "T": 200000
+      },
+      "note": "while (t != now) ++now の t はイベントの時刻(≤ N)。値の上限は分からず記号 T"
+    },
+    "abc478_e@26539#0": {
+      "lang": "cpp",
+      "hash": "3a112d10",
+      "stated": "O(N + Q)",
+      "source": "editorial",
+      "time": "O(N + Q)",
+      "accept": [],
+      "note": "TODO: scc.scc() の成分の大きさの総和は N。初期化文つきの範囲 for(for (string delim{}; a : ans))の対象が const になる"
+    },
+    "abc478_f@26540#0": {
+      "lang": "cpp",
+      "hash": "0bcc5107",
+      "stated": "O(N)",
+      "source": "editorial",
+      "time": "O(N)",
+      "accept": [],
+      "note": "TODO: while (p && Q[p] < Q[i]) p = prev_greater[p]; の後に prev_greater[i] = p とする連結スタックの償却を見ず N² で TLE 判定"
+    }
+  }
+}
