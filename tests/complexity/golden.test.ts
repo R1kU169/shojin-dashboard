@@ -1944,6 +1944,108 @@ const CASES: Golden[] = [
       }`,
     time: "O(64·Q)",
   },
+  {
+    id: "追加41 C++20: 初期化文つきの範囲 for と views::istream(ABC473 E)",
+    lang: "cpp",
+    code: `
+      int main() {
+          unsigned n, k; cin >> n >> k;
+          map<unsigned, unsigned> prev;
+          unsigned ans = 0;
+          for (unsigned s{}; const auto& [i, a] : views::istream<unsigned>(cin) | views::enumerate) {
+              s = (s + a) % k;
+              if (prev.contains(s)) ans++;
+              prev[s] = i;
+          }
+          cout << ans << endl;
+      }`,
+    time: "O(N log N)",
+  },
+  {
+    id: "追加42 バケツの各要素をソートしても合計は N log N(ABC461 C)",
+    lang: "python",
+    code: `
+      n, k = map(int, input().split())
+      t = [[] for _ in range(n + 1)]
+      for i in range(n):
+          c, v = map(int, input().split())
+          t[c].append(v)
+      top = []
+      rest = []
+      for r in t:
+          if r:
+              r.sort(reverse=True)
+              top.append(r[0])
+              rest += r[1:]
+      rest.sort()
+      print(sum(top) + sum(rest[:k]))`,
+    time: "O(N log N + K)",
+  },
+  {
+    id: "追加43 ループ変数で引くバケツの要素の大きさは合計で追加の総数(ABC462 B)",
+    lang: "python",
+    code: `
+      n = int(input())
+      ans = [[] for _ in range(n)]
+      for i in range(n):
+          a = list(map(int, input().split()))[1:]
+          for c in a:
+              ans[c - 1].append(i + 1)
+      for i in range(n):
+          b = [len(ans[i])] + ans[i]
+          print(*b)`,
+    time: "O(N·|a|)",
+  },
+  {
+    id: "追加44 C++: scc() の成分の大きさの合計は頂点数(ABC478 E)",
+    lang: "cpp",
+    code: `
+      #include <atcoder/scc>
+      int main() {
+          int n, m; cin >> n >> m;
+          atcoder::scc_graph g(n);
+          for (int i = 0; i < m; i++) {
+              int u, v; cin >> u >> v;
+              g.add_edge(u, v);
+          }
+          vector<int> id(n);
+          for (const auto& [i, comp] : g.scc() | views::enumerate)
+              for (const auto x : comp) id[x] = i;
+          for (int i = 0; i < n; i++) cout << id[i] << " ";
+      }`,
+    time: "O(N + M)",
+  },
+  {
+    id: "追加45 C++: バケツの写しを回し、while (true) で set から消し続ける償却(ABC470 G)",
+    lang: "cpp",
+    code: `
+      int main() {
+          int n; cin >> n;
+          vector<int> a(n);
+          for (int& x : a) cin >> x;
+          vector<vector<int>> idx(n + 1);
+          for (int i = 0; i < n; i++) idx[a[i]].push_back(i);
+          set<int> s;
+          for (int i = 0; i <= n; i++) s.insert(i);
+          long long ans = 0;
+          for (int x = 0; x < n; x++) {
+              vector<int> r = idx[x];
+              r.push_back(n);
+              for (int i = 0; i < (int)r.size(); i++) {
+                  while (true) {
+                      auto it = s.lower_bound(r[i]);
+                      if (it == s.end()) break;
+                      if (*it > r[i] + 1) break;
+                      s.erase(it);
+                  }
+                  s.insert(r[i]);
+                  ans += s.size();
+              }
+          }
+          cout << ans << endl;
+      }`,
+    time: "O(N log N)",
+  },
 ];
 
 for (const g of CASES) test(g.id, () => void check(g));

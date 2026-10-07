@@ -109,6 +109,13 @@ export class Analyzer {
   aliases = new Map<string, Expr>();
   /** 仮引数の長さ |a| を値に持つ別名(n = a.size())。呼び出し側で置き換えるので、同名の大域の a の大きさで解かない */
   private paramAliases = new Set<string>();
+  /**
+   * バケツ(リストのリスト)の要素の大きさの記号 |t[i]| → (コンテナ t, 添字の変数 i)。
+   * ループ i の1回ごとの大きさなので、i のループ全体では t への追加の総数に置き換える(Σ|t[i]| = 総数)
+   */
+  private bucketSyms = new Map<string, { name: string; idx: string }>();
+  /** 1回目の走査で要素の総数がまだ分からず Σ|t[]| のまま使ったバケツ(for r in t の t) */
+  private bucketPlaceholders = new Set<string>();
   /** 1回目の走査で辺の数がまだ分からず Σ|g[]| のまま使った隣接リスト */
   private edgePlaceholders = new Set<string>();
   growTotals = new Map<string, Expr>();
@@ -284,6 +291,9 @@ export class Analyzer {
       case "index": {
         if (e.of.kind === "sym") {
           const g = this.growTotals.get(e.of.name);
+          // ループ変数 i で引くバケツ t[i] の大きさは記号 |t[i]| にしておき、i のループで総数に置き換える
+          const i = e.idx[0];
+          if (g && i && i.kind === "sym" && env && env.outer.some((s) => s.var === i.name)) return this.bucketSym(e.of.name, i.name);
           if (g) return g;
           const d = this.declOf(e.of.name);
           if (d && d.dims.length >= 2) return boundOf(d.dims[1], this.boundEnv(env))?.expr ?? Q;
@@ -339,6 +349,8 @@ export class Analyzer {
       default: {
         const al = allocOf(e, this.spec.typeKind);
         if (al && al.dims.length) return boundOf(al.dims[0], this.boundEnv(env))?.expr ?? Q;
+        // views::istream<unsigned>(cin) のように入力から読む並び
+        if (this.isInputExpr(e, env)) return this.named("N", "入力の要素数", 0);
         return this.named(`|${sexprText(e, 24)}|`, `${sexprText(e, 24)} の要素数`, 0);
       }
     }
@@ -580,6 +592,11 @@ export class Analyzer {
       }
       return plus(idxCost, { time, alloc: ONE, grow: g, specials: [] });
     }
+    // Python のリストへの tail += r[1:] は、足したリストの長さぶん大きくなる
+    if (op === "+=" && target.kind === "sym" && (this.lang === "python" || this.lang === "pypy") && value && this.kindOf(target) === "array" && (value.kind === "list" || value.kind === "slice" || value.kind === "comp" || (value.kind === "sym" && this.kindOf(value) === "array"))) {
+      this.directGrowth.add(target.name);
+      return { ...c, grow: new Map([[target.name, this.sizeOf(value, env)]]) };
+    }
     // Python / Java の文字列の += はコピーになりうる
     if (op === "+=" && target.kind === "sym" && (this.lang === "python" || this.lang === "pypy" || this.lang === "java") && value && (value.kind === "str" || this.kindOf(target) === "string") && env.outer.length > 0 && !this.stringConcatWarned) {
       this.stringConcatWarned = true;
@@ -627,7 +644,8 @@ export class Analyzer {
       }
       case "slice": {
         const c = plus(sub(e.of), plus(sub(e.from), sub(e.to)));
-        if (this.lang === "python" || this.lang === "pypy") return plus(c, { ...empty(), time: this.sizeOf(e, env) });
+        // 読んだ行のスライス(list(map(int, input().split()))[1:])は読み取りの一部
+        if ((this.lang === "python" || this.lang === "pypy") && !(reading && this.isInputExpr(e.of, env))) return plus(c, { ...empty(), time: this.sizeOf(e, env) });
         return c;
       }
       case "bin": {
@@ -1043,7 +1061,36 @@ export class Analyzer {
     const loopVar = b.form === "while" ? null : b.var;
     const scope: LoopScope = { var: loopVar, bound: F.expr, node: loop, popped: F.popped ?? [] };
     const inner: WalkEnv = { ...env, outer: [...env.outer, scope], inAdjacency: env.inAdjacency || F.special?.kind === "adjacency" };
-    const body = this.walkNodes(loop.body, inner);
+    let body = this.walkNodes(loop.body, inner);
+    // バケツの要素の大きさ(for r in t の |r|、t[i] の |t[i]|)を含む項は、ループ全体で要素の総数 G に置き換え、
+    // 回数を掛けない(Σ|r|^p ≤ G^p)。それ以外の項はふつうに回数を掛ける
+    let bucketTime: Expr | undefined;
+    const bucketGrow = new Map<string, Expr>();
+    const own = new Map<string, Expr>();
+    // for r in t の |r| が本体に出てくるときだけ、t がバケツかを調べる
+    const mentions = (s: string) => vars(body.time).includes(s) || [...body.grow.values()].some((v) => vars(v).includes(s));
+    if (b.form === "for-in" && loopVar && mentions(`|${loopVar}|`)) {
+      const g = this.bucketOfColl(b.coll, env);
+      if (g) own.set(`|${loopVar}|`, g);
+    }
+    if (loopVar) for (const [s, x] of this.bucketSyms) if (x.idx === loopVar && this.growTotals.has(x.name)) own.set(s, this.growTotals.get(x.name)!);
+    if (own.size > 0) {
+      const sub = (e: Expr) => [...own].reduce((acc, [s, g]) => rename(acc, s, g), e);
+      const hasB = (t: Expr[number]) => t.factors.some((f) => own.has(f.v));
+      const withB = body.time.filter(hasB);
+      const noB = body.time.filter((t) => !hasB(t));
+      if (withB.length > 0) bucketTime = sub(withB);
+      // 成長も同じ: tail += r[1:] の |r| の項はループ全体で総数ぶん
+      const grow = new Map<string, Expr>();
+      for (const [k, v] of body.grow) {
+        const rest = v.filter((t) => !hasB(t));
+        const once = v.filter(hasB);
+        if (rest.length) grow.set(k, rest);
+        if (once.length) bucketGrow.set(k, sub(once));
+      }
+      body = { ...body, time: noB.length ? noB : ONE, alloc: sub(body.alloc), grow, exitOnce: body.exitOnce && sub(body.exitOnce), breakOnce: body.breakOnce && sub(body.breakOnce) };
+      body = { ...body, breakOnce: addOpt(body.breakOnce, bucketTime) };
+    }
     const perIter = add(body.time, head.time);
     let total = mul(F.expr, perIter);
     // ループの中で宣言した(d = deque() / diff = [] のように作り直した)コンテナの成長は毎回捨てられる(S11)。
@@ -1067,6 +1114,11 @@ export class Analyzer {
       if (sp.kind === "harmonic" && sp.anchor === loopVar) {
         total = add(total, mul(mul(sp.total, logOfExpr(sp.total)), sc.body));
         grow = addGrow(grow, mulGrow(sc.grow, logOfExpr(sp.total)));
+        continue;
+      }
+      // 外側のループで合成する償却は、そこまで回数を掛けずに持ち上げる
+      if (sp.kind === "amortized" && sp.anchorNode && sp.anchorNode !== loop) {
+        up.push(sc);
         continue;
       }
       if (sp.kind === "amortized") {
@@ -1096,9 +1148,9 @@ export class Analyzer {
     // break で終わる分岐はこのループの1回の実行で1度だけ。return / exit で終わる分岐は関数の境目まで持ち上げる
     if (F.special) {
       const specialGrow = mulGrow(addGrow(bodyGrow, head.grow), F.special.total);
-      return { time: addOpt(once.time, body.breakOnce)!, alloc: add(once.alloc, alloc), grow: addGrow(once.grow, bounded), specials: [...up, { sp: F.special, body: perIter, fallback: total, grow: specialGrow }], exitOnce: body.exitOnce };
+      return { time: addOpt(once.time, body.breakOnce)!, alloc: add(once.alloc, alloc), grow: addGrow(addGrow(once.grow, bounded), bucketGrow), specials: [...up, { sp: F.special, body: perIter, fallback: total, grow: specialGrow }], exitOnce: body.exitOnce };
     }
-    return { time: addOpt(add(once.time, total), body.breakOnce)!, alloc: add(once.alloc, alloc), grow: addGrow(once.grow, grow), specials: up, exitOnce: body.exitOnce };
+    return { time: addOpt(add(once.time, total), body.breakOnce)!, alloc: add(once.alloc, alloc), grow: addGrow(addGrow(once.grow, grow), bucketGrow), specials: up, exitOnce: body.exitOnce };
   }
 
   // ---- 別名(1回目と2回目の間) ---------------------------------------------------
@@ -1200,6 +1252,10 @@ export class Analyzer {
           if (len) setAlias(target, withGrowth(len));
           // p = convolution(a, b) の長さは |a| + |b|
           if (convolutionArgs(value)) setAlias(target, withGrowth(this.sizeOf(value, null)));
+          // ris = idxs[xi] のようにバケツの要素を写したなら、その要素の大きさ |idxs[xi]|
+          if (value.kind === "index" && value.of.kind === "sym" && this.growRecord.has(value.of.name) && value.idx[0]?.kind === "sym" && !this.inputs.has(target)) {
+            setAlias(target, withGrowth(this.bucketSym(value.of.name, (value.idx[0] as { name: string }).name)));
+          }
           // t = [f(i) for i in range(m)] の長さは生成の回数(条件があればその上界)
           // (自分自身を回す idxs = [v for v in idxs if …] や、後から追加して育てるリストには付けない)
           if (value.kind === "comp" && !value.brace && !this.inputs.has(target) && !this.growRecord.has(target) && !symbolsIn(value).has(target)) setAlias(target, this.sizeOf(value, null));
@@ -1252,6 +1308,11 @@ export class Analyzer {
     }
     // (b) 成長だけでサイズが決まるコンテナ
     for (const [name, g] of this.growRecord) setAlias(name, g);
+    // 1回目に Σ|t[]| で置いたバケツの要素の総数は t への追加の総数。追加が無ければ(バケツでなければ)|t|·|t[]|
+    for (const t of this.bucketPlaceholders) {
+      const key = `Σ|${t}[]|`;
+      if (!this.aliases.has(key) && !this.edgePlaceholders.has(t)) this.aliases.set(key, this.growRecord.get(t) ?? mul(sym(`|${t}|`), sym(`|${t}[]|`)));
+    }
     // 1回目に Σ|g[]| で置いた辺の数は g への追加の総数。追加が見つからなければ記号 M
     for (const g of this.edgePlaceholders) {
       const key = `Σ|${g}[]|`;
@@ -1263,6 +1324,44 @@ export class Analyzer {
     }
     // 成長の合計(辺の数など)も別名を解いた形で持つ
     this.growTotals = new Map([...this.growRecord].map(([k, v]) => [k, this.resolveAliases(v, `|${k}|`)]));
+  }
+
+  bucketSym(name: string, idx: string): Expr {
+    const s = `|${name}[${idx}]|`;
+    this.bucketSyms.set(s, { name, idx });
+    return this.named(s, `${name}[${idx}] の要素数(${idx} のループ全体で ${name} の要素の総数)`, 0);
+  }
+
+  /** バケツ t の要素の大きさの総和(t への追加の総数。2次元で確保したなら全体の大きさ)。分からなければ null */
+  bucketTotal(name: string, env: WalkEnv | null): Expr | null {
+    const g = this.growTotals.get(name);
+    if (g) return g;
+    const d = this.declOf(name);
+    if (d && d.dims.length >= 2) return this.dimsProduct(d.dims, env ?? this.topEnv());
+    // 1回目はまだ追加の総数が分からないので Σ|t[]| にしておき、別名を解くときに置き換える
+    if (this.pass === 1) {
+      this.bucketPlaceholders.add(name);
+      return sym(`Σ|${name}[]|`);
+    }
+    return null;
+  }
+
+  /** for r in t / for (auto& [i, c] : scc.scc() | views::enumerate) の対象がバケツなら、要素の大きさの総和 */
+  bucketOfColl(coll: SExpr, env: WalkEnv): Expr | null {
+    let c = coll;
+    for (let guard = 0; guard < 6; guard++) {
+      if (c.kind === "call" && ["enumerate", "reversed", "list", "iter"].includes(c.name) && c.args[0]) c = c.args[0];
+      else if (c.kind === "bin" && c.op === "|") c = c.l;
+      else if (c.kind === "member" && ["values", "iter", "into_iter", "rev"].includes(c.name) && !(c.args && c.args.length)) c = c.of;
+      else break;
+    }
+    if (c.kind === "sym") return this.bucketTotal(c.name, env);
+    if (c.kind === "member" && (c.name === "scc" || c.name === "groups") && this.kindOf(c.of) === "acl") return this.sizeOf(c.of, env);
+    return null;
+  }
+
+  topEnv(): WalkEnv {
+    return { outer: [], params: new Set(), func: null, selfNames: new Set(), selfCalls: null, before: [], inAdjacency: false };
   }
 
   /** name と同じ記号になる別の変数(関数内の h と main の入力 H)があるか */
@@ -1449,6 +1548,17 @@ export class Analyzer {
     this.entryCost();
     for (const f of this.funcs.values()) this.funcResult(f);
     this.computeAliases();
+    // 1回目は辺の数やバケツの要素の総数を仮の記号で数えるので、それに掛かる成長(キューへの追加・償却の総数)がずれる。
+    // 仮の記号を使ったときは、1回目の結果(辺の数・総数・別名)を使って成長の総数を数え直す
+    if (this.edgePlaceholders.size > 0 || this.bucketPlaceholders.size > 0 || this.bucketSyms.size > 0) {
+      this.funcCache.clear();
+      this.growRecord = new Map();
+      this.entryCost();
+      for (const f of this.funcs.values()) this.funcResult(f);
+      this.aliases.clear();
+      this.paramAliases.clear();
+      this.computeAliases();
+    }
     // 2回目
     this.pass = 2;
     this.funcCache.clear();
@@ -1483,6 +1593,14 @@ export class Analyzer {
     }
     time = fix(time);
     space = fix(space);
+    // ループで置き換えられずに残ったバケツの要素の大きさ |t[i]| は、要素の総数を上界にする
+    const unbucket = (e: Expr) => {
+      let out = e;
+      for (const [s, x] of this.bucketSyms) if (vars(out).includes(s)) out = rename(out, s, this.growTotals.get(x.name) ?? ONE);
+      return out;
+    };
+    time = unbucket(time);
+    space = unbucket(space);
     const plain = (s: string) => /^[A-Za-z_]\w*$/.test(s);
     const order = [...this.symbolOrder.filter((s) => s !== "?" && plain(s)), ...this.symbolOrder.filter((s) => s !== "?" && !plain(s))];
     const items = this.items.map((it) => {

@@ -225,7 +225,7 @@
       "source": "editorial",
       "time": "O(N log N + K + M)",
       "accept": [],
-      "note": "TODO: バケツ t の各 r を回す(Σ|r| = N)と、tail += r[1:] による成長"
+      "note": "バケツ t の各 r を回してソートしても、|r| の総和は追加の総数 N(以前は N·|r| log |r|)。tail += r[1:] でも |r| の総和だけ大きくなる"
     },
     "abc461_d@20145#0": {
       "lang": "cpp",
@@ -272,7 +272,7 @@
       "source": "manual",
       "time": "O(N·|a|)",
       "accept": [],
-      "note": "TODO: for i in range(n) の中の ans[i] の大きさは全体で追加の総数(N·|a|)。|a| は K_i(≤ N-1)"
+      "note": "for i in range(n) の中の ans[i] の大きさは、ループ全体で追加の総数(N·|a|)。読んだ行のスライス [1:] は読み取りの一部。|a| は各行の個数 K_i(≤ N - 1)で記号のまま"
     },
     "abc462_c@21406#0": {
       "lang": "python",
@@ -877,7 +877,7 @@
       "source": "editorial",
       "time": "O(N log N)",
       "accept": [],
-      "note": "TODO: idxs[xi] のバケツの大きさの総和は N。while (true) で slopes から erase し続ける部分は挿入の総数で償却"
+      "note": "ris = idxs[xi] の大きさは xi のループ全体で N(バケツの総和)。while (true) で毎回 slopes から erase する部分は、slopes に入った総数で償却。以前は O(N³ log N) で TLE 判定"
     },
     "abc471_a@24211#0": {
       "lang": "python",
@@ -1168,7 +1168,7 @@
       "source": "manual",
       "time": "O(N log N)",
       "accept": [],
-      "note": "TODO: 初期化文つきの範囲 for(for (init; x : views::istream…))の対象が const になる"
+      "note": "初期化文つきの範囲 for(for (init; x : …))を読む。views::istream<unsigned>(cin) は入力の要素数 N"
     },
     "abc473_f@24871#0": {
       "lang": "cpp",
@@ -1519,7 +1519,7 @@
       "source": "editorial",
       "time": "O(N + Q)",
       "accept": [],
-      "note": "TODO: scc.scc() の成分の大きさの総和は N。初期化文つきの範囲 for(for (string delim{}; a : ans))の対象が const になる"
+      "note": "scc() の成分の大きさの総和は頂点数 N。初期化文つきの範囲 for(for (string delim{}; a : ans))を読む"
     },
     "abc478_f@26540#0": {
       "lang": "cpp",

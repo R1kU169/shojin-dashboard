@@ -50,6 +50,8 @@ export interface Special {
   anchor: string;
   /** 調和級数は上限 E、償却は全体の回数、隣接走査は辺の数 */
   total: Expr;
+  /** 償却を合成するループ(このループに着くまでは外側のループの回数を掛けない)。無ければ一番内側の外側のループ */
+  anchorNode?: LoopNode;
 }
 
 export interface LoopFactor {
@@ -576,6 +578,7 @@ function queueOf(cond: SExpr): string | null {
   if (c.kind === "not" && c.e.kind === "call" && ["empty", "isEmpty"].includes(c.e.name) && c.e.args[0]?.kind === "sym") return (c.e.args[0] as { name: string }).name;
   if (c.kind === "cmp" && (c.op === ">" || c.op === "!=" || c.op === ">=")) c = c.l;
   if (c.kind === "size" && c.of.kind === "sym") return c.of.name;
+  if (c.kind === "sym" && NULLISH.has(c.name)) return null; // while (true) / while True
   if (c.kind === "sym") return c.name;
   if (c.kind === "member" && POP_METHODS.has(c.name) && c.of.kind === "sym") return c.of.name; // while let Some(v) = q.pop_front()
   return freePop(c);
@@ -599,14 +602,29 @@ function whileLoop(loop: LoopNode, env: BoundEnv): LoopFactor {
   const line = loop.loc.line;
   const cond = b.cond;
   const fallback = (reason: string): LoopFactor => ({ expr: Q, conf: "low", reason, warn: `${line}行目: while の反復回数を推定できません。N 回とみなしました。範囲指定で N に上限を与えるか、内訳を確認してください` });
-  if (!cond) return fallback("終了条件なし");
-  const body = flatBody(loop.body);
-  const assigns = allAssigns(body);
   const outer = env.outer[env.outer.length - 1];
   const amortize = (name: string, total: Expr, reason: string): LoopFactor | null => {
     if (!outer || !env.persistsAcross(name, outer, loop)) return null;
     return { expr: total, conf: "medium", reason: `${reason}(償却)`, special: { kind: "amortized", anchor: outer.var ?? "", total }, info: `${line}行目: ${name} が外側のループで振り出しに戻らないので、償却で全体 ${reason} としました` };
   };
+
+  // while (true) { …; if (…) break; …; s.erase(it); } のように、抜けない限り毎回 s から1つ取り除くなら、
+  // 全体で s に入った数までしか回らない。s が作り直されない一番外側のループで合成する(償却)
+  if ((!cond || (cond.kind === "sym" && NULLISH.has(cond.name)) || (cond.kind === "num" && cond.value !== 0)) && outer) {
+    const s = erasedEveryTime(loop.body);
+    if (s) {
+      let k = env.outer.length - 1;
+      while (k >= 0 && env.persistsAcross(s, env.outer[k], loop)) k--;
+      if (k < env.outer.length - 1) {
+        const anchor = env.outer[k + 1];
+        const total = env.sizeOf({ kind: "sym", name: s });
+        return { expr: total, conf: "medium", reason: `${s} から毎回取り除く(償却)`, special: { kind: "amortized", anchor: anchor.var ?? "", total, anchorNode: anchor.node }, info: `${line}行目: 回るたびに ${s} から1つ取り除くので、全体で ${s} に入った要素の数だけ回るとみなしました(償却)` };
+      }
+    }
+  }
+  if (!cond) return fallback("終了条件なし");
+  const body = flatBody(loop.body);
+  const assigns = allAssigns(body);
 
   // L16 next_permutation
   let perm: SExpr | null = null;
@@ -836,4 +854,16 @@ function mutates(e: SExpr, q: string): boolean {
     if (x.kind === "assign" && x.target.kind === "sym" && x.target.name === q) f = true;
   });
   return f;
+}
+
+const ERASE_METHODS = new Set(["erase", "pop", "pop_back", "pop_front", "popleft", "remove", "extract", "poll", "pollFirst", "pollLast", "removeFirst", "removeLast", "shift", "discard"]);
+
+/** ループの本体の直下(分岐の中は除く)で毎回 s.erase(…) / s.pop() するコンテナ s */
+function erasedEveryTime(nodes: readonly IrNode[]): string | null {
+  for (const n of nodes) {
+    if (n.kind !== "expr") continue;
+    const e = n.e;
+    if (e.kind === "member" && e.args !== null && ERASE_METHODS.has(e.name) && e.of.kind === "sym") return e.of.name;
+  }
+  return null;
 }

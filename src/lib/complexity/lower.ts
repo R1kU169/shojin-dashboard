@@ -110,6 +110,9 @@ export function loopBound(kw: string, head: readonly Tok[], ctx: LowerCtx): Loop
     };
   }
   if (semis.length === 2) {
+    // C++20 の初期化文つきの範囲 for: for (int s = 0; const auto& x : a)(初期化文は1回だけなので読み捨てる)
+    const rangeColon = d.colonRange ? -1 : findTop(semis[1], (x) => isOp(x, ":"));
+    if (rangeColon > 0 && ctx.spec.key !== "d") return forInOrRange(varOf(semis[1].slice(0, rangeColon)), parseTokens(semis[1].slice(rangeColon + 1), d));
     // D の foreach (i; 0 .. n) / foreach (i, x; a)
     const vars = semis[0].filter((x) => x.k === "ident");
     return forInOrRange(vars.length ? vars[vars.length - 1].v : null, parseTokens(semis[1], d));
