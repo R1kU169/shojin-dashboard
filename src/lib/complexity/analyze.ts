@@ -96,6 +96,8 @@ export class Analyzer {
   aliases = new Map<string, Expr>();
   /** 仮引数の長さ |a| を値に持つ別名(n = a.size())。呼び出し側で置き換えるので、同名の大域の a の大きさで解かない */
   private paramAliases = new Set<string>();
+  /** 1回目の走査で辺の数がまだ分からず Σ|g[]| のまま使った隣接リスト */
+  private edgePlaceholders = new Set<string>();
   growTotals = new Map<string, Expr>();
   symbolOrder: string[] = [];
   symCount = new Map<string, number>();
@@ -373,7 +375,17 @@ export class Analyzer {
       persistsAcross: (name, outer, inner) => this.persistsAcross(name, outer, inner),
       isInput: (x) => this.isInputExpr(x, e),
       isInputVar: (name) => this.inputs.get(name)?.array === false,
-      edgesOf: (g) => this.growTotals.get(g) ?? this.named("M", `辺の数(${g} への追加が見つからないので記号にしました)`, 0),
+      // 1回目はまだ辺の数が分からないので Σ|g[]| にしておき、別名を解くときに g への追加の総数に置き換える
+      // (仮に M とすると、入力の M と同じ記号になってキューの大きさなどを取り違える)
+      edgesOf: (g) => {
+        const t = this.growTotals.get(g);
+        if (t) return t;
+        if (this.pass === 1) {
+          this.edgePlaceholders.add(g);
+          return sym(`Σ|${g}[]|`);
+        }
+        return this.named("M", `辺の数(${g} への追加が見つからないので記号にしました)`, 0);
+      },
       vertices: () => this.vertices(e),
       declDims: (name) => this.declOf(name)?.dims ?? null,
     };
@@ -1205,6 +1217,11 @@ export class Analyzer {
     }
     // (b) 成長だけでサイズが決まるコンテナ
     for (const [name, g] of this.growRecord) setAlias(name, g);
+    // 1回目に Σ|g[]| で置いた辺の数は g への追加の総数。追加が見つからなければ記号 M
+    for (const g of this.edgePlaceholders) {
+      const key = `Σ|${g}[]|`;
+      if (!this.aliases.has(key)) this.aliases.set(key, this.growRecord.get(g) ?? this.named("M", `辺の数(${g} への追加が見つからないので記号にしました)`, 0));
+    }
     // 別名の中の別名を解く
     for (let it = 0; it < 3; it++) {
       for (const [k, v] of this.aliases) if (!this.paramAliases.has(k)) this.aliases.set(k, this.resolveAliases(v, k));

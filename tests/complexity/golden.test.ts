@@ -1750,6 +1750,31 @@ const CASES: Golden[] = [
       }`,
     time: "O(K² log K)",
   },
+  {
+    id: "追加30 C++: const auto [d, v]{pq.top()} で取り出した頂点の隣接走査(ABC463 E)",
+    lang: "cpp",
+    code: `
+      int main() {
+          int n, m; cin >> n >> m;
+          vector<vector<pair<int, long long>>> g(n + 1);
+          for (int i = 0; i < m; i++) {
+              int u, v; long long c; cin >> u >> v >> c;
+              g[u].emplace_back(v, c);
+          }
+          for (int i = 0; i < n; i++) g[n].emplace_back(i, 1);
+          vector<long long> dist(n + 1, 1e18);
+          priority_queue<pair<long long, int>, vector<pair<long long, int>>, greater<>> pq;
+          pq.emplace(dist[n] = 0, n);
+          while (!pq.empty()) {
+              const auto [d, v]{pq.top()};
+              pq.pop();
+              if (dist[v] < d) continue;
+              for (const auto& [to, c] : g[v])
+                  if (dist[to] > d + c) pq.emplace(dist[to] = d + c, to);
+          }
+      }`,
+    time: "O(N log M + N log N + M log N + M log M)",
+  },
 ];
 
 for (const g of CASES) test(g.id, () => void check(g));

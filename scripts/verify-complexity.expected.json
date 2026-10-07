@@ -367,9 +367,9 @@
       "hash": "98ef27b0",
       "stated": null,
       "source": "manual",
-      "time": "O((N + M) log (N + M))",
+      "time": "O(N log M + N log N + M log N + M log M)",
       "accept": [],
-      "note": "TODO: const auto [dist, now]{pq.top()} の構造化束縛を取り出した頂点と認識できず、edges[now] を毎回全体の辺数と数えて TLE 判定"
+      "note": "(N + M) log(N + M) を展開した形。const auto [dist, now]{pq.top()} の構造化束縛(波括弧の初期化)を取り出した頂点と認識できず、edges[now] を毎回全体の辺数と数えて TLE 判定だった。1回目の走査で辺の数を仮に M と置いていたので、キューの大きさを入力の M と取り違えていた"
     },
     "abc463_f@21939#0": {
       "lang": "cpp",

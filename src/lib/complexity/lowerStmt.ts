@@ -247,7 +247,13 @@ function typedDecl(toks: readonly Tok[], ctx: LowerCtx): IrNode[] | null {
     const c = matchClose(toks, after);
     const names = toks.slice(after + 1, c).filter((x) => x.k === "ident").map((x) => x.v);
     const rest = toks.slice(c + 1);
-    const e = rest.length && isOp(rest[0], "=") ? parseTokens(rest.slice(1), ctx.d) : null;
+    // auto [d, v] = pq.top() / const auto [d, v]{pq.top()} / auto [d, v](f())
+    let e: SExpr | null = null;
+    if (rest.length && isOp(rest[0], "=")) e = parseTokens(rest.slice(1), ctx.d);
+    else if (rest.length && (isOp(rest[0], "{") || isOp(rest[0], "("))) {
+      const close = matchClose(rest, 0);
+      e = parseTokens(rest.slice(1, close < 0 ? rest.length : close), ctx.d);
+    }
     return finishAssign({ kind: "assign", op: "=", target: { kind: "list", items: names.map((n) => ({ kind: "sym", name: n }) as SExpr) }, value: e }, toks, ctx);
   }
   const nameTok = toks[after];
