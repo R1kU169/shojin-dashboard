@@ -11,7 +11,7 @@ import { lookupFree, lookupMethod } from "./builtins.ts";
 import type { BuiltinRule, CallCtx } from "./builtins.ts";
 import { estimateRecursion } from "./recursion.ts";
 import type { SelfCall } from "./recursion.ts";
-import { allocOf, countOf, rangeOf, targetNames, walk } from "./semantics.ts";
+import { allocOf, countOf, rangeOf, symbolsIn, targetNames, walk } from "./semantics.ts";
 import type { Consts } from "./semantics.ts";
 import { sexprText } from "./sexpr.ts";
 import { READ_FUNCS } from "./lowerStmt.ts";
@@ -95,7 +95,7 @@ const NAMESPACES = new Set(["std", "ranges", "views", "atcoder", "heapq", "bisec
 const QUIET = new Set(["print", "println", "printf", "puts", "p", "echo", "say", "write", "writeln", "writefln", "Println", "Printf", "Print", "WriteLine", "Write", "log", "cout", "endl", "flush", "format", "sprintf", "String", "str", "int", "float", "parseInt", "Number", "chr", "ord", "abs", "min", "max", "exit", "assert", "eprintln", "dbg!", "println!", "print!", "write!", "writeln!", "format!", "vec!", "assert!", "assert_eq!", "panic!", "unreachable!", "debug_assert!", "to_string", "toString", "valueOf", "toFixed", "parse", "unwrap", "expect", "ok", "clone", "into", "from", "new", "as_str", "setrecursionlimit", "Some", "Ok", "Err", "None", "chomp", "die", "require", "local", "defined", "ref", "bless", "sprintf", "sizeof", "alignof", "decltype", "typeid", "stack_size", "start", "setDaemon", "daemon", "Thread", "sync_with_stdio", "tie", "to_i", "to_s", "to_f", "to_sym", "to_r", "chr", "ord", "even?", "odd?", "zero?", "nil?", "positive?", "negative?", "succ", "pred", "freeze", "frozen?", "is_a?", "kind_of?", "respond_to?", "inspect", "object_id", "tap", "then", "divmod", "fdiv", "floor", "ceil", "round", "truncate", "between?", "clamp", "class", "if", "unless", "case", "while", "switch", "lambda", "proc", "rand", "srand", "exit!", "abort", "sleep", "Integer", "Float", "Rational", "Complex", "chomp", "chop", "strip", "empty?", "to_a", "eof?", "eof", "combination", "permutation", "repeated_permutation", "repeated_combination", "each_slice", "each_cons", "lazy", "each_entry", "inc", "dec", "discard", "echo", "parseInt", "parseFloat", "newSeq", "newSeqWith", "newSeqOfCap", "newString", "initHashSet", "initTable", "initCountTable", "initDeque", "initHeapQueue", "toHashSet", "toTable", "high", "low", "succ", "pred", "quit"]);
 
 /** 受け手の要素数を保つ(以下にする)メソッド: a.keys() / a.map(f) / a.iter().rev() */
-const SIZE_KEEPING_MEMBERS = new Set(["keys", "values", "items", "iter", "chars", "bytes", "entries", "to_a", "clone", "copy", "dup", "rev", "reverse", "sorted", "into_iter", "begin", "end", "rbegin", "map", "filter", "select", "reject", "collect", "to_vec", "cloned", "copied", "enumerate", "sort_by", "uniq", "compact", "each_with_index", "with_index", "filter_map", "iter_mut", "Select", "Where", "ToList", "ToArray", "toList", "toSeq", "mapIt", "filterIt", "reversed", "slice", "to_owned", "as_slice", "values_mut", "keySet", "entrySet", "stream", "boxed"]);
+const SIZE_KEEPING_MEMBERS = new Set(["split", "keys", "values", "items", "iter", "chars", "bytes", "entries", "to_a", "clone", "copy", "dup", "rev", "reverse", "sorted", "into_iter", "begin", "end", "rbegin", "map", "filter", "select", "reject", "collect", "to_vec", "cloned", "copied", "enumerate", "sort_by", "uniq", "compact", "each_with_index", "with_index", "filter_map", "iter_mut", "Select", "Where", "ToList", "ToArray", "toList", "toSeq", "mapIt", "filterIt", "reversed", "slice", "to_owned", "as_slice", "values_mut", "keySet", "entrySet", "stream", "boxed"]);
 
 const VISIT_NAMES = /^(vis|visited|seen|used|dist|dis|depth|color|col|visit|reached|done|checked|check|lv|level|d|par|parent|prev|pre|cost|ok|flag|memo)$/i;
 
@@ -299,6 +299,9 @@ export class Analyzer {
         return this.sliceLen(e, this.boundEnv(env)) ?? this.sizeOf(e.of, env);
       case "size":
         return this.sizeOf(e.of, env);
+      case "un":
+        // zip(*a) / f(*xs) の *a は a の大きさ
+        return this.sizeOf(e.e, env);
       case "member":
         if (e.of.kind === "sym" && (e.of.name === "this" || e.of.name === "self") && e.args === null) return this.sizeSym(e.name);
         if (SIZE_KEEPING_MEMBERS.has(e.name)) return this.sizeOf(e.of, env);
@@ -351,7 +354,7 @@ export class Analyzer {
       if (b && b.kind === "bin" && b.op === "+") return boundOf(b.r, this.boundEnv(env))?.expr ?? this.sizeOf(a.of, env);
       return this.sizeOf(a.of, env);
     }
-    if (a.kind === "call" && (a.name === "begin" || a.name === "all") && a.args[0]) return this.sizeOf(a.args[0], env);
+    if (a.kind === "call" && ["begin", "cbegin", "rbegin", "crbegin", "all"].includes(a.name) && a.args[0]) return this.sizeOf(a.args[0], env);
     if (b && b.kind === "bin" && b.op === "+" && a.kind === "sym" && b.l.kind === "sym" && b.l.name === a.name) return boundOf(b.r, this.boundEnv(env))?.expr ?? Q;
     if (b && b.kind === "bin" && b.op === "+" && a.kind === "bin" && a.op === "+") return boundOf(b.r, this.boundEnv(env))?.expr ?? Q;
     return this.sizeOf(a, env);
@@ -1197,6 +1200,9 @@ export class Analyzer {
           if (len) setAlias(target, withGrowth(len));
           // p = convolution(a, b) の長さは |a| + |b|
           if (convolutionArgs(value)) setAlias(target, withGrowth(this.sizeOf(value, null)));
+          // t = [f(i) for i in range(m)] の長さは生成の回数(条件があればその上界)
+          // (自分自身を回す idxs = [v for v in idxs if …] や、後から追加して育てるリストには付けない)
+          if (value.kind === "comp" && !value.brace && !this.inputs.has(target) && !this.growRecord.has(target) && !symbolsIn(value).has(target)) setAlias(target, this.sizeOf(value, null));
           // ans = a + [w] + b[::-1] のような連結の長さは、つないだものの長さの和(入力で読んだ配列には付けない)
           if (value.kind === "bin" && value.op === "+" && !this.inputs.has(target) && isConcat(value, (x) => this.kindOf(x))) setAlias(target, withGrowth(this.sizeOf(value, null)));
           const src = len ? null : copySource(value);
@@ -1215,6 +1221,13 @@ export class Analyzer {
             }
             else setAlias(of, this.named(this.symbolOf(target), `変数 ${target}(${of} の長さ)`, n.loc.line));
           }
+        }
+        // for a in permutations(xs) / combinations(xs, k) の a は |xs| 個 / k 個の並び
+        if (n.kind === "loop" && n.bound.form === "for-in" && n.bound.var && n.bound.coll.kind === "call") {
+          const c = n.bound.coll;
+          const k = c.args[1] && c.args[1].kind !== "assign" ? boundOf(c.args[1], benv)?.expr : null;
+          if (c.name === "permutations" && c.args[0]) setAlias(n.bound.var, k ?? this.sizeOf(c.args[0], null));
+          else if ((c.name === "combinations" || c.name === "combinations_with_replacement") && k) setAlias(n.bound.var, k);
         }
         if (n.kind === "func") copies(n.body, new Set(n.params));
         else if (n.kind === "loop") copies(n.body, params);

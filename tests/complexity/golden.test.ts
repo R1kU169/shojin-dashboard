@@ -1860,6 +1860,90 @@ const CASES: Golden[] = [
     time: "O(N)",
     space: "O(N)",
   },
+  {
+    id: "追加34 区切りの文字列の join は引数の長さ(ABC475 A)",
+    lang: "python",
+    code: `
+      s = input()
+      print("o".join(s))`,
+    time: "O(|s|)",
+  },
+  {
+    id: "追加35 型の分からない文字列の split の結果は元の長さ以下(ABC468 G)",
+    lang: "python",
+    code: `
+      n = int(input())
+      s = input()
+      ans = 0
+      for x in s.split("o")[1:-1]:
+          ans += len(x)
+      print(ans)`,
+    time: "O(|s|)",
+  },
+  {
+    id: "追加36 permutations の要素は元の長さの並び(ABC468 C)",
+    lang: "python",
+    code: `
+      from itertools import permutations
+      n = int(input())
+      p = list(map(int, input().split()))
+      ans = 0
+      for a in permutations(range(1, n + 1)):
+          ans += p < list(a)
+      print(ans)`,
+    time: "O(N·N!)",
+  },
+  {
+    id: "追加37 C++: inclusive_scan(rbegin(x), rend(x)) と views::iota(a, b)(ABC463 F)",
+    lang: "cpp",
+    code: `
+      int main() {
+          int n; cin >> n;
+          vector<long long> f(2 * n + 1, 1);
+          inclusive_scan(rbegin(f), rend(f), rbegin(f), multiplies{});
+          long long s = 0;
+          for (const auto w : views::iota(0, n)) s += f[w];
+          cout << s << endl;
+      }`,
+    time: "O(N)",
+  },
+  {
+    id: "追加38 内包表記で作ったリストの長さは生成の回数(ABC474 G)",
+    lang: "python",
+    code: `
+      n, k = map(int, input().split())
+      m = (n - 1) // 2
+      t = [(k + i) // m for i in range(m)]
+      ans = 0
+      for j in range(1, m + 1):
+          ans += sum(v >= j for v in t)
+      print(ans)`,
+    time: "O(N²)",
+  },
+  {
+    id: "追加39 読んだ行をそのまま lower() するのは読み取りの一部(ABC471 B)",
+    lang: "python",
+    code: `
+      from collections import Counter
+      n = int(input())
+      c = Counter([input().lower() for _ in range(n)])
+      print(max(c.values()))`,
+    time: "O(N)",
+  },
+  {
+    id: "追加40 C++: !(bi >> k) の間は 2^k 回(ABC465 F)",
+    lang: "cpp",
+    code: `
+      int main() {
+          int q; cin >> q;
+          long long ans = 0;
+          for (int i = 0; i < q; i++) {
+              for (int bi = 0; !(bi >> 6); bi++) ans += bi;
+          }
+          cout << ans << endl;
+      }`,
+    time: "O(64·Q)",
+  },
 ];
 
 for (const g of CASES) test(g.id, () => void check(g));

@@ -378,6 +378,9 @@ function limitOf(cond: SExpr, v: string): { E: SExpr; kind: "lt" | "gt" | "sqrt"
     if (x.kind === "logic" && x.op === "&&") {
       split(x.l);
       split(x.r);
+    } else if (x.kind === "not" && x.e.kind === "bin" && x.e.op === ">>") {
+      // !(bi >> k) は bi < 2^k
+      conj.push({ kind: "cmp", op: "<", l: x.e.l, r: { kind: "bin", op: "<<", l: { kind: "num", value: 1 }, r: x.e.r } });
     } else if (x.kind === "not" && x.e.kind === "cmp" && INVERT[x.e.op]) {
       // until i >= n / repeat … until i >= n は while i < n
       conj.push({ ...x.e, op: INVERT[x.e.op] as typeof x.e.op });

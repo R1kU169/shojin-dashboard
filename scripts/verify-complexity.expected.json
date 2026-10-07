@@ -378,7 +378,7 @@
       "source": "manual",
       "time": "O(N)",
       "accept": [],
-      "note": "TODO: inclusive_scan(rbegin(x), rend(x)) の長さ、views::iota(a, b) の回数"
+      "note": "inclusive_scan(rbegin(x), rend(x)) の長さと views::iota(a, b) の回数を読む(以前は記号 |rbegin(ifact)| などが出ていた)"
     },
     "abc464_a@22254#0": {
       "lang": "cpp",
@@ -413,8 +413,10 @@
       "stated": null,
       "source": "manual",
       "time": "O(H² + H·|C[]|)",
-      "accept": [],
-      "note": "TODO: zip(*a[::-1]) の大きさが記号 |*a[:]| になる。|C[]| は入力の行の長さ(W)"
+      "accept": [
+        "O(H² + H·|C[]| + H·|r|)"
+      ],
+      "note": "zip(*a[::-1]) の要素(列のタプル)r の長さは分からず記号 |r|(≒ H)。|C[]| は入力の行の長さ(W)。while not \"#\" in C[0] の回数は推定できず H(主記号)"
     },
     "abc464_b@22268#3": {
       "lang": "cpp",
@@ -564,9 +566,14 @@
       "hash": "fc842982",
       "stated": "O(DN + B^D D + Q 2^D D)",
       "source": "editorial",
-      "time": "O(Q + N + 10^6)",
-      "accept": [],
-      "note": "TODO: for (bi = 0; !(bi >> BITLEN); bi++) は 2^6 回。pow10[BITLEN] は関数で作った表の値(10^6)で max(pow10) になる"
+      "time": "O(N + 384·Q + 10^6)",
+      "accept": [
+        "O(N + 384·Q + max(pow10))"
+      ],
+      "note": "for (bi = 0; !(bi >> 6); bi++) は 2^6 回(以前は推定できず N 回で N·Q)。pow10[BITLEN] は関数で作った表の値(10^6)で、要素の値の上限 max(pow10) の記号になる",
+      "values": {
+        "max(pow10)": 1000000
+      }
     },
     "abc466_a@22625#0": {
       "lang": "cpp",
@@ -739,7 +746,7 @@
       "source": "manual",
       "time": "O(N·N!)",
       "accept": [],
-      "note": "TODO: permutations の要素 a の長さが記号 |a| になる"
+      "note": "permutations の要素 a の長さは N"
     },
     "abc468_d@23736#0": {
       "lang": "python",
@@ -796,7 +803,7 @@
       "source": "editorial",
       "time": "O(N² + |s|)",
       "accept": [],
-      "note": "TODO: s.split(\"o\") が未知の関数で、大きさが記号になる"
+      "note": "s.split(\"o\") の要素数は |s| 以下"
     },
     "abc469_a@23757#0": {
       "lang": "cpp",
@@ -909,7 +916,7 @@
       "source": "manual",
       "time": "O(N)",
       "accept": [],
-      "note": "TODO: input().lower() の大きさを入力の要素数 N とみなして N² になる"
+      "note": "読んだ行をそのまま lower() するのは読み取りの一部(以前は行の長さを入力の要素数 N とみなして N²)"
     },
     "abc471_c@23911#0": {
       "lang": "cpp",
@@ -1234,7 +1241,7 @@
         "T": 1,
         "N": 1000
       },
-      "note": "TODO: t = [… for i in range(m)] の大きさ(M ≒ N/2)が記号 |t| になる"
+      "note": "t = [… for i in range(m)] の長さは M(≒ N/2)。マルチテストの総和制約は見ない(既知の限界)"
     },
     "abc475_a@25489#0": {
       "lang": "cpp",
@@ -1255,7 +1262,7 @@
       "source": "manual",
       "time": "O(|S|)",
       "accept": [],
-      "note": "TODO: \"o\".join(S) を区切り文字の長さで数えて O(1)(過小)"
+      "note": "\"o\".join(S) は S の長さ(以前は区切りの長さで O(1)、過小)"
     },
     "abc475_b@25491#0": {
       "lang": "cpp",

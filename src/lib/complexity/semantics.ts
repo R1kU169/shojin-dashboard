@@ -323,6 +323,10 @@ export function rangeOf(e: SExpr): { from: SExpr | null; to: SExpr; step: SExpr 
       return e.name === "upto" ? { from: e.of, to: e.args[0], step: null, inclusive: true } : { from: e.args[0], to: e.of, step: null, inclusive: true };
     }
     if (e.name === "indices" && (e.args === null || e.args.length === 0)) return { from: null, to: size(e.of), step: null, inclusive: false };
+    // views::iota(a, b) / ranges::iota(a, b)(C++20)
+    if (e.name === "iota" && e.of.kind === "sym" && ["views", "ranges", "std"].includes(e.of.name) && e.args && e.args.length >= 1) {
+      return e.args.length === 1 ? { from: e.args[0], to: { kind: "unknown", text: "∞" }, step: null, inclusive: false } : { from: e.args[0], to: e.args[1], step: null, inclusive: false };
+    }
   }
   return null;
 }

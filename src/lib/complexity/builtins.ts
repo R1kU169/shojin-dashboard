@@ -131,6 +131,8 @@ const STRING_METHODS: Record<string, BuiltinRule> = table([
 ]);
 for (const n of ["push_back", "append", "push", "push_str", "Append", "add"]) STRING_METHODS[n] = r(one, { grows: true });
 STRING_METHODS.substr = r((c) => (c.args.length >= 2 ? c.bound(c.args[1]) : S(c)));
+// Python の "o".join(xs) は区切りではなく xs の要素数
+STRING_METHODS.join = r((c) => (c.args.length >= 1 ? c.size(c.args[0]) : S(c)));
 STRING_METHODS.sub = r(substr(0));
 STRING_METHODS.substring = r((c) => (c.args.length >= 2 ? c.bound(c.args[1]) : S(c)));
 
@@ -176,7 +178,7 @@ for (const n of ["push_back", "emplace_back", "push", "append", "add", "offer", 
 UNKNOWN_METHODS.sub = r(substr(0));
 UNKNOWN_METHODS.byte = r(one);
 UNKNOWN_METHODS.char = r(one);
-for (const n of ["gsub", "gmatch", "upper", "lower", "reverse", "rep", "format"]) UNKNOWN_METHODS[n] = r(S);
+for (const n of ["gsub", "gmatch", "upper", "lower", "reverse", "rep", "format", "split", "strip", "rstrip", "lstrip", "replace", "splitlines", "startswith", "endswith"]) UNKNOWN_METHODS[n] = r(S);
 
 export const METHODS: Partial<Record<ContainerKind, Record<string, BuiltinRule>>> = {
   array: ARRAY_METHODS,
