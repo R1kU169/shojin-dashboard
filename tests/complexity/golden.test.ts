@@ -2177,6 +2177,22 @@ const CASES: Golden[] = [
     time: "O(2^N)",
     warn: /指数時間/,
   },
+  {
+    id: "追加53 heappush で入れ直す while はキューの要素数で償却しない(ABC466 F)",
+    lang: "python",
+    code: `
+      from heapq import heappush, heappop
+      n = int(input())
+      a = list(map(int, input().split()))
+      pq = [(0, 1)]
+      for v in a:
+          while pq and pq[0][0] < v:
+              x, c = heappop(pq)
+              heappush(pq, (x + v, c))
+      print(len(pq))`,
+    time: "O(N² log N)",
+    warn: /推定できない/,
+  },
 ];
 
 for (const g of CASES) test(g.id, () => void check(g));

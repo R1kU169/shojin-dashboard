@@ -874,6 +874,9 @@ function mutates(e: SExpr, q: string): boolean {
   let f = false;
   walk(e, (x) => {
     if (x.kind === "member" && x.of.kind === "sym" && x.of.name === q && ["push", "push_back", "append", "add", "insert", "emplace", "emplace_back", "clear", "appendleft", "push_front"].includes(x.name)) f = true;
+    // heappush(q, x) / heapq.heappush(q, x) / insort(q, x) も q に足す
+    const args = x.kind === "call" ? x.args : x.kind === "member" && x.of.kind === "sym" && x.of.name !== q ? x.args : null;
+    if (args && ["heappush", "heappushpop", "insort", "insort_left", "insort_right"].includes(x.kind === "call" ? x.name : (x as { name: string }).name) && args[0]?.kind === "sym" && args[0].name === q) f = true;
     if (x.kind === "assign" && x.target.kind === "sym" && x.target.name === q) f = true;
   });
   return f;
