@@ -239,6 +239,8 @@ function typedDecl(toks: readonly Tok[], ctx: LowerCtx): IrNode[] | null {
   const spec = ctx.spec;
   let i = 0;
   while (toks[i]?.k === "ident" && DECL_MODS.has(toks[i].v)) i++;
+  // unsigned p = 0; / unsigned p{i - 1}; の unsigned / signed は修飾ではなく型そのもの
+  if (i > 0 && (toks[i - 1].v === "unsigned" || toks[i - 1].v === "signed") && toks[i]?.k === "ident" && toks[i + 1]?.k === "op" && ["=", "{", "(", ";", ",", "["].includes(toks[i + 1].v)) i--;
   const typeStart = i;
   const after = skipType(toks, i, spec);
   if (after < 0) return null;

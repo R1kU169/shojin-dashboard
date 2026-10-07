@@ -315,6 +315,8 @@ export class Analyzer {
       case "member":
         if (e.of.kind === "sym" && (e.of.name === "this" || e.of.name === "self") && e.args === null) return this.sizeSym(e.name);
         if (SIZE_KEEPING_MEMBERS.has(e.name)) return this.sizeOf(e.of, env);
+        // views::iota(a, b) の長さは b
+        if (rangeOf(e)) return boundOf(rangeOf(e)!.to, this.boundEnv(env))?.expr ?? Q;
         if (convolutionArgs(e)) return add(this.sizeOf(convolutionArgs(e)![0] ?? null, env), this.sizeOf(convolutionArgs(e)![1] ?? null, env));
         // ACL の scc() / groups() は頂点数以下の個数のグループ
         if ((e.name === "scc" || e.name === "groups") && this.kindOf(e.of) === "acl") return this.sizeOf(e.of, env);
@@ -741,6 +743,8 @@ export class Analyzer {
     // 組み込み
     // 入力の読み取り(cin / input() / sc.nextInt() / fmt.Scan …)とその変換は数えない(I1)
     if (this.spec.inputMarkers.has(name) || (reading && READ_FUNCS.has(name))) return empty();
+    // views::iota(a, b) は数を順に出すだけの遅延の範囲(std::iota で配列を埋めるのとは別)
+    if (name === "iota" && (ns === "views" || ns === "ranges")) return empty();
     let rule: BuiltinRule | null = null;
     let kind: ContainerKind = "unknown";
     let target: SExpr | null = recv;

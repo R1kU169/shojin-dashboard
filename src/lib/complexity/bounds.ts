@@ -662,6 +662,24 @@ function whileLoop(loop: LoopNode, env: BoundEnv): LoopFactor {
     return { expr: env.sym(t), conf: "high", reason: `${t} 回(マルチテスト)`, info: env.isInputVar(t) ? "マルチテストです。範囲指定の N は1ケースあたりの値にしてください" : undefined };
   }
 
+  // 直前の大きい要素をリンクでたどるスタック:
+  //   p = i - 1; while (p && a[p] < a[i]) p = prev[p]; prev[i] = p;
+  // たどった要素は以後たどられない(prev[i] が飛び越す)ので、外側のループ全体で i の回数まで(償却)
+  if (outer && outer.var && assigns.length === 1) {
+    const a = assigns[0];
+    const link = a.target.kind === "sym" && a.value && a.value.kind === "index" && a.value.of.kind === "sym" && a.value.idx[0]?.kind === "sym" && a.value.idx[0].name === a.target.name ? a.value.of.name : null;
+    const p = a.target.kind === "sym" ? a.target.name : null;
+    const i = outer.var;
+    const init0 = p ? env.initialValue(p, loop) : null;
+    // unsigned p{i - 1} の波括弧の初期化
+    const init = init0 && init0.kind === "list" && init0.items.length === 1 ? init0.items[0] : init0;
+    const startsBefore = !!init && init.kind === "bin" && init.op === "-" && init.l.kind === "sym" && init.l.name === i;
+    const linksBack = !!link && outer.node.body.some((n) => n.kind === "assign" && n.target.kind === "index" && n.target.of.kind === "sym" && n.target.of.name === link && n.target.idx[0]?.kind === "sym" && n.target.idx[0].name === i && n.value?.kind === "sym" && n.value.name === p);
+    if (link && startsBefore && linksBack) {
+      return { expr: outer.bound, conf: "medium", reason: `${link} をたどるスタック(償却)`, special: { kind: "amortized", anchor: i, total: outer.bound }, info: `${line}行目: ${link}[${i}] = ${p} でたどった要素を飛び越すので、全体で ${i} のループの回数だけたどるとみなしました(償却)` };
+    }
+  }
+
   // L12'' Union-Find の根をたどる while (par[x] != x) x = par[x]
   for (const a of assigns) {
     if (a.target.kind === "sym" && a.value && a.value.kind === "index" && a.value.of.kind === "sym" && a.value.idx[0]?.kind === "sym" && a.value.idx[0].name === a.target.name) {

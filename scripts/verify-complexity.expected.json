@@ -360,7 +360,7 @@
       "source": "manual",
       "time": "O(N log N + 30·N)",
       "accept": [],
-      "note": "TODO: ranges::partition_point(views::iota(0, 10^9), f) の二分探索 × f の O(N) を数えていない(過小)"
+      "note": "ranges::partition_point(views::iota(0, 10^9), f) は log(10^9) ≒ 30 回 f を呼ぶ。以前は f の O(N) を数えず O(N log N)(過小)"
     },
     "abc463_e@21940#0": {
       "lang": "cpp",
@@ -1528,7 +1528,7 @@
       "source": "editorial",
       "time": "O(N)",
       "accept": [],
-      "note": "TODO: while (p && Q[p] < Q[i]) p = prev_greater[p]; の後に prev_greater[i] = p とする連結スタックの償却を見ず N² で TLE 判定"
+      "note": "p = i - 1 から prev_greater[p] をたどり、たどり終えた p を prev_greater[i] に入れる連結スタックは、全体で N 回(償却)。unsigned p{i - 1} が宣言として読めず、毎回 N 回と数えて N² で TLE 判定だった"
     }
   }
 }

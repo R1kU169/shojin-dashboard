@@ -200,7 +200,8 @@ export type FreeTable = "cpp" | "python" | "java" | "other" | "ruby" | "lua" | "
 
 const CPP_FREE = table([
   ["sort stable_sort partial_sort sort_heap make_heap", r(RlogR, { cmpArg: 2 })],
-  ["lower_bound upper_bound binary_search equal_range partition_point", r(logR)],
+  // 比較・判定の関数を渡すなら、二分探索の回数(log)だけ呼ぶ(ranges::partition_point(views::iota(0, M), f))
+  ["lower_bound upper_bound binary_search equal_range partition_point", r(logR, { cmpArg: 1 })],
   ["reverse accumulate max_element min_element minmax_element fill count count_if find find_if find_if_not iota unique copy copy_if all_of any_of none_of for_each transform replace replace_if rotate inner_product partial_sum adjacent_difference exclusive_scan inclusive_scan merge is_sorted equal mismatch remove remove_if next_permutation prev_permutation shuffle random_shuffle generate set_union set_intersection set_difference set_symmetric_difference includes reduce is_permutation nth_element", r(R, { loopArg: 2 })],
   // memset(dp, -1, sizeof(dp)) はバイト数(第3引数)で数える。読めなければ第1引数の要素数
   ["memset memcpy memmove", r((c) => {

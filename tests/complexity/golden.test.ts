@@ -2046,6 +2046,43 @@ const CASES: Golden[] = [
       }`,
     time: "O(N log N)",
   },
+  {
+    id: "追加46 C++: リンクでたどるスタック(直前の大きい要素)は全体で N(ABC478 F)",
+    lang: "cpp",
+    code: `
+      int main() {
+          unsigned n; cin >> n;
+          vector<unsigned> a(n), prv(n);
+          for (auto& x : a) cin >> x;
+          long long ans = 0;
+          for (unsigned i{1}; i < n; ++i) {
+              unsigned p{i - 1};
+              while (p && a[p] < a[i]) p = prv[p];
+              prv[i] = p;
+              ans += i - p;
+          }
+          cout << ans << endl;
+      }`,
+    time: "O(N)",
+  },
+  {
+    id: "追加47 C++: 判定関数を渡す partition_point は log × 判定(ABC463 D)",
+    lang: "cpp",
+    code: `
+      int main() {
+          unsigned n, k; cin >> n >> k;
+          vector<pair<unsigned, unsigned>> v(n);
+          for (auto& [l, r] : v) cin >> l >> r;
+          ranges::sort(v);
+          unsigned ans = *ranges::partition_point(views::iota(0U, 1000000000U), [&](const unsigned x) {
+              unsigned cnt{}, last{};
+              for (const auto& [l, r] : v) if (last <= l) { cnt++; last = r + x; }
+              return cnt >= k;
+          });
+          cout << ans << endl;
+      }`,
+    time: "O(N log N + 30·N)",
+  },
 ];
 
 for (const g of CASES) test(g.id, () => void check(g));
