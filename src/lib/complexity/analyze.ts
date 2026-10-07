@@ -423,6 +423,7 @@ export class Analyzer {
         return this.named("M", `辺の数(${g} への追加が見つからないので記号にしました)`, 0);
       },
       vertices: () => this.vertices(e),
+      hasGrowth: (g) => this.growTotals.has(g),
       declDims: (name) => this.declOf(name)?.dims ?? null,
     };
   }
@@ -739,7 +740,9 @@ export class Analyzer {
     // 自己呼び出し(再帰)
     const selfRecv = !recv || (recv.kind === "sym" && ["this", "self", "$this", "Self"].includes(recv.name));
     if (selfRecv && env.selfNames.has(name) && env.selfCalls) {
-      env.selfCalls.push({ args: argv, line, insideLoop: env.outer.length > 0, insideAdjacency: env.inAdjacency, path: env.path ?? [] });
+      // self(self, to, v) の先頭の self は自分自身を渡しているだけ
+      const own = argv[0]?.kind === "sym" && env.selfNames.has(argv[0].name) ? argv.slice(1) : argv;
+      env.selfCalls.push({ args: own, line, insideLoop: env.outer.length > 0, insideAdjacency: env.inAdjacency, path: env.path ?? [] });
       return empty();
     }
     // ユーザー定義の関数・メソッド(組み込みより優先)
@@ -851,8 +854,10 @@ export class Analyzer {
     return { ...settle(c), specials: [] };
   }
 
-  userCall(fn: FuncNode, args: SExpr[], env: WalkEnv, line: number): Cost {
+  userCall(fn: FuncNode, args0: SExpr[], env: WalkEnv, line: number): Cost {
     this.called.add(fn.name);
+    // dfs(dfs, 0, -1) の先頭の dfs は自分自身を渡しているだけ(auto&& self の再帰ラムダ)
+    const args = fn.selfParam && args0[0]?.kind === "sym" && args0[0].name === fn.name ? args0.slice(1) : args0;
     if (this.inProgress.includes(fn)) {
       // 相互再帰(R11)
       this.warn(`${fn.name} が相互再帰しています。合計 N 回の呼び出しとみなしました`, "warn", line);

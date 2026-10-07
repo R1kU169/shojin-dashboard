@@ -104,6 +104,10 @@ function classify(arg: SExpr, pos: number, params: string[], mids: Set<string>, 
     return arg.op === "-" ? "step-down" : "step-up";
   }
   if (arg.kind === "index" && arg.of.kind === "sym" && arrays(arg.of.name) && arg.idx[0]?.kind === "sym" && params.includes(arg.idx[0].name)) return "uf";
+  // dfs(g[v][i]) / dfs(g[v][i].to) は隣接リストの頂点への再帰
+  let el: SExpr = arg;
+  if (el.kind === "member" && el.args === null) el = el.of;
+  if (el.kind === "index" && el.of.kind === "index" && el.of.idx[0]?.kind === "sym" && params.includes(el.of.idx[0].name)) return "graph";
   if (arg.kind === "sym" && !params.includes(arg.name)) return "graph";
   if (arg.kind === "bin" && (arg.op === "+" || arg.op === "-") && arg.l.kind === "sym" && params.includes(arg.l.name)) return "graph";
   if (arg.kind === "num" || arg.kind === "str") return "same";

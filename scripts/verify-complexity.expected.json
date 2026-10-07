@@ -97,8 +97,10 @@
       "stated": "O(N + ΣD)",
       "source": "editorial",
       "time": "O(N + ΣD)",
-      "accept": [],
-      "note": "TODO: 添字で回す木の DFS(dfs(e[k][i]))が再帰と認識されない"
+      "accept": [
+        "O(N + 2×10^5·max(d))"
+      ],
+      "note": "int sz = e[k].size(); for (i < sz) dfs(e[k][i]) を隣接リストを添字で回す DFS と認識する(以前は再帰の引数を解釈できず N 回の呼び出しとみなし、記号 sz が残った)。頂点数は配列の大きさ 2×10^5(マクロ N)。各頂点の d[k] 回のループは ΣD ≤ 10^6 の総和制約を見ないので max(d) の記号(既知の限界)"
     },
     "abc459_f@20507#0": {
       "lang": "python",
@@ -1150,7 +1152,7 @@
       "source": "editorial",
       "time": "O(N²·f)",
       "accept": [],
-      "note": "TODO: [..](this auto self, …){ … self(…) … }(…) の再帰を見落として O(N + K)(過小)"
+      "note": "出力の個数 f(N,K)(≤ 3×10^5)に比例する列挙で、静的には分からない(既知の限界)。[…](this auto self, …){ … self(…) … }(0, 0, path) のその場で呼ぶ再帰ラムダを見落として O(N + K)(過小)だったのを、ほかの言語と同じく指数時間の再帰(警告つき)と数えるようにした"
     },
     "abc473_d@24887#3": {
       "lang": "python",

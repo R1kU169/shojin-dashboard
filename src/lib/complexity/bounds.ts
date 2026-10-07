@@ -38,6 +38,8 @@ export interface BoundEnv {
   isInputVar(name: string): boolean;
   /** 隣接リスト g への辺の追加の総数(無ければ記号 M) */
   edgesOf(g: string): Expr;
+  /** g への要素の追加(辺の登録)が見つかっているか */
+  hasGrowth(g: string): boolean;
   /** 頂点数(visited / dist の大きさ。無ければ主記号) */
   vertices(): Expr;
   /** 配列の宣言の次元(メモ化の表の大きさ) */
@@ -477,6 +479,9 @@ function forC(loop: LoopNode, b: Extract<LoopNode["bound"], { form: "for-c" }>, 
   }
   if (!lim) return unknownQ("条件の形が分からない");
   if (lim.kind === "end") return { expr: boundOf(lim.E, env)?.expr ?? Q, conf: "high", reason: `${sexprText(lim.E)} の要素` };
+  // for (i = 0; i < g[v].size(); i++) / int sz = g[v].size(); for (i < sz) は隣接リスト g[v] を添字で回す走査
+  const adj = adjacencyBySize(lim.E, loop, env);
+  if (adj && lim.kind === "lt") return adj;
   const E = boundOf(lim.E, env);
   if (lim.kind === "sqrt") {
     return E ? { expr: powExpr(E.expr, 0.5), conf: "high", reason: `${v}² ≤ ${sexprText(lim.E)}` } : unknownQ("上限が分からない");
@@ -884,4 +889,26 @@ function erasedEveryTime(nodes: readonly IrNode[]): string | null {
     if (e.kind === "member" && e.args !== null && ERASE_METHODS.has(e.name) && e.of.kind === "sym") return e.of.name;
   }
   return null;
+}
+
+/** 上限が g[v].size()(または g[v].size() を入れた変数)で、v が関数の引数・外側のループ変数・取り出した頂点なら隣接走査 */
+function adjacencyBySize(E: SExpr, loop: LoopNode, env: BoundEnv): LoopFactor | null {
+  let e = E;
+  if (e.kind === "sym") {
+    const init = env.initialValue(e.name, loop);
+    if (init) e = init;
+  }
+  if (e.kind === "call" && isCast(e.name) && e.args.length === 1) e = e.args[0];
+  if (e.kind !== "size" || e.of.kind !== "index" || e.of.of.kind !== "sym") return null;
+  const g = e.of.of.name;
+  const v = e.of.idx[0];
+  if (!v || v.kind !== "sym") return null;
+  // 文字列の配列の s[i].size() や、追加の無い2次元配列の a[i].size() は隣接リストではない
+  const elem = env.kindOf(e.of);
+  if (!env.hasGrowth(g) || !["array", "deque", "oset", "hset", "linkedlist"].includes(elem)) return null;
+  const anchor = v.name;
+  const anchored = env.params.has(anchor) || env.outer.some((s) => s.var === anchor || s.popped.includes(anchor));
+  if (!anchored) return null;
+  const edges = env.edgesOf(g);
+  return { expr: edges, conf: "medium", reason: `隣接リスト ${g}[${anchor}] を添字で回す(全体で辺の数)`, special: { kind: "adjacency", anchor, total: edges } };
 }

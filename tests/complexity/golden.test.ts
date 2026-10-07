@@ -2135,6 +2135,48 @@ const CASES: Golden[] = [
       }`,
     time: "O(H·W)",
   },
+  {
+    id: "追加51 C++: 添字で子を回す木の DFS(ABC459 E)",
+    lang: "cpp",
+    code: `
+      vector<vector<int>> g;
+      long long dfs(int v) {
+          int sz = g[v].size();
+          long long s = 1;
+          for (int i = 0; i < sz; i++) s += dfs(g[v][i]);
+          return s;
+      }
+      int main() {
+          int n; cin >> n;
+          g.resize(n);
+          for (int i = 1; i < n; i++) {
+              int p; cin >> p;
+              g[p - 1].push_back(i);
+          }
+          cout << dfs(0) << endl;
+      }`,
+    time: "O(N)",
+  },
+  {
+    id: "追加52 C++23: その場で呼ぶ this auto self の再帰ラムダ(ABC473 D)",
+    lang: "cpp",
+    code: `
+      int main() {
+          int n; cin >> n;
+          long long cnt = 0;
+          [&](this auto self, int i) -> void {
+              if (i == 0) {
+                  cnt++;
+                  return;
+              }
+              self(i - 1);
+              self(i - 1);
+          }(n);
+          cout << cnt << endl;
+      }`,
+    time: "O(2^N)",
+    warn: /指数時間/,
+  },
 ];
 
 for (const g of CASES) test(g.id, () => void check(g));

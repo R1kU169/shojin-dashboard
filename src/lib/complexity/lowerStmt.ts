@@ -438,9 +438,10 @@ function finishAssign(e0: SExpr & { kind: "assign" }, toks: readonly Tok[], ctx:
 
 /** ラムダの式 → 関数(auto&& self や this auto&& self は自分自身を受け取る仮引数) */
 export function lambdaFunc(name: string, lam: SExpr & { kind: "lambda" }): IrNode {
-  const selfParam = lam.params.length > 0 && (lam.params[0] === "self" || lam.params[0] === name) ? lam.params[0] : null;
+  // auto&& self / this auto self は仮引数の一覧から外れるので、本体で self(…) を呼んでいれば self を自分自身とみなす
+  const selfParam = lam.params.length > 0 && (lam.params[0] === "self" || lam.params[0] === name) ? lam.params[0] : callsSelf(lam) ? "self" : null;
   const body: IrNode[] = lam.body.length ? lam.body : lam.expr ? [{ kind: "return", value: lam.expr, loc: lam.loc }] : [];
-  return { kind: "func", name, params: selfParam ? lam.params.slice(1) : lam.params, decorators: [], body, loc: lam.loc, isLambda: true, selfParam };
+  return { kind: "func", name, params: selfParam && lam.params[0] === selfParam ? lam.params.slice(1) : lam.params, decorators: [], body, loc: lam.loc, isLambda: true, selfParam };
 }
 
 // ---------------------------------------------------------------------------
@@ -515,6 +516,13 @@ export function lowerStmt(toks: readonly Tok[], ctx: LowerCtx): IrNode[] {
     if (x.kind === "assign") for (const n of targetNames(x.target)) delete ctx.consts[n];
   });
   if (e.kind === "unknown" && e.text === "") return out;
+  // その場で呼ぶ再帰ラムダ [&](this auto self, int v) { … self(…) … }(0) は、名前の付いた関数とその呼び出しにする
+  if (e.kind === "call" && e.name === "" && e.args[0]?.kind === "lambda" && callsSelf(e.args[0])) {
+    const name = `lambda@${l.line}`;
+    out.push(lambdaFunc(name, e.args[0]));
+    out.push({ kind: "expr", e: { kind: "call", name, ns: null, args: e.args.slice(1) }, loc: l, src: tokText(toks) });
+    return out;
+  }
   out.push({ kind: "expr", e, loc: l, src: tokText(toks), reading: !!inp || readsInput(e, ctx) || undefined });
   return out;
 }
@@ -568,4 +576,31 @@ export function paramsFrom(toks: readonly Tok[]): string[] {
 /** 式に含まれる名前(入力の伝播の判定に使う) */
 export function namesIn(e: SExpr | null): Set<string> {
   return symbolsIn(e);
+}
+
+/** ラムダの本体が self(…) を呼ぶか(auto&& self / this auto self の再帰) */
+function callsSelf(lam: SExpr & { kind: "lambda" }): boolean {
+  let found = false;
+  const visitExpr = (e: SExpr | null) =>
+    walk(e, (x) => {
+      if (x.kind === "call" && x.name === "self") found = true;
+      return !found;
+    });
+  const visit = (nodes: readonly IrNode[]) => {
+    for (const n of nodes) {
+      if (found) return;
+      if (n.kind === "expr") visitExpr(n.e);
+      else if (n.kind === "assign") visitExpr(n.value);
+      else if (n.kind === "return") visitExpr(n.value);
+      else if (n.kind === "decl") visitExpr(n.init);
+      else if (n.kind === "loop") visit(n.body);
+      else if (n.kind === "branch") {
+        n.conds.forEach(visitExpr);
+        n.branches.forEach(visit);
+      }
+    }
+  };
+  visit(lam.body);
+  visitExpr(lam.expr);
+  return found;
 }
