@@ -37,6 +37,10 @@ interface Cost {
   alloc: Expr;
   grow: Map<string, Expr>;
   specials: SpecialCost[];
+  /** return / exit で終わる分岐の時間。関数の1回の呼び出しで1度しか通らないので、ループの回数を掛けない */
+  exitOnce?: Expr;
+  /** break で終わる分岐の時間。一番内側のループの1回の実行で1度しか通らない */
+  breakOnce?: Expr;
 }
 
 const empty = (): Cost => ({ time: ONE, alloc: ONE, grow: new Map(), specials: [] });
@@ -53,8 +57,17 @@ function mulGrow(g: Map<string, Expr>, f: Expr): Map<string, Expr> {
   return out;
 }
 
+function addOpt(a: Expr | undefined, b: Expr | undefined): Expr | undefined {
+  return a && b ? add(a, b) : (a ?? b);
+}
+
 function plus(a: Cost, b: Cost): Cost {
-  return { time: add(a.time, b.time), alloc: add(a.alloc, b.alloc), grow: addGrow(a.grow, b.grow), specials: [...a.specials, ...b.specials] };
+  return { time: add(a.time, b.time), alloc: add(a.alloc, b.alloc), grow: addGrow(a.grow, b.grow), specials: [...a.specials, ...b.specials], exitOnce: addOpt(a.exitOnce, b.exitOnce), breakOnce: addOpt(a.breakOnce, b.breakOnce) };
+}
+
+/** 1度しか通らない分岐の時間を、ふつうの時間に戻す(関数・ラムダ・モジュールの境目) */
+function settle(c: Cost): Cost {
+  return { ...c, time: add(c.time, addOpt(c.exitOnce, c.breakOnce) ?? ONE), exitOnce: undefined, breakOnce: undefined };
 }
 
 interface Frame {
@@ -501,8 +514,15 @@ export class Analyzer {
         for (const cond of n.conds) if (cond) c = plus(c, this.exprCost(cond, env, false, n.loc.line));
         let br = empty();
         const id = this.branchId(n);
+        // if の枝が return / exit で終わるなら関数の1回の呼び出しで1度、break で終わるならループの1回の実行で1度しか通らない
+        // (switch の case の break は switch を抜けるだけなので、条件の無い分岐は見ない)
+        const isIf = n.conds.some((x) => x !== null);
         n.branches.forEach((b, k) => {
-          br = plus(br, this.walkNodes(b, { ...env, path: [...(env.path ?? []), `${id}:${k}`] }));
+          const arm = this.walkNodes(b, { ...env, path: [...(env.path ?? []), `${id}:${k}`] });
+          const jump = isIf && env.outer.length > 0 ? terminalJump(b) : null;
+          if (jump === "exit") br = plus(br, { ...arm, time: ONE, exitOnce: addOpt(arm.exitOnce, arm.time) });
+          else if (jump === "break") br = plus(br, { ...arm, time: ONE, breakOnce: addOpt(arm.breakOnce, arm.time) });
+          else br = plus(br, arm);
         });
         return plus(c, br);
       }
@@ -796,7 +816,7 @@ export class Analyzer {
     if (l.kind !== "lambda") return empty();
     const inner: WalkEnv = { ...env, params: new Set([...env.params, ...l.params]), before: [...env.before] };
     const c = l.body.length ? this.walkNodes(l.body, inner) : this.exprCost(l.expr, inner, false, line);
-    return { ...c, specials: [] };
+    return { ...settle(c), specials: [] };
   }
 
   userCall(fn: FuncNode, args: SExpr[], env: WalkEnv, line: number): Cost {
@@ -839,7 +859,7 @@ export class Analyzer {
     if (cached) return cached;
     const env: WalkEnv = { outer: [], params: new Set(fn.params), func: fn, selfNames: new Set([fn.name, ...(fn.selfParam ? [fn.selfParam] : [])]), selfCalls: [], before: [], inAdjacency: false };
     this.inProgress.push(fn);
-    const cost = this.walkNodes(fn.body, env);
+    const cost = settle(this.walkNodes(fn.body, env));
     this.inProgress.pop();
     let time = cost.time;
     let alloc = cost.alloc;
@@ -1023,9 +1043,20 @@ export class Analyzer {
     const body = this.walkNodes(loop.body, inner);
     const perIter = add(body.time, head.time);
     let total = mul(F.expr, perIter);
+    // ループの中で宣言した(d = deque() / diff = [] のように作り直した)コンテナの成長は毎回捨てられる(S11)。
+    // 大きさは1回の反復で足した数まで(テストケースごとに作り直すなら T·N ではなく N)
+    const declared = new Set<string>();
+    const visit = (nodes: readonly IrNode[]) => {
+      for (const n of nodes) {
+        if (n.kind === "decl") declared.add(n.name);
+        else if (n.kind === "assign" && n.op === "=" && n.target.kind === "sym" && n.value && allocOf(n.value, this.spec.typeKind)) declared.add(n.target.name);
+        else if (n.kind === "branch") n.branches.forEach(visit);
+      }
+    };
+    visit(loop.body);
     // 大きさが増え続けないコンテナは、ループの回数を掛けずに1回ぶん(または上限)だけ増えるとみなす
     const bounded = this.boundedGrowth(loop, body.grow, env);
-    const bodyGrow = new Map([...body.grow].filter(([k]) => !bounded.has(k)));
+    const bodyGrow = new Map([...body.grow].filter(([k]) => !bounded.has(k) && !declared.has(k)));
     let grow = addGrow(mulGrow(addGrow(bodyGrow, head.grow), F.expr), bounded);
     const up: SpecialCost[] = [];
     for (const sc of body.specials) {
@@ -1048,34 +1079,23 @@ export class Analyzer {
       total = add(total, mul(F.expr, sc.fallback));
       grow = addGrow(grow, mulGrow(sc.grow, F.expr));
     }
-    // ループの中で宣言した(d = deque() / diff = [] のように作り直した)コンテナの成長は毎回捨てられる(S11)。
-    // 大きさは1回の反復で足した数まで(テストケースごとに作り直すなら T·N ではなく N)
     let alloc = body.alloc;
-    const declared = new Set<string>();
-    const visit = (nodes: readonly IrNode[]) => {
-      for (const n of nodes) {
-        if (n.kind === "decl") declared.add(n.name);
-        else if (n.kind === "assign" && n.op === "=" && n.target.kind === "sym" && n.value && allocOf(n.value, this.spec.typeKind)) declared.add(n.target.name);
-        else if (n.kind === "branch") n.branches.forEach(visit);
-      }
-    };
-    visit(loop.body);
-    for (const [k, v] of [...grow]) {
-      if (declared.has(k)) {
-        const per = body.grow.get(k) ?? v;
-        this.recordGrow(k, per);
-        alloc = add(alloc, per);
-        grow.delete(k);
-      }
+    for (const k of declared) {
+      const per = body.grow.get(k);
+      if (!per) continue;
+      this.recordGrow(k, per);
+      alloc = add(alloc, per);
     }
+    for (const k of [...grow.keys()]) if (declared.has(k)) grow.delete(k);
     if (F.warn) this.warn(F.warn, "warn", line);
     if (F.info) this.warn(F.info, "info", line);
     this.item({ axis: "time", kind: "loop", loc: loop.loc, label: loop.src || "ループ", expr: F.expr, text: "", reason: `${F.reason}${loop.hasBreak ? "(break / return あり。最悪は変わらない)" : ""}`, conf: F.conf });
+    // break で終わる分岐はこのループの1回の実行で1度だけ。return / exit で終わる分岐は関数の境目まで持ち上げる
     if (F.special) {
       const specialGrow = mulGrow(addGrow(bodyGrow, head.grow), F.special.total);
-      return { time: once.time, alloc: add(once.alloc, alloc), grow: addGrow(once.grow, bounded), specials: [...up, { sp: F.special, body: perIter, fallback: total, grow: specialGrow }] };
+      return { time: addOpt(once.time, body.breakOnce)!, alloc: add(once.alloc, alloc), grow: addGrow(once.grow, bounded), specials: [...up, { sp: F.special, body: perIter, fallback: total, grow: specialGrow }], exitOnce: body.exitOnce };
     }
-    return { time: add(once.time, total), alloc: add(once.alloc, alloc), grow: addGrow(once.grow, grow), specials: up };
+    return { time: addOpt(add(once.time, total), body.breakOnce)!, alloc: add(once.alloc, alloc), grow: addGrow(once.grow, grow), specials: up, exitOnce: body.exitOnce };
   }
 
   // ---- 別名(1回目と2回目の間) ---------------------------------------------------
@@ -1177,6 +1197,8 @@ export class Analyzer {
           if (len) setAlias(target, withGrowth(len));
           // p = convolution(a, b) の長さは |a| + |b|
           if (convolutionArgs(value)) setAlias(target, withGrowth(this.sizeOf(value, null)));
+          // ans = a + [w] + b[::-1] のような連結の長さは、つないだものの長さの和(入力で読んだ配列には付けない)
+          if (value.kind === "bin" && value.op === "+" && !this.inputs.has(target) && isConcat(value, (x) => this.kindOf(x))) setAlias(target, withGrowth(this.sizeOf(value, null)));
           const src = len ? null : copySource(value);
           if (src && src !== target) {
             const s = this.aliases.get(`|${src}|`);
@@ -1376,7 +1398,7 @@ export class Analyzer {
     const hasWork = moduleNodes.some((n) => n.kind !== "decl" && n.kind !== "stmt" && n.kind !== "input");
     const main = this.funcs.get("main") ?? this.funcs.get("Main");
     const module: FuncNode = { kind: "func", name: "<module>", params: [], decorators: [], body: moduleNodes, loc: { line: 1, endLine: this.prog.lineCount }, isLambda: false, selfParam: null };
-    let cost = this.walkNodes(module.body, env);
+    let cost = settle(this.walkNodes(module.body, env));
     for (const s of cost.specials) {
       cost.time = add(cost.time, s.fallback);
       cost.grow = addGrow(cost.grow, s.grow);
@@ -1644,4 +1666,33 @@ function convolutionArgs(e: SExpr): SExpr[] | null {
   if (e.kind === "call" && names.includes(e.name)) return e.args.filter((a) => a.kind !== "num");
   if (e.kind === "member" && e.args && e.of.kind === "sym" && e.of.name === "atcoder" && names.includes(e.name)) return e.args.filter((a) => a.kind !== "num");
   return null;
+}
+
+const EXIT_JUMPS = new Set(["exit", "die", "abort", "throw", "raise", "panic"]);
+const EXIT_CALLS = new Set(["exit", "quit", "_exit", "abort", "exit!", "die", "panic!", "process.exit"]);
+
+/** 分岐の最後の文が抜け出す文なら、その種類(return / exit は "exit"、break は "break") */
+function terminalJump(nodes: readonly IrNode[]): "exit" | "break" | null {
+  const last = nodes[nodes.length - 1];
+  if (!last) return null;
+  if (last.kind === "return") return "exit";
+  if (last.kind === "stmt" && last.jump) {
+    if (last.jump === "break" || last.jump === "last") return "break";
+    if (EXIT_JUMPS.has(last.jump)) return "exit";
+  }
+  if (last.kind === "expr") {
+    const e = last.e;
+    if (e.kind === "call" && EXIT_CALLS.has(e.name)) return "exit";
+    if (e.kind === "member" && e.of.kind === "sym" && ["sys", "os", "process", "std"].includes(e.of.name) && ["exit", "_exit", "abort"].includes(e.name)) return "exit";
+  }
+  return null;
+}
+
+/** a + [w] + b[::-1] のようなリスト・文字列の連結か(どこかにリストのリテラル・スライス・配列か文字列の変数がある) */
+function isConcat(e: SExpr, kindOf: (x: SExpr) => ContainerKind): boolean {
+  if (e.kind === "bin" && e.op === "+") return isConcat(e.l, kindOf) || isConcat(e.r, kindOf);
+  if (e.kind === "list" && !e.brace) return true;
+  if (e.kind === "slice") return true;
+  if (e.kind === "sym") return ["array", "string", "deque"].includes(kindOf(e));
+  return false;
 }

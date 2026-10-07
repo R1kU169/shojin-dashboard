@@ -416,6 +416,13 @@ function finishAssign(e0: SExpr & { kind: "assign" }, toks: readonly Tok[], ctx:
       out.push({ kind: "decl", name: e.target.name, typeName: "", container: e.target.sigil === "@" ? "array" : "hmap", dims: [], init: null, isGlobal: ctx.top, costsTime: false, loc: l });
     }
   }
+  // a, b = [], [] のように並べて確保するなら、それぞれの宣言
+  if (!declared && value && e.op === "=" && e.target.kind === "list" && value.kind === "list" && e.target.items.length === value.items.length) {
+    e.target.items.forEach((t, i) => {
+      const al = t.kind === "sym" ? allocOf((value as Extract<SExpr, { kind: "list" }>).items[i], ctx.spec.typeKind) : null;
+      if (al && t.kind === "sym") out.push({ kind: "decl", name: t.name, typeName: "", container: al.container, dims: al.dims, init: null, isGlobal: ctx.top, costsTime: al.costsTime, elem: al.elem, loc: l });
+    });
+  }
   // 定数(入力で読んだものは定数にしない)
   for (const n of targetNames(e.target)) {
     if (inp && (inp.scalars.includes(n) || inp.arrays.includes(n))) continue;
@@ -449,7 +456,7 @@ export function lowerStmt(toks: readonly Tok[], ctx: LowerCtx): IrNode[] {
   if (first.k === "ident" && !first.sigil) {
     if (SKIP_WORDS.has(first.v) && !isOp(toks[1], "=") && !isOp(toks[1], "(") && !isOp(toks[1], ".")) return [];
     if (JUMP_WORDS.has(first.v) && !isOp(toks[1], "=") && !isOp(toks[1], ".") && !(spec.postfixModifiers && findTop(toks, (x, i) => i > 0 && (isWord(x, "if") || isWord(x, "unless"))) > 0)) {
-      return [{ kind: "stmt", loc: l }];
+      return [{ kind: "stmt", loc: l, jump: first.v }];
     }
   }
   // 文末の修飾: x += 1 if c / n /= 10 while n > 0 / print for @a

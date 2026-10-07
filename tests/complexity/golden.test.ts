@@ -1775,6 +1775,91 @@ const CASES: Golden[] = [
       }`,
     time: "O(N log M + N log N + M log N + M log M)",
   },
+  {
+    id: "追加31 見つけたら erase して break する分岐はループの1回の実行で1度(ABC473 B)",
+    lang: "cpp",
+    code: `
+      int main() {
+          int n; cin >> n;
+          vector<int> a(n);
+          for (int& x : a) cin >> x;
+          int ans = 0;
+          while (!a.empty()) {
+              int x = a.back();
+              a.pop_back();
+              bool found = false;
+              for (int i = 0; i < (int)a.size(); i++) {
+                  if (a[i] == x) {
+                      a.erase(a.begin() + i);
+                      found = true;
+                      break;
+                  }
+              }
+              if (!found) ans += x;
+          }
+          cout << ans << endl;
+      }`,
+    time: "O(N²)",
+  },
+  {
+    id: "追加32 見つけたら経路を復元して return する分岐は1度だけ(ABC472 E)",
+    lang: "python",
+    code: `
+      def solve():
+          n, m = map(int, input().split())
+          g = [[] for _ in range(n)]
+          for _ in range(m):
+              u, v = map(int, input().split())
+              g[u].append(v)
+              g[v].append(u)
+          par = [-1] * n
+          col = [-1] * n
+          col[0] = 0
+          st = [0]
+          while st:
+              u = st.pop()
+              for v in g[u]:
+                  if col[v] == -1:
+                      col[v] = col[u] ^ 1
+                      par[v] = u
+                      st.append(v)
+                  elif col[u] == col[v]:
+                      a, b = [], []
+                      x = u
+                      while x != -1:
+                          a.append(x)
+                          x = par[x]
+                      x = v
+                      while x != -1:
+                          b.append(x)
+                          x = par[x]
+                      path = a + b[::-1]
+                      print(*[x + 1 for x in path])
+                      return
+          print(-1)
+
+      for _ in range(int(input())):
+          solve()`,
+    time: "O(T·N + T·M)",
+  },
+  {
+    id: "追加33 連結したリストの長さは長さの和(ABC465 C)",
+    lang: "python",
+    code: `
+      n = int(input())
+      s = input()
+      a, b = [], []
+      for i in range(n):
+          if s[i] == "o":
+              a.append(i)
+          else:
+              b.append(i)
+      ans = a[::-1] + b
+      ans = ans[::-1]
+      print(*ans)`,
+    time: "O(N)",
+    space: "O(N)",
+  },
 ];
 
 for (const g of CASES) test(g.id, () => void check(g));
