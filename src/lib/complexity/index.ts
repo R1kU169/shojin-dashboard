@@ -5,6 +5,8 @@
 //  - unordered_map / dict は平均 O(1)。Python / Java の文字列の += は O(1) + 警告
 //  - スコープを見ない(同名の変数は同じもの)。入力配列の長さの推定は外れることがある
 //  - 入力の読み取り(1行の分割・数値変換)そのものは時間に数えない
+//  - 出力の個数に比例する列挙・要素の値に依存する償却(フィルタで作り直すリスト、取り出しては入れ直すヒープ)・
+//    刻みが変数の while は推定できず、過大に出すか警告する(AtCoder 公式解説での検証: docs/complexity-verification.md)
 import type { Analysis } from "./ir.ts";
 import { ONE } from "./expr.ts";
 import { analyze } from "./analyze.ts";
