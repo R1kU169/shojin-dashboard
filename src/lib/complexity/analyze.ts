@@ -94,6 +94,8 @@ export class Analyzer {
   funcs = new Map<string, FuncNode>();
   decls = new Map<string, DeclNode[]>();
   aliases = new Map<string, Expr>();
+  /** 仮引数の長さ |a| を値に持つ別名(n = a.size())。呼び出し側で置き換えるので、同名の大域の a の大きさで解かない */
+  private paramAliases = new Set<string>();
   growTotals = new Map<string, Expr>();
   symbolOrder: string[] = [];
   symCount = new Map<string, number>();
@@ -260,6 +262,8 @@ export class Analyzer {
     switch (e.kind) {
       case "sym":
         if (this.spec.inputMarkers.has(e.name) && !this.decls.has(e.name)) return this.named("N", "入力の要素数", 0);
+        // 仮引数の長さは呼び出し側で実引数の長さに置き換える(同名の大域変数の大きさは使わない)
+        if (env && env.params.has(e.name) && env.func && !env.func.isLambda) return this.named(`|${e.name}|`, `関数 ${env.func.name} の引数 ${e.name} の要素数`, 0);
         return this.sizeSym(e.name);
       case "index": {
         if (e.of.kind === "sym") {
@@ -407,7 +411,7 @@ export class Analyzer {
         if (reset) return;
         if (n === inner) continue;
         if (n.kind === "decl" && n.name === name) reset = true;
-        else if (n.kind === "assign" && n.op === "=" && targetNames(n.target).includes(name) && n.target.kind !== "index") reset = true;
+        else if (n.kind === "assign" && n.op === "=" && targetNames(n.target).includes(name) && n.target.kind !== "index" && !monotoneUpdate(n.value, name)) reset = true;
         else if (n.kind === "expr") {
           walk(n.e, (x) => {
             if (x.kind === "member" && x.name === "clear" && x.of.kind === "sym" && x.of.name === name) reset = true;
@@ -1026,20 +1030,22 @@ export class Analyzer {
       total = add(total, mul(F.expr, sc.fallback));
       grow = addGrow(grow, mulGrow(sc.grow, F.expr));
     }
-    // ループの中で宣言したコンテナの成長は毎回捨てられる(S11)
+    // ループの中で宣言した(d = deque() / diff = [] のように作り直した)コンテナの成長は毎回捨てられる(S11)。
+    // 大きさは1回の反復で足した数まで(テストケースごとに作り直すなら T·N ではなく N)
     let alloc = body.alloc;
     const declared = new Set<string>();
     const visit = (nodes: readonly IrNode[]) => {
       for (const n of nodes) {
         if (n.kind === "decl") declared.add(n.name);
+        else if (n.kind === "assign" && n.op === "=" && n.target.kind === "sym" && n.value && allocOf(n.value, this.spec.typeKind)) declared.add(n.target.name);
         else if (n.kind === "branch") n.branches.forEach(visit);
       }
     };
     visit(loop.body);
     for (const [k, v] of [...grow]) {
       if (declared.has(k)) {
-        this.recordGrow(k, v);
         const per = body.grow.get(k) ?? v;
+        this.recordGrow(k, per);
         alloc = add(alloc, per);
         grow.delete(k);
       }
@@ -1139,7 +1145,8 @@ export class Analyzer {
     };
     perBlock(this.prog.nodes);
     // (c) 写しと長さの代入
-    const copies = (nodes: readonly IrNode[]) => {
+    const singles = this.singleDefs();
+    const copies = (nodes: readonly IrNode[], params: ReadonlySet<string>) => {
       for (const n of nodes) {
         const target = n.kind === "assign" && n.op === "=" && n.target.kind === "sym" ? n.target.name : n.kind === "decl" ? n.name : null;
         const value = n.kind === "assign" ? n.value : n.kind === "decl" ? n.init : null;
@@ -1154,14 +1161,24 @@ export class Analyzer {
             const s = this.aliases.get(`|${src}|`);
             setAlias(target, withGrowth(s ?? sym(`|${src}|`)));
           }
-          if (value.kind === "size" && value.of.kind === "sym") setAlias(value.of.name, this.named(this.symbolOf(target), `変数 ${target}(${value.of.name} の長さ)`, n.loc.line));
+          if (value.kind === "size" && value.of.kind === "sym") {
+            const of = value.of.name;
+            // 関数の中の n = a.size()(a は仮引数)は n を |a| にして、呼び出し側で実引数の長さに置き換える。
+            // dl = d.size() で d の大きさが確保や追加の回数で決まるなら、dl はその大きさ
+            const known = params.has(of) || this.growRecord.has(of) || !!this.declOf(of)?.dims.length;
+            if (known && singles.get(target) === value && !this.sharesSymbol(target)) {
+              this.aliases.set(this.symbolOf(target), sym(`|${of}|`));
+              if (params.has(of)) this.paramAliases.add(this.symbolOf(target));
+            }
+            else setAlias(of, this.named(this.symbolOf(target), `変数 ${target}(${of} の長さ)`, n.loc.line));
+          }
         }
-        if (n.kind === "func") copies(n.body);
-        else if (n.kind === "loop") copies(n.body);
-        else if (n.kind === "branch") n.branches.forEach(copies);
+        if (n.kind === "func") copies(n.body, new Set(n.params));
+        else if (n.kind === "loop") copies(n.body, params);
+        else if (n.kind === "branch") n.branches.forEach((b) => copies(b, params));
       }
     };
-    copies(this.prog.nodes);
+    copies(this.prog.nodes, new Set());
     // (h) 一度だけ代入され、入力のスカラと定数だけで決まる変数(m = n - 1 / k = min(n, 20) / x = n if c else 1)
     for (const [name, value] of this.singleDefs()) {
       const s = this.symbolOf(name);
@@ -1181,10 +1198,19 @@ export class Analyzer {
     for (const [name, g] of this.growRecord) setAlias(name, g);
     // 別名の中の別名を解く
     for (let it = 0; it < 3; it++) {
-      for (const [k, v] of this.aliases) this.aliases.set(k, this.resolveAliases(v, k));
+      for (const [k, v] of this.aliases) if (!this.paramAliases.has(k)) this.aliases.set(k, this.resolveAliases(v, k));
     }
     // 成長の合計(辺の数など)も別名を解いた形で持つ
     this.growTotals = new Map([...this.growRecord].map(([k, v]) => [k, this.resolveAliases(v, `|${k}|`)]));
+  }
+
+  /** name と同じ記号になる別の変数(関数内の h と main の入力 H)があるか */
+  sharesSymbol(name: string): boolean {
+    const s = this.symbolOf(name);
+    const names = new Set<string>([...this.inputs.keys(), ...this.decls.keys()]);
+    for (const f of this.funcs.values()) f.params.forEach((p) => names.add(p));
+    for (const x of names) if (x !== name && this.symbolOf(x) === s) return true;
+    return false;
   }
 
   /** 式の中の別名のある記号を置き換える(self は自分自身の別名で置き換えない) */
@@ -1220,8 +1246,11 @@ export class Analyzer {
         if (x.kind === "lambda") return false;
       });
     const visit = (nodes: readonly IrNode[]) => {
-      for (const n of nodes) {
+      for (const [i, n] of nodes.entries()) {
         if (n.kind === "assign") {
+          // C++ の ll n = a.size(); は宣言と代入の2つになる。同じ値の代入は宣言と合わせて1回と数える
+          const prev = nodes[i - 1];
+          if (prev && prev.kind === "decl" && n.target.kind === "sym" && prev.name === n.target.name && prev.init === n.value) continue;
           if (n.op === "=" && n.value && n.target.kind === "sym") def(n.target.name, n.value);
           else if (n.op === "=" && n.value && n.target.kind === "list" && n.value.kind === "list" && n.target.items.length === n.value.items.length) {
             n.target.items.forEach((t, i) => {
@@ -1576,3 +1605,9 @@ export function analyze(prog: Program, spec: LangSpec): Analysis {
 }
 
 export const __internal = { countOf, constValue, singleSym };
+
+/** r = max(r, l + 1) / r = min(r, x) のように自分を含む max / min で更新する(振り出しに戻さない) */
+function monotoneUpdate(value: SExpr | null, name: string): boolean {
+  if (!value || value.kind !== "call" || (value.name !== "max" && value.name !== "min")) return false;
+  return value.args.some((a) => a.kind === "sym" && a.name === name);
+}

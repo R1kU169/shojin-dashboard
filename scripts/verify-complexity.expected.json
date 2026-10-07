@@ -105,13 +105,15 @@
       "hash": "cc692fbf",
       "stated": "O(N)",
       "source": "editorial",
-      "time": "O(ΣN)",
-      "accept": [],
+      "time": "O(T·N)",
+      "accept": [
+        "O(T·N·len)"
+      ],
       "values": {
         "T": 1,
         "N": 600000
       },
-      "note": "TODO: テストケースごとに作り直す d の大きさが T·N になる。for i in range(len) は Σlen = N(要素の値で回すループ)"
+      "note": "テストケースごとに作り直す d の大きさは1ケース分。for i in range(len) の len は d の要素(タプル)の値で、Σlen = N は分からず記号になる(要素の値で回すループの既知の限界)"
     },
     "abc460_a@21025#0": {
       "lang": "cpp",
@@ -232,7 +234,7 @@
       "source": "editorial",
       "time": "O(H²·W)",
       "accept": [],
-      "note": "TODO: r1 = max(r1, l+1) は振り出しに戻さない(尺取りの償却)。関数内の n = a.size() を |a| として呼び出し側で置き換える"
+      "note": "関数の中の n = a.size() を呼び出し側の長さ(W)に置き換え、r1 = max(r1, l+1) は振り出しに戻さない(尺取りの償却)"
     },
     "abc461_e@21023#0": {
       "lang": "python",
@@ -474,13 +476,13 @@
       "hash": "f229bbeb",
       "stated": "O(N log N)",
       "source": "editorial",
-      "time": "O(ΣN log ΣN)",
+      "time": "O(T·N log N)",
       "accept": [],
       "values": {
         "T": 1,
         "N": 1000000
       },
-      "note": "TODO: ループ内で宣言した sam の大きさが T·N になる。dl = d.size() の dl が記号のまま"
+      "note": "マルチテストの総和制約は見ない(既知の限界)。ループの中で宣言した sam の大きさは1ケース分、dl = d.size() は d の大きさ"
     },
     "abc465_a@22565#0": {
       "lang": "python",
@@ -644,7 +646,7 @@
         "T": 1,
         "N": 200000
       },
-      "note": "TODO: テストケースごとに作り直す pq の大きさが T·N になり log T が付く"
+      "note": "テストケースごとに作り直す pq の大きさは1ケース分。マルチテストの総和制約は見ない(既知の限界)"
     },
     "abc466_g@22603#0": {
       "lang": "cpp",
@@ -1217,7 +1219,7 @@
         "T": 1,
         "N": 200000
       },
-      "note": "TODO: テストケースごとに作り直す diff の大きさが T·N になり T²·N log N で TLE 判定"
+      "note": "テストケースごとに作り直す diff の大きさは1ケース分。マルチテストの総和制約は見ない(既知の限界)"
     },
     "abc474_g@25439#0": {
       "lang": "python",
@@ -1333,8 +1335,10 @@
       "stated": "O((N+M) log (N+M))",
       "source": "editorial",
       "time": "O(N log N + M log M)",
-      "accept": [],
-      "note": "TODO: accum の中の sz = a.size() を呼び出し側の長さに置き換えない。関数内の局所変数 b と大域の b を同じ変数とみなす(既知の限界)"
+      "accept": [
+        "O(N log N + M log N)"
+      ],
+      "note": "関数 accum の中の局所変数 b と大域の b を同じ変数とみなすので sort(b) が M log N になる(同名の変数を区別しない既知の限界)"
     },
     "abc476_e@25802#0": {
       "lang": "cpp",
@@ -1352,7 +1356,7 @@
       "source": "manual",
       "time": "O(N²)",
       "accept": [],
-      "note": "TODO: const ll nn = 3*n+1 の nn が記号のまま"
+      "note": "const ll nn = 3*n+1(宣言と初期化)の nn は 3N"
     },
     "abc476_g@25751#0": {
       "lang": "python",

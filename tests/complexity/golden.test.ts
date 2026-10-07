@@ -1576,6 +1576,99 @@ const CASES: Golden[] = [
     time: "O(N)",
     space: "O(1)",
   },
+  {
+    // AtCoder 公式解説での検証(docs/complexity-verification.md)で見つかった形。以下、解説のコードそのものではなく同じ形の最小のコード
+    id: "追加20 テストケースごとに作り直すリストは1ケース分の大きさ(ABC474 E)",
+    lang: "python",
+    code: `
+      for _ in range(int(input())):
+          n = int(input())
+          d = []
+          for _ in range(n):
+              a, b = map(int, input().split())
+              d.append(b - a)
+          d.sort()
+          print(sum(d))`,
+    time: "O(T·N log N)",
+    space: "O(N)",
+  },
+  {
+    id: "追加21 C++: ループの中で宣言した vector の大きさは1回分(ABC464 G)",
+    lang: "cpp",
+    code: `
+      int main() {
+          int T; cin >> T;
+          while (T--) {
+              int n; cin >> n;
+              vector<int> v;
+              for (int i = 0; i < n; i++) v.push_back(i);
+              int m = v.size();
+              priority_queue<int> pq;
+              for (int i = 0; i < m; i++) pq.push(v[i]);
+          }
+      }`,
+    time: "O(T·N log N)",
+  },
+  {
+    id: "追加22 関数の中の n = a.size() は呼び出し側の長さ(ABC461 D)",
+    lang: "cpp",
+    code: `
+      long long f(vector<long long>& a, long long k) {
+          long long n = a.size();
+          long long r = 0, res = 0;
+          for (long long l = 0; l < n; l++) {
+              r = max(r, l + 1);
+              while (r < n && a[r] - a[l] < k) r++;
+              res += r - l;
+          }
+          return res;
+      }
+      int main() {
+          long long h, w, k; cin >> h >> w >> k;
+          vector<vector<long long>> a(h, vector<long long>(w));
+          long long ans = 0;
+          for (int u = 0; u < h; u++)
+              for (int d = u; d < h; d++) {
+                  vector<long long> b(w + 1);
+                  ans += f(b, k);
+              }
+          cout << ans << endl;
+      }`,
+    time: "O(H²·W)",
+  },
+  {
+    id: "追加23 関数の中の h と入力の H は別の変数(ABC464 B)",
+    lang: "cpp",
+    code: `
+      vector<string> rot(vector<string> a) {
+          int h = a.size(), w = a[0].size();
+          vector<string> res(w, string(h, '.'));
+          for (int i = 0; i < h; i++)
+              for (int j = 0; j < w; j++) res[j][h - 1 - i] = a[i][j];
+          return res;
+      }
+      int main() {
+          int H, W; cin >> H >> W;
+          vector<string> C(H);
+          for (int i = 0; i < H; i++) cin >> C[i];
+          for (int t = 0; t < 4; t++) C = rot(C);
+      }`,
+    time: "O(H·W)",
+  },
+  {
+    id: "追加24 C++: 宣言と同時に初期化した定数式の変数(ABC476 F)",
+    lang: "cpp",
+    code: `
+      int main() {
+          long long n; cin >> n;
+          const long long nn = 3 * n + 1;
+          vector<vector<long long>> s(nn, vector<long long>(nn));
+          for (long long i = 0; i < nn; i++)
+              for (long long j = 0; j < nn; j++) s[i][j] = i + j;
+      }`,
+    time: "O(N²)",
+    space: "O(N²)",
+  },
 ];
 
 for (const g of CASES) test(g.id, () => void check(g));
