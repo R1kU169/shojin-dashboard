@@ -4,7 +4,7 @@
 // list の insert は N)。受け手の種類が分からないときは UNKNOWN_METHODS の既定を使い、
 // 警告で「set/map と仮定した」ことを伝える。自由関数は言語の系統ごとの表で引く。
 import type { Confidence, ContainerKind, Expr, SExpr } from "./ir.ts";
-import { logOfExpr, mul, ONE, vars } from "./expr.ts";
+import { add, logOfExpr, mul, ONE, vars } from "./expr.ts";
 
 export interface CallCtx {
   args: SExpr[];
@@ -145,8 +145,17 @@ const ACL_METHODS: Record<string, BuiltinRule> = table([
   ["all_prod size", r(one)],
   ["groups", r(S)],
   ["flow", r((c) => mul(S(c), S(c)), { conf: "low", warn: "最大流は O(N²M) になりえます。ここでは粗く見積もっています" })],
-  ["scc", r(S)],
+  ["scc satisfiable", r(S)],
+  ["add_edge add_clause get_edge change_edge answer", r(one)],
+  ["min_cut edges", r(S)],
 ]);
+
+/** ACL の convolution(a, b): (|a| + |b|) log(|a| + |b|) */
+const convolution = (c: CallCtx): Expr => {
+  const xs = c.args.filter((a) => a.kind !== "num");
+  const n = add(c.size(xs[0] ?? null), c.size(xs[1] ?? null));
+  return mul(n, logOfExpr(n));
+};
 
 /** 受け手の種類が分からないときの既定 */
 export const UNKNOWN_METHODS: Record<string, BuiltinRule> = {
@@ -202,6 +211,7 @@ const CPP_FREE = table([
   ["__builtin_popcount __builtin_popcountll __builtin_ctz __builtin_ctzll __builtin_clz __builtin_clzll popcount __lg bit_width countr_zero countl_zero abs llabs fabs swap min max pow sqrt sqrtl cbrt exp log log2 log10 floor ceil round to_string stoi stol stoll stoull stod atoi atol printf scanf puts getchar putchar exit assert make_pair make_tuple tie get setprecision fixed endl hypot atan2 sin cos tan", r(one)],
 ]);
 CPP_FREE.nth_element = r(R);
+for (const n of ["convolution", "convolution_ll", "convolution_int"]) CPP_FREE[n] = r(convolution);
 
 const PY_FREE = table([
   ["sorted", r(AlogA(0), { cmpArg: 1 })],
@@ -219,6 +229,7 @@ const PY_FREE = table([
   ["insort insort_left insort_right", r(A(0), { grows: true })],
   ["permutations combinations product combinations_with_replacement groupby chain islice count cycle repeat", r(one)],
 ]);
+for (const n of ["convolution", "convolution_int"]) PY_FREE[n] = r(convolution);
 
 const JAVA_FREE = table([
   ["sort parallelSort", r(AlogA(0), { cmpArg: 1 })],

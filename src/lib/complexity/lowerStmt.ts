@@ -130,6 +130,8 @@ function inputOf(e: SExpr, ctx: LowerCtx): InputFound | null {
     } else if (t.kind === "un" && t.op === "*") out.arrays.push(...targetNames(t.e));
   };
   walk(e, (x) => {
+    // input = sys.stdin.readline は読み取りの関数に名前を付けるだけ(読み取りではない)
+    if (x.kind === "assign" && x.target.kind === "sym" && ctx.spec.inputMarkers.has(x.target.name)) return false;
     // x = <入力> / (a, b) = <入力>
     if (x.kind === "assign" && x.value && x.op !== ":" && readsInput(x.value, ctx)) {
       addTarget(x.target, x.value);
@@ -302,7 +304,10 @@ function typedDecl(toks: readonly Tok[], ctx: LowerCtx): IrNode[] | null {
       }
     }
     const isGlobal = ctx.top;
-    out.push({ kind: "decl", name: n.v, typeName: tokText(typeToks, 80), container, dims: allDims, init, isGlobal, costsTime: costsTime || (dims.length > 0 && init !== null), loc: loc(toks) });
+    // vector<ll> g[n] / set<int> s[n] は要素がコンテナの配列
+    const baseKind = spec.typeKind[baseName];
+    const elem = dims.length > 0 && baseKind && baseKind !== "scalar" && baseKind !== "unknown" && baseKind !== "user" ? baseKind : undefined;
+    out.push({ kind: "decl", name: n.v, typeName: tokText(typeToks, 80), container, dims: allDims, init, isGlobal, costsTime: costsTime || (dims.length > 0 && init !== null), elem, loc: loc(toks) });
     if (init) out.push(...finishAssign({ kind: "assign", op: "=", target: { kind: "sym", name: n.v }, value: init }, toks, ctx, true));
     else if (ctorArgs && ctorArgs.length) {
       // コンストラクタ引数に呼び出しがあれば評価する(vector<int> b(a.begin(), a.end()) など)
@@ -400,7 +405,7 @@ function finishAssign(e0: SExpr & { kind: "assign" }, toks: readonly Tok[], ctx:
   if (!declared && value && e.target.kind === "sym" && e.op === "=" && !(inp && inp.arrays.includes(e.target.name))) {
     const al = allocOf(value, ctx.spec.typeKind);
     if (al) {
-      out.push({ kind: "decl", name: e.target.name, typeName: "", container: al.container, dims: al.dims, init: null, isGlobal: ctx.top, costsTime: al.costsTime, loc: l });
+      out.push({ kind: "decl", name: e.target.name, typeName: "", container: al.container, dims: al.dims, init: null, isGlobal: ctx.top, costsTime: al.costsTime, elem: al.elem, loc: l });
     } else if (e.target.sigil === "@" || e.target.sigil === "%") {
       out.push({ kind: "decl", name: e.target.name, typeName: "", container: e.target.sigil === "@" ? "array" : "hmap", dims: [], init: null, isGlobal: ctx.top, costsTime: false, loc: l });
     }

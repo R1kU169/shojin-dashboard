@@ -75,6 +75,8 @@ export interface AllocInfo {
   dims: SExpr[];
   /** 確保と同時に全要素を初期化する(要素数ぶんの時間がかかる) */
   costsTime: boolean;
+  /** 要素もコンテナなら、その種類 */
+  elem?: ContainerKind;
 }
 
 const size = (of: SExpr): SExpr => ({ kind: "size", of });
@@ -167,14 +169,18 @@ export function allocOf(e: SExpr, typeKind: Readonly<Record<string, ContainerKin
     return a ? a.dims : [];
   };
   switch (e.kind) {
-    case "list":
+    case "list": {
       if (e.brace) return { container: e.brace === "hash" ? "hmap" : "hset", dims: [], costsTime: false };
-      return { container: "array", dims: e.items.length > 0 ? [{ kind: "num", value: e.items.length }] : [], costsTime: e.items.length > 0 };
+      // [[-1] * (n + 1), [0] * (n + 1)] のように確保を並べたなら、中の確保の大きさも数える
+      const inner = e.items.length > 0 && e.items.every((x) => allocOf(x, typeKind)) ? allocOf(e.items[0], typeKind)! : null;
+      return { container: "array", dims: e.items.length > 0 ? [{ kind: "num", value: e.items.length }, ...(inner ? inner.dims : [])] : [], costsTime: e.items.length > 0, elem: inner?.container };
+    }
     case "bin": {
       // [0] * n(Python)/ (0) x $n(Perl。(0) は括弧を剥がすと数になる)/ "a" * n(Ruby の文字列)
       if ((e.op === "*" && (e.l.kind === "list" || e.l.kind === "str")) || e.op === "x") {
         const inner = e.l.kind === "list" && e.l.items.length === 1 ? nested(e.l.items[0]) : [];
-        return { container: e.l.kind === "str" ? "string" : "array", dims: [e.r, ...inner], costsTime: true };
+        const elem = e.l.kind === "list" && e.l.items.length === 1 ? allocOf(e.l.items[0], typeKind)?.container : undefined;
+        return { container: e.l.kind === "str" ? "string" : "array", dims: [e.r, ...inner], costsTime: true, elem };
       }
       return null;
     }
@@ -182,7 +188,7 @@ export function allocOf(e: SExpr, typeKind: Readonly<Record<string, ContainerKin
       // {k: v for …} / {x for …} は要素数ぶんのハッシュ・集合
       if (e.brace) return { container: e.brace === "hash" ? "hmap" : "hset", dims: [countOf(e.gens[0]?.iter ?? e.elem)], costsTime: true };
       if (!pureElem(e.elem, typeKind) || e.conds.length > 0) return null;
-      return { container: "array", dims: [...e.gens.map((g) => countOf(g.iter)), ...nested(e.elem)], costsTime: true };
+      return { container: "array", dims: [...e.gens.map((g) => countOf(g.iter)), ...nested(e.elem)], costsTime: true, elem: allocOf(e.elem, typeKind)?.container };
     }
     case "new": {
       const kind = kindOf(e.type, typeKind);
@@ -227,6 +233,13 @@ export function allocOf(e: SExpr, typeKind: Readonly<Record<string, ContainerKin
       if (n === "newSeqWith" && a.length === 2) return { container: "array", dims: [a[0], ...nested(a[1])], costsTime: true };
       if (n === "Repeat" && e.ns === "Enumerable" && a.length === 2) return { container: "array", dims: [a[1]], costsTime: true };
       const kind = kindOf(n, typeKind);
+      // Python の ACL: FenwickTree(n) / DSU(n) / MFGraph(n) / SegTree(op, e, n か v) / LazySegTree(…, v) の大きさは最後の引数
+      if (kind === "acl" && a.length >= 1) {
+        const last = a[a.length - 1];
+        // 数(n / q + 1)ならその値、配列(v / [x] * m)ならその要素数(boundOf は配列の変数を要素数にする)
+        const dim = allocOf(last, typeKind)?.dims[0] ?? (last.kind === "lambda" ? null : last);
+        return { container: "acl", dims: dim ? [dim] : [], costsTime: true };
+      }
       // set(xs) / deque(xs) / Counter(xs) / frozenset(xs) は xs の要素数から始まる
       if (kind && ["hset", "hmap", "deque", "oset", "omap", "pq", "array"].includes(kind) && a.length === 1 && a[0].kind !== "num" && a[0].kind !== "lambda" && ["set", "frozenset", "deque", "Counter", "SortedList", "SortedSet", "heapify"].includes(n)) {
         return { container: kind, dims: [countOf(a[0])], costsTime: true };

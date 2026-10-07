@@ -1669,6 +1669,87 @@ const CASES: Golden[] = [
     time: "O(N²)",
     space: "O(N²)",
   },
+  {
+    id: "追加25 Python: FenwickTree のリストの要素の sum は log(ABC461 E)",
+    lang: "python",
+    code: `
+      from atcoder.fenwicktree import FenwickTree
+      n, q = map(int, input().split())
+      fs = [FenwickTree(q + 1) for _ in range(2)]
+      last = [[-1] * (n + 1), [0] * (n + 1)]
+      for i in range(1, q + 1):
+          t, x = map(int, input().split())
+          print(fs[t].sum(0, i))
+          fs[t].add(i, 1)
+          last[t][x] = i`,
+    time: "O(Q log Q + N)",
+    space: "O(N + Q)",
+  },
+  {
+    id: "追加26 Python: input = sys.stdin.readline は読み取りではない。SegTree の操作は log(ABC468 F)",
+    lang: "python",
+    code: `
+      import sys
+      from atcoder.segtree import SegTree
+      input = sys.stdin.readline
+      n = int(input())
+      a = list(map(int, input().split()))
+      seg = SegTree(max, -1, n + 1)
+      for v in a:
+          seg.set(v, seg.prod(0, v) + 1)
+      print(seg.all_prod())`,
+    time: "O(N log N)",
+    space: "O(N)",
+  },
+  {
+    id: "追加27 Python: LazySegTree の大きさは最後の引数の要素数(ABC477 F)",
+    lang: "python",
+    code: `
+      from atcoder.lazysegtree import LazySegTree
+      n, m, q = map(int, input().split())
+      seg = LazySegTree(lambda a, b: a + b, 0, lambda f, x: x + f, lambda f, g: f + g, 0, [0] * m)
+      for i in range(q):
+          l, r = map(int, input().split())
+          seg.apply(l, r, 1)
+          print(seg.prod(l, r))`,
+    time: "O(Q log M + M)",
+  },
+  {
+    id: "追加28 Python: 集合のリストの要素への in は O(1)",
+    lang: "python",
+    code: `
+      n, m = map(int, input().split())
+      s = [set() for _ in range(n)]
+      for _ in range(m):
+          u, v = map(int, input().split())
+          s[u - 1].add(v - 1)
+      c = 0
+      for _ in range(m):
+          u, v = map(int, input().split())
+          if v - 1 in s[u - 1]:
+              c += 1
+      print(c)`,
+    time: "O(N + M)",
+  },
+  {
+    id: "追加29 C++: vector の配列の assign と atcoder::convolution(ABC471 G)",
+    lang: "cpp",
+    code: `
+      #include <atcoder/convolution>
+      int main() {
+          int n, k; cin >> n >> k;
+          vector<long long> r[k];
+          for (int i = 0; i < k; i++) r[i].assign(k, 0);
+          vector<long long> s(k, 1);
+          long long ans = 0;
+          for (int i = 0; i < k; i++) {
+              vector<long long> p = atcoder::convolution(r[i], s);
+              for (int v = 0; v < (int)p.size(); v++) ans += p[v];
+          }
+          cout << ans << endl;
+      }`,
+    time: "O(K² log K)",
+  },
 ];
 
 for (const g of CASES) test(g.id, () => void check(g));

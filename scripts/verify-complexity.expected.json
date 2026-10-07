@@ -243,7 +243,7 @@
       "source": "editorial",
       "time": "O(Q log Q + N)",
       "accept": [],
-      "note": "TODO: FenwickTree のリストの要素の .sum を Python の sum(O(Q))と取り違えて TLE 判定"
+      "note": "FenwickTree のリストの要素の .sum を Python の sum(O(Q))と取り違えて TLE 判定だった。ACL のクラスとして log Q で数える"
     },
     "abc462_a@21397#0": {
       "lang": "python",
@@ -778,7 +778,7 @@
       "source": "editorial",
       "time": "O(N log N)",
       "accept": [],
-      "note": "TODO: input = sys.stdin.readline の input が記号になる。atcoder.segtree の set / prod が未知"
+      "note": "input = sys.stdin.readline の input を入力の変数とみなして記号 input になっていた。atcoder.segtree の set / prod は log N"
     },
     "abc468_f@23738#1": {
       "lang": "python",
@@ -945,7 +945,7 @@
       "source": "editorial",
       "time": "O(K² log K + N)",
       "accept": [],
-      "note": "TODO: atcoder::convolution が未知の関数。vector<ll> rarr[k] の要素が配列と分からず assign / resize が未知"
+      "note": "atcoder::convolution は (|a| + |b|) log(|a| + |b|)。vector<ll> rarr[k] の要素は配列で、rarr[i].assign(k, 0) の大きさは K"
     },
     "abc472_a@24786#0": {
       "lang": "cpp",
@@ -1051,9 +1051,9 @@
       "hash": "db3251f4",
       "stated": null,
       "source": "manual",
-      "time": "O(H·W + flow)",
+      "time": "O(H²·W²)",
       "accept": [],
-      "note": "TODO: atcoder.maxflow の MFGraph(add_edge / flow)が未知の関数で、最大流を O(1) と数えている(過小)"
+      "note": "atcoder.maxflow の flow は頂点数の2乗の粗い見積もり(最悪 O(V²E) と警告を出す)。以前は未知の関数で O(1) だった(過小)"
     },
     "abc473_a@24870#0": {
       "lang": "cpp",
@@ -1178,8 +1178,10 @@
       "stated": "O(N log² N)",
       "source": "editorial",
       "time": "O(N log² N)",
-      "accept": [],
-      "note": "TODO: atcoder::convolution が未知(O(1))で O(N)(過小)。キューの要素の多項式の大きさは追えない"
+      "accept": [
+        "O(N·|l| log |l| + N·|l| log |r| + N·|r| log |l| + N·|r| log |r|)"
+      ],
+      "note": "atcoder::convolution を数えるようにした(以前は O(N) で過小)。キューから取り出す多項式 l, r の大きさは追えず記号のまま(推定できない)"
     },
     "abc474_a@25429#0": {
       "lang": "python",
@@ -1428,7 +1430,7 @@
       "source": "manual",
       "time": "O(N log M + Q log M + M)",
       "accept": [],
-      "note": "TODO: atcoder.lazysegtree の apply / prod を正しく数えない。input = sys.stdin.buffer.readline の input が記号になる"
+      "note": "atcoder.lazysegtree の apply / prod は log M(大きさは最後の引数 [(0, 1)] * m の要素数)"
     },
     "abc477_g@25886#0": {
       "lang": "python",

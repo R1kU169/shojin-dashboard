@@ -133,6 +133,8 @@ export type IrNode =
       isGlobal: boolean;
       /** 確保と同時に全要素を初期化する(=要素数ぶんの時間がかかる)か */
       costsTime: boolean;
+      /** 要素もコンテナなら、その種類([FenwickTree(n) for _ in …] の要素は acl、[set() for _ in …] は hset) */
+      elem?: ContainerKind;
       loc: Loc;
       reading?: boolean;
     }

@@ -229,6 +229,7 @@ export class Analyzer {
       if (e.of.kind === "sym") {
         const d = this.declOf(e.of.name);
         if (d) {
+          if (d.elem && d.elem !== "unknown" && d.elem !== "scalar") return d.elem;
           const inner = [...d.typeName.matchAll(/([A-Za-z_]\w*)\s*</g)].map((m) => m[1]).slice(1);
           for (const t of inner) if (this.spec.typeKind[t]) return this.spec.typeKind[t];
           if (d.dims.length >= 2) return "array";
@@ -286,6 +287,9 @@ export class Analyzer {
       case "member":
         if (e.of.kind === "sym" && (e.of.name === "this" || e.of.name === "self") && e.args === null) return this.sizeSym(e.name);
         if (SIZE_KEEPING_MEMBERS.has(e.name)) return this.sizeOf(e.of, env);
+        if (convolutionArgs(e)) return add(this.sizeOf(convolutionArgs(e)![0] ?? null, env), this.sizeOf(convolutionArgs(e)![1] ?? null, env));
+        // ACL の scc() / groups() は頂点数以下の個数のグループ
+        if ((e.name === "scc" || e.name === "groups") && this.kindOf(e.of) === "acl") return this.sizeOf(e.of, env);
         if (this.isInputExpr(e, env)) return this.named("N", "入力の要素数", 0);
         return this.named(`|${sexprText(e, 24)}|`, `${sexprText(e, 24)} の要素数`, 0);
       case "call": {
@@ -293,6 +297,8 @@ export class Analyzer {
         if (r) return boundOf(r.to, this.boundEnv(env))?.expr ?? Q;
         if (["sorted", "list", "reversed", "set", "enumerate", "tuple", "zip", "deque", "frozenset", "Counter", "sort", "scan_words", "keys", "values", "reverse", "uniq", "shuffle"].includes(e.name) && e.args.length) return this.sizeOf(e.args[e.args.length - 1], env);
         if (e.name === "head" && this.lang === "bash") return ONE;
+        const conv = convolutionArgs(e);
+        if (conv) return add(this.sizeOf(conv[0] ?? null, env), this.sizeOf(conv[1] ?? null, env));
         // map(f, a) / filter(f, a) / Julia の parse.(Int, xs) / PHP の array_map(f, $a) は最後の引数の要素数(以下)
         if ((e.name === "map" || e.name === "filter" || e.name === "array_map") && e.args.length >= 2) return this.sizeOf(e.args[e.args.length - 1], env);
         // PHP の配列関数は第1引数の要素数(以下)
@@ -1079,9 +1085,10 @@ export class Analyzer {
     }
     // resize(n) / assign(n, x) で大きさを決めたコンテナ
     walkIr(this.prog.nodes, (x) => {
-      if (x.kind === "member" && (x.name === "resize" || x.name === "assign") && x.of.kind === "sym" && x.args && x.args[0]) {
-        const b = boundOf(x.args[0], benv);
-        if (b) setAlias(x.of.name, b.expr);
+      if (x.kind === "member" && (x.name === "resize" || x.name === "assign") && x.args && x.args[0]) {
+        const name = x.of.kind === "sym" ? x.of.name : x.of.kind === "index" && x.of.of.kind === "sym" ? `${x.of.of.name}[]` : null;
+        const b = name ? boundOf(x.args[0], benv) : null;
+        if (name && b) setAlias(name, b.expr);
       }
     });
     // Rust の input! の長さ
@@ -1156,6 +1163,8 @@ export class Analyzer {
           const withGrowth = (x: Expr) => (g ? add(x, g) : x);
           const len = value.kind === "slice" ? this.sliceLen(value, benv) : null;
           if (len) setAlias(target, withGrowth(len));
+          // p = convolution(a, b) の長さは |a| + |b|
+          if (convolutionArgs(value)) setAlias(target, withGrowth(this.sizeOf(value, null)));
           const src = len ? null : copySource(value);
           if (src && src !== target) {
             const s = this.aliases.get(`|${src}|`);
@@ -1610,4 +1619,12 @@ export const __internal = { countOf, constValue, singleSym };
 function monotoneUpdate(value: SExpr | null, name: string): boolean {
   if (!value || value.kind !== "call" || (value.name !== "max" && value.name !== "min")) return false;
   return value.args.some((a) => a.kind === "sym" && a.name === name);
+}
+
+/** convolution(a, b) / atcoder::convolution(a, b) の (a, b)(convolution<mod> の数の引数は除く)。違えば null */
+function convolutionArgs(e: SExpr): SExpr[] | null {
+  const names = ["convolution", "convolution_ll", "convolution_int"];
+  if (e.kind === "call" && names.includes(e.name)) return e.args.filter((a) => a.kind !== "num");
+  if (e.kind === "member" && e.args && e.of.kind === "sym" && e.of.name === "atcoder" && names.includes(e.name)) return e.args.filter((a) => a.kind !== "num");
+  return null;
 }
