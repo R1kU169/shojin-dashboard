@@ -1254,6 +1254,291 @@ button.member-card {
   font-size: 12px;
   margin: 4px 0 0;
 }
+
+/* ---------- コーナーケース(エディターの下のカード) ---------- */
+
+.cg-card .card-head {
+  margin-bottom: 0;
+}
+.cg-card .card-head + * {
+  margin-top: 14px;
+}
+.cg-hint,
+.cg-backend {
+  font-size: 12px;
+  line-height: 1.6;
+  margin: 0 0 12px;
+}
+.cg-hint code,
+.cg-var-name code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.cg-inputs {
+  gap: 12px;
+  margin-bottom: 12px;
+}
+/* グリッドの項目は既定で中身より狭くならないので、長い行を貼るとカードからはみ出す */
+.cg-inputs > * {
+  min-width: 0;
+}
+.cg-field {
+  display: block;
+}
+.cg-field .io-label {
+  display: block;
+  margin-top: 0;
+}
+.cg-area {
+  display: block;
+  width: 100%;
+  min-height: 132px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--ink) 2%, transparent);
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-variant-ligatures: none;
+  font-feature-settings: "liga" 0, "calt" 0;
+  font-size: 13px;
+  line-height: 1.55;
+  padding: 10px 12px;
+  resize: vertical;
+}
+.cg-spec-view {
+  margin-bottom: 12px;
+}
+.cg-var-table td {
+  vertical-align: middle;
+}
+.cg-var-name {
+  white-space: nowrap;
+  font-weight: 700;
+}
+.cg-var-kind {
+  font-size: 12px;
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+.cg-bounds {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.cg-bounds .muted {
+  font-size: 12px;
+  white-space: nowrap;
+}
+.cg-bound {
+  width: 110px;
+  font: inherit;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 3px 8px;
+}
+.cg-var-note {
+  font-size: 12px;
+}
+.cg-graph {
+  font-size: 12px;
+  margin: 8px 0 0;
+}
+.cg-reset {
+  font-size: 12px;
+  margin-top: 6px;
+}
+.cg-warn {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #a15c00;
+}
+:root[data-theme="dark"] .cg-warn {
+  color: #e0a34a;
+}
+.cg-unread {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.cg-unread summary {
+  cursor: pointer;
+}
+.cg-unread ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  line-height: 1.6;
+}
+.cg-stale {
+  font-size: 12px;
+  color: #a15c00;
+  margin: 0 0 8px;
+}
+:root[data-theme="dark"] .cg-stale {
+  color: #e0a34a;
+}
+.cg-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  margin-bottom: 8px;
+}
+.cg-actions .linklike {
+  font-size: 13px;
+}
+.cg-list-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  padding: 8px 2px;
+  border-bottom: 1px solid var(--grid);
+  font-size: 13px;
+}
+.cg-check-all {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+.cg-counts {
+  font-size: 12px;
+}
+.cg-cases {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+/* 1件: [チェック] [名前・大きさ] [結果] [標準入力に入れる]、下に開閉する入力・出力 */
+.cg-case {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 4px 12px;
+  padding: 10px 2px;
+  border-bottom: 1px solid var(--grid);
+}
+.cg-case:last-child {
+  border-bottom: none;
+}
+.cg-case-check input {
+  margin: 0;
+}
+.cg-case-title {
+  font-size: 14px;
+  font-weight: 600;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+}
+.cg-case-purpose {
+  font-size: 12px;
+  font-weight: 400;
+}
+.cg-case-meta {
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.cg-case-result {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px 8px;
+  font-size: 12px;
+}
+.cg-exit {
+  font-size: 11px;
+}
+.cg-time {
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+.cg-time.slow {
+  color: #a15c00;
+  font-weight: 700;
+}
+:root[data-theme="dark"] .cg-time.slow {
+  color: #e0a34a;
+}
+.cg-use {
+  white-space: nowrap;
+}
+.cg-case-detail {
+  grid-column: 2 / -1;
+  min-width: 0;
+  font-size: 12px;
+}
+.cg-case-detail summary {
+  cursor: pointer;
+  color: var(--muted);
+  width: fit-content;
+}
+.cg-case-detail .io-out {
+  max-height: 220px;
+  font-size: 12px;
+}
+.cg-case-detail .error-text {
+  margin: 8px 0 0;
+}
+@media (max-width: 560px) {
+  /* 表は「変数・種類」の行の下に範囲とメモを並べる縦積みにする。
+     .data-table の既定(後ろで定義)より強くするため .data-table も付ける */
+  .data-table.cg-var-table thead {
+    display: none;
+  }
+  .data-table.cg-var-table tbody,
+  .data-table.cg-var-table td {
+    display: block;
+  }
+  .data-table.cg-var-table tbody tr {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 4px 10px;
+    padding: 10px 2px;
+    border-bottom: 1px solid var(--grid);
+  }
+  .data-table.cg-var-table tbody tr:last-child {
+    border-bottom: none;
+  }
+  .data-table.cg-var-table td {
+    padding: 0;
+    border-bottom: none;
+  }
+  .data-table.cg-var-table td.cg-var-range,
+  .data-table.cg-var-table td.cg-var-note {
+    flex: 1 1 100%;
+  }
+  .data-table.cg-var-table td.cg-var-note:empty,
+  .data-table.cg-var-table td.cg-none {
+    display: none;
+  }
+  .cg-bound {
+    width: 7.5em;
+  }
+  /* 1件の結果: 名前の下に結果と「標準入力に入れる」を並べる */
+  .cg-case {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  .cg-case-result {
+    grid-column: 2;
+    justify-content: flex-start;
+  }
+  .cg-use {
+    grid-column: 2;
+    justify-self: start;
+  }
+}
 .editor-lines {
   flex: none;
   width: 46px;

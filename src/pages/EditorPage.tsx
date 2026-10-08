@@ -1,6 +1,7 @@
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 import type { ChangeEvent } from "react";
 import { Link, useSearchParams } from "react-router-dom";
+import { CaseGenerator } from "../components/CaseGenerator";
 import { CodeEditor } from "../components/CodeEditor";
 import type { CodeEditorHandle } from "../components/CodeEditor";
 import { ProblemSearch } from "../components/ProblemSearch";
@@ -177,7 +178,14 @@ export function EditorPage() {
     return () => clearTimeout(t);
   }, [code, langKey]);
   useEffect(() => {
-    const t = setTimeout(() => localStorage.setItem(STDIN_KEY, stdin), 400);
+    const t = setTimeout(() => {
+      // コーナーケースの大きい入力は localStorage に入りきらないことがある。古い入力が戻るよりは空の方がよい
+      try {
+        localStorage.setItem(STDIN_KEY, stdin);
+      } catch {
+        localStorage.removeItem(STDIN_KEY);
+      }
+    }, 400);
     return () => clearTimeout(t);
   }, [stdin]);
 
@@ -382,7 +390,7 @@ export function EditorPage() {
             <>
               {result.backend === "godbolt" && (
                 <p className="fallback-note">
-                  ⚠ Wandboxが停止中のため{" "}
+                  ⚠ {result.fallback === "size" ? "入力が大きい(約1MBを超える)ため" : "Wandboxが停止中のため"}{" "}
                   <a href="https://godbolt.org" target="_blank" rel="noreferrer">
                     Compiler Explorer
                   </a>{" "}
@@ -413,6 +421,8 @@ export function EditorPage() {
           )}
         </section>
       </div>
+
+      <CaseGenerator lang={lang} code={code} problem={problem} onUseInput={setStdin} />
 
       <p className="muted editor-note">
         実行は{" "}

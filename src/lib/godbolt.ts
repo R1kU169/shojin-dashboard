@@ -49,6 +49,8 @@ interface CeResponse {
   code?: number;
   didExecute?: boolean;
   timedOut?: boolean;
+  /** 実行にかかった時間(ミリ秒) */
+  execTime?: number;
   stdout?: CeText[];
   stderr?: CeText[];
   buildResult?: { code?: number; stdout?: CeText[]; stderr?: CeText[] };
@@ -110,5 +112,7 @@ export async function runCodeGodbolt(
     compilerError,
     stdout: joinLines(j.stdout),
     stderr: j.timedOut ? `${stderr}実行時間の上限を超えました\n` : stderr,
+    ...(j.didExecute !== false && buildCode === 0 && typeof j.execTime === "number" ? { timeMs: j.execTime } : {}),
+    ...(j.timedOut ? { timedOut: true } : {}),
   };
 }

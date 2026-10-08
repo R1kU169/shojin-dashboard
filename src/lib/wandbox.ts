@@ -269,6 +269,36 @@ export interface RunResult {
   compilerError: string;
   stdout: string;
   stderr: string;
+  /** 実行時間(ミリ秒)。Compiler Explorer だけが返す */
+  timeMs?: number;
+  /** 実行時間の上限で打ち切られた(Compiler Explorer だけが返す) */
+  timedOut?: boolean;
+}
+
+/** Wandbox に送るリクエストの本文 */
+function requestBody(lang: EditorLang, code: string, stdin: string): string {
+  return JSON.stringify({
+    compiler: lang.compiler,
+    code,
+    stdin,
+    ...(lang.options ? { options: lang.options } : {}),
+    // キー名はケバブケース。1要素=argv1個なので改行で繋ぐ(スペース区切りは不可)。
+    // 使わない言語では送らない(compiler-option-raw非対応のコンパイラがあるため)
+    ...(lang.rawOptions?.length
+      ? { "compiler-option-raw": lang.rawOptions.join("\n") }
+      : {}),
+  });
+}
+
+/**
+ * Wandbox が受け付けるリクエストの大きさの上限(本文 1MiB。nginx の既定の上限で、
+ * 超えると 413 が返る。2026-10 に実測: 1.04MB は通り、1.06MB は 413)
+ */
+export const WANDBOX_MAX_BODY = 1024 * 1024;
+
+/** このコードと入力を Wandbox に送れるか */
+export function fitsWandbox(lang: EditorLang, code: string, stdin: string): boolean {
+  return new TextEncoder().encode(requestBody(lang, code, stdin)).length <= WANDBOX_MAX_BODY - 512;
 }
 
 /** コードを実行して結果を返す。ネットワーク/サービスエラー時は例外。 */
@@ -281,17 +311,7 @@ export async function runCode(
   const res = await fetch(`${API}/compile.json`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      compiler: lang.compiler,
-      code,
-      stdin,
-      ...(lang.options ? { options: lang.options } : {}),
-      // キー名はケバブケース。1要素=argv1個なので改行で繋ぐ(スペース区切りは不可)。
-      // 使わない言語では送らない(compiler-option-raw非対応のコンパイラがあるため)
-      ...(lang.rawOptions?.length
-        ? { "compiler-option-raw": lang.rawOptions.join("\n") }
-        : {}),
-    }),
+    body: requestBody(lang, code, stdin),
     signal,
   });
   if (!res.ok) throw new Error(`実行APIエラー (HTTP ${res.status})`);

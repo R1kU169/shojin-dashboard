@@ -19,5 +19,5 @@
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["tests", "src/lib/complexity"]
+  "include": ["tests", "src/lib/complexity", "src/lib/casegen"]
 }

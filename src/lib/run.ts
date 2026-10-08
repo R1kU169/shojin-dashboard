@@ -5,7 +5,7 @@
 // どの言語・どんなコードでも "OCI runtime error: crun: clone: Resource
 // temporarily unavailable" (終了コード126)しか返らなくなる。生のまま表示すると
 // 自分のコードのせいだと誤解するので、代替サービスに逃がしたうえで理由を出す。
-import { runCode as runWandbox } from "./wandbox";
+import { fitsWandbox, runCode as runWandbox } from "./wandbox";
 import type { EditorLang, RunResult } from "./wandbox";
 import { GODBOLT_LANGS, runCodeGodbolt } from "./godbolt";
 
@@ -16,6 +16,8 @@ export interface RunOutcome extends RunResult {
   backend: Backend;
   /** フォールバックした時だけ: 実際に動いた処理系のバージョン */
   backendVersion?: string;
+  /** Compiler Explorer に切り替えた理由(Wandbox が止まっている / 入力が大きくて Wandbox に送れない) */
+  fallback?: "down" | "size";
 }
 
 /**
@@ -62,16 +64,24 @@ export async function runCode(
   signal?: AbortSignal,
 ): Promise<RunOutcome> {
   let reason: string;
-  try {
-    const r = await runWandbox(lang, code, stdin, signal);
-    if (!isSandboxFailure(r)) return { ...r, backend: "wandbox" };
-    reason = "Wandboxの実行サンドボックスが停止しています";
-  } catch (e) {
-    if ((e as Error).name === "AbortError") throw e;
-    reason = `Wandboxに接続できませんでした (${(e as Error).message})`;
+  let fallback: "down" | "size" = "down";
+  const g = GODBOLT_LANGS[lang.key];
+  if (!fitsWandbox(lang, code, stdin)) {
+    // 送っても 413 で弾かれるだけなので、最初から Compiler Explorer に回す
+    if (!g) throw new Error(`入力が大きすぎて Wandbox に送れません(コードと合わせて約1MBまで)。${lang.label} は代替の実行環境がないため、入力を小さくしてください。`);
+    reason = "入力が大きすぎて Wandbox に送れません";
+    fallback = "size";
+  } else {
+    try {
+      const r = await runWandbox(lang, code, stdin, signal);
+      if (!isSandboxFailure(r)) return { ...r, backend: "wandbox" };
+      reason = "Wandboxの実行サンドボックスが停止しています";
+    } catch (e) {
+      if ((e as Error).name === "AbortError") throw e;
+      reason = `Wandboxに接続できませんでした (${(e as Error).message})`;
+    }
   }
 
-  const g = GODBOLT_LANGS[lang.key];
   if (!g) {
     throw new Error(
       `${reason}。${lang.label} は代替の実行環境がないため、時間をおいて試すか、他の言語をお使いください。`,
@@ -79,11 +89,46 @@ export async function runCode(
   }
   try {
     const r = await runCodeGodbolt(g, code, stdin, signal);
-    return { ...r, backend: "godbolt", backendVersion: g.version };
+    return { ...r, backend: "godbolt", backendVersion: g.version, fallback };
   } catch (e) {
     if ((e as Error).name === "AbortError") throw e;
     throw new Error(
       `${reason}。代替のCompiler Explorerにも接続できませんでした (${(e as Error).message})`,
     );
   }
+}
+
+/** まとめて実行で Compiler Explorer を先に使うか(実行時間が分かる言語) */
+export function prefersGodbolt(lang: EditorLang): boolean {
+  return lang.key in GODBOLT_LANGS;
+}
+
+/**
+ * コーナーケースのまとめて実行用。Compiler Explorer が使える言語はそちらを先に使う
+ * (実行時間を返す・C++ などは -O2 つきで AtCoder に近い・約1MBを超える入力も送れる)。
+ * Compiler Explorer に接続できなければ Wandbox で実行する(入力が送れる大きさなら)。
+ */
+export async function runCase(
+  lang: EditorLang,
+  code: string,
+  stdin: string,
+  signal?: AbortSignal,
+): Promise<RunOutcome> {
+  const g = GODBOLT_LANGS[lang.key];
+  let reason = "";
+  if (g) {
+    try {
+      const r = await runCodeGodbolt(g, code, stdin, signal);
+      return { ...r, backend: "godbolt", backendVersion: g.version };
+    } catch (e) {
+      if ((e as Error).name === "AbortError") throw e;
+      reason = `Compiler Explorerに接続できませんでした (${(e as Error).message})`;
+    }
+  }
+  if (!fitsWandbox(lang, code, stdin)) {
+    throw new Error(`${reason ? `${reason}。` : ""}入力が大きすぎて Wandbox に送れません(コードと合わせて約1MBまで)`);
+  }
+  const r = await runWandbox(lang, code, stdin, signal);
+  if (isSandboxFailure(r)) throw new Error(`${reason ? `${reason}。` : ""}Wandboxの実行サンドボックスが停止しています`);
+  return { ...r, backend: "wandbox" };
 }
