@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { StatCard } from "../components/StatCard";
 import { MEMBERS } from "../data/members";
-import { getProblemModels, getRating, loadSubmissions } from "../lib/cache";
+import { getProblemModels, getRating, peekSubmissions, refreshSubmissions } from "../lib/cache";
 import { TIER_COLORS, TIER_LABELS, tierIndex } from "../lib/colors";
 import { computeStats, todayEpochDay } from "../lib/stats";
 import type { UserStats } from "../lib/stats";
@@ -15,6 +15,10 @@ interface Row {
   progress: number;
   stats?: UserStats;
   rating?: number | null;
+  /** 手元のデータで表示しながら、最新の提出を取っている(取る順番を待っている) */
+  refreshing?: boolean;
+  /** 最新の提出を取れず、手元のデータで表示している */
+  stale?: boolean;
 }
 
 type Period = "week" | "month" | "all";
@@ -55,21 +59,34 @@ export function ClubPage() {
     (async () => {
       const models = await getProblemModels().catch(() => null);
       if (!models || cancel) return;
-      // API礼儀のため部員を並列ではなく順番に取得する
-      for (const m of MEMBERS) {
+      // 1. 手元のデータ(IndexedDB のキャッシュか、6時間ごとに更新するスナップショット)で全員をすぐ並べる。
+      //    kenkoooo を1人ずつ待つと、応答の遅い人のところで後ろの全員が止まってしまう
+      const [locals, ratings] = await Promise.all([
+        Promise.all(MEMBERS.map((m) => peekSubmissions(m.id).catch(() => null))),
+        Promise.all(MEMBERS.map((m) => getRating(m.id).catch(() => null))),
+      ]);
+      if (cancel) return;
+      setRows(
+        MEMBERS.map((m, i) => {
+          const local = locals[i];
+          return local
+            ? { member: m, status: "done", progress: 0, stats: computeStats(local.list, models), rating: ratings[i], refreshing: !local.fresh }
+            : { member: m, status: "pending", progress: 0, rating: ratings[i] };
+        }),
+      );
+      // 2. 古い人だけ、kenkoooo から最新の提出を順に取って差し替える(リクエストの間隔は api.ts が1秒以上あける)
+      for (const [i, m] of MEMBERS.entries()) {
         if (cancel) break;
-        update(m.id, { status: "loading" });
+        const local = locals[i];
+        if (local?.fresh) continue;
+        if (!local) update(m.id, { status: "loading" });
         try {
-          const subs = await loadSubmissions(m.id, (n) => {
-            if (!cancel) update(m.id, { progress: n });
+          const r = await refreshSubmissions(m.id, (n) => {
+            if (!cancel && !local) update(m.id, { progress: n });
           });
-          const stats = computeStats(subs, models);
-          const rating = await getRating(m.id).catch(() => null);
-          if (!cancel) {
-            update(m.id, { status: "done", stats, rating });
-          }
+          if (!cancel) update(m.id, { status: "done", stats: computeStats(r.list, models), refreshing: false, stale: !r.live });
         } catch {
-          if (!cancel) update(m.id, { status: "error" });
+          if (!cancel) update(m.id, local ? { refreshing: false, stale: true } : { status: "error" });
         }
       }
     })();
@@ -115,6 +132,8 @@ export function ClubPage() {
   const periodWord =
     period === "week" ? "今週" : period === "month" ? "今月" : "全期間";
   const loadedRows = rows.filter((r) => r.status === "done" && r.stats);
+  const refreshingCount = rows.filter((r) => r.refreshing).length;
+  const staleCount = rows.filter((r) => r.stale).length;
   const periodSum = loadedRows.reduce((s, r) => s + periodAc(r.stats!, period), 0);
   const activeCount = loadedRows.filter(
     (r) => periodAc(r.stats!, period) > 0,
@@ -159,6 +178,8 @@ export function ClubPage() {
           <h2 className="card-title">部全体サマリー</h2>
           <span className="card-sub">
             読み込み済み {loadedRows.length}/{MEMBERS.length} 人
+            {refreshingCount > 0 && `・最新の提出を確認中(残り ${refreshingCount} 人)`}
+            {refreshingCount === 0 && staleCount > 0 && `・${staleCount} 人は最新の提出を取得できず、保存済みのデータで表示`}
           </span>
         </div>
         <div className="stat-grid">
@@ -260,6 +281,22 @@ export function ClubPage() {
                       {isTop && (
                         <span className="best-chip">
                           👑 {period === "month" ? "今月" : "今週"}のMVP
+                        </span>
+                      )}
+                      {r.refreshing && (
+                        <span
+                          className="sync-spinner rank-sync"
+                          title="最新の提出を確認中"
+                          aria-label="最新の提出を確認中"
+                        />
+                      )}
+                      {r.stale && (
+                        <span
+                          className="muted rank-stale"
+                          title="AtCoder Problems から最新の提出を取得できなかったため、保存済みのデータで表示しています"
+                        >
+                          {" "}
+                          保存済み
                         </span>
                       )}
                       {r.status === "loading" && (

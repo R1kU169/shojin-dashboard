@@ -20,6 +20,20 @@ const REQUEST_TIMEOUT_MS = 15_000;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+// kenkoooo へのリクエストは、ページ全体で前の開始から PAGE_INTERVAL_MS 以上あけて出す
+// (ランキングのように何人分も続けて取るときも、利用規約の間隔を守り、混雑させない)
+let turn: Promise<void> = Promise.resolve();
+let lastStart = 0;
+function waitTurn(): Promise<void> {
+  const next = turn.then(async () => {
+    const wait = lastStart + PAGE_INTERVAL_MS - Date.now();
+    if (wait > 0) await sleep(wait);
+    lastStart = Date.now();
+  });
+  turn = next;
+  return next;
+}
+
 async function fetchJson<T>(url: string): Promise<T> {
   const res = await fetch(url, { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
   if (!res.ok) throw new Error(`API error ${res.status}: ${url}`);
@@ -45,6 +59,7 @@ export async function fetchSubmissionsSince(
   const byId = new Map<number, Submission>();
   let from = fromSecond;
   for (;;) {
+    await waitTurn();
     const page = await fetchJson<Submission[]>(
       `${BASE}/atcoder-api/v3/user/submissions?user=${encodeURIComponent(user)}&from_second=${from}`,
     );
@@ -60,7 +75,6 @@ export async function fetchSubmissionsSince(
     const last = page[page.length - 1].epoch_second;
     if (added === 0 && last <= from) break;
     from = last;
-    await sleep(PAGE_INTERVAL_MS);
   }
   return [...byId.values()].sort((a, b) => a.epoch_second - b.epoch_second);
 }
