@@ -13,7 +13,7 @@ const SNAP = `${import.meta.env.BASE_URL}snapshot`;
 
 async function snapJson<T>(file: string): Promise<T | null> {
   try {
-    const res = await fetch(`${SNAP}/${file}`, { cache: "no-cache" });
+    const res = await fetch(`${SNAP}/${file}`, { cache: "no-cache", signal: AbortSignal.timeout(10_000) });
     if (!res.ok) return null;
     return (await res.json()) as T;
   } catch {

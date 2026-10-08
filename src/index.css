@@ -1740,6 +1740,27 @@ button.member-card {
   flex-wrap: wrap;
   margin-top: 3px;
 }
+/* 手元のデータを表示しながら最新の提出を取っている・取れなかった */
+.sync-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.sync-spinner {
+  width: 10px;
+  height: 10px;
+  border: 2px solid var(--grid);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sync-spinner {
+    animation: none;
+  }
+}
 .mypage-toggle {
   font-size: 12px;
   font-weight: 600;

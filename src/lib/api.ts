@@ -15,10 +15,13 @@ const BASE = import.meta.env.DEV
 const PAGE_INTERVAL_MS = 1100;
 const PAGE_SIZE = 500;
 
+// kenkoooo が混んでいると応答が返らないまま待ち続けることがあるので、1リクエストごとに打ち切る
+const REQUEST_TIMEOUT_MS = 15_000;
+
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 async function fetchJson<T>(url: string): Promise<T> {
-  const res = await fetch(url);
+  const res = await fetch(url, { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
   if (!res.ok) throw new Error(`API error ${res.status}: ${url}`);
   return res.json() as Promise<T>;
 }

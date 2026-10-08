@@ -49,15 +49,21 @@ interface SubsEntry {
 // React StrictModeの二重マウント等で同じ取得が並走してもAPIを1回しか叩かない
 const inflightRes = new Map<string, Promise<unknown>>();
 
+/**
+ * IndexedDB にキャッシュした資源。ttlMs を過ぎていたら取り直す。
+ * staleWhileRevalidate なら、古いキャッシュがあればそれをすぐ返し、取り直しは裏で行う
+ * (問題一覧のように1日遅れても困らないものの表示を待たせないため)。
+ */
 async function cachedResource<T>(
   key: string,
   fetcher: () => Promise<T>,
   ttlMs: number,
+  staleWhileRevalidate = false,
 ): Promise<T> {
   const hit = (await get(key)) as ResourceEntry<T> | undefined;
   if (hit && Date.now() - hit.at < ttlMs) return hit.data;
   const existing = inflightRes.get(key);
-  if (existing) return existing as Promise<T>;
+  if (existing) return hit && staleWhileRevalidate ? hit.data : (existing as Promise<T>);
   const p = (async () => {
     try {
       const data = await fetcher();
@@ -69,6 +75,10 @@ async function cachedResource<T>(
     }
   })().finally(() => inflightRes.delete(key));
   inflightRes.set(key, p);
+  if (hit && staleWhileRevalidate) {
+    p.catch(() => {}); // 裏の取り直しの失敗は次の訪問で再挑戦する
+    return hit.data;
+  }
   return p;
 }
 
@@ -78,6 +88,7 @@ export const getProblems = () =>
     "res:problems",
     async () => (await snapshotProblems()) ?? (await fetchProblems()),
     DAY_MS,
+    true,
   );
 
 export const getProblemModels = () =>
@@ -85,6 +96,7 @@ export const getProblemModels = () =>
     "res:models",
     async () => (await snapshotModels()) ?? (await fetchProblemModels()),
     DAY_MS,
+    true,
   );
 
 // 全部員の公式レーティング表(snapshot ratings.json)。無ければ空表(devや未生成時)。
@@ -139,21 +151,87 @@ export const getRatingHistory = (user: string): Promise<RatePoint[]> =>
     DAY_MS,
   );
 
+/** 手元にある提出履歴(IndexedDB のキャッシュか、同一オリジンのスナップショット) */
+export interface LocalSubs {
+  list: Submission[];
+  watermark: number;
+  /** 最後に kenkoooo から取った時刻(スナップショットなら作った時刻) */
+  at: number;
+  /** 10分以内に取ったもので、取り直さなくてよい */
+  fresh: boolean;
+}
+
+// 同じユーザーのスナップショットを、表示用と取得用で2回読まないよう少しの間覚えておく
+const snapMemo = new Map<string, { at: number; p: ReturnType<typeof snapshotSubs> }>();
+const SNAP_MEMO_MS = 60 * 1000;
+
+function snapshotSubsMemo(user: string) {
+  const key = user.toLowerCase();
+  const m = snapMemo.get(key);
+  if (m && Date.now() - m.at < SNAP_MEMO_MS) return m.p;
+  const p = snapshotSubs(user);
+  snapMemo.set(key, { at: Date.now(), p });
+  return p;
+}
+
+/**
+ * kenkoooo に問い合わせずに手元で用意できる提出履歴(表示用)。IndexedDB のキャッシュがあればそれを
+ * (古くても)すぐ返し、無ければ同一オリジンのスナップショットを読む。どちらも無ければ null。
+ */
+export async function peekSubmissions(user: string): Promise<LocalSubs | null> {
+  const hit = (await get(`subs:${user.toLowerCase()}`)) as SubsEntry | undefined;
+  if (hit) return { ...hit, fresh: Date.now() - hit.at < SUBS_FRESH_MS };
+  const snap = await snapshotSubsMemo(user);
+  return snap ? { list: snap.list, watermark: snap.watermark, at: snap.at, fresh: false } : null;
+}
+
+/**
+ * 差分を取る起点。IndexedDB のキャッシュが古く、6時間ごとに更新されるスナップショットのほうが新しければ
+ * それと合わせる(しばらく間が空いた再訪でも、kenkoooo から取り直す範囲を短くする)。
+ */
+async function refreshBase(user: string): Promise<LocalSubs | null> {
+  const local = await peekSubmissions(user);
+  if (!local || local.fresh) return local;
+  const snap = await snapshotSubsMemo(user);
+  if (!snap || snap.watermark <= local.watermark) return local;
+  const byId = new Map<number, Submission>();
+  for (const s of local.list) byId.set(s.id, s);
+  for (const s of snap.list) byId.set(s.id, s);
+  const list = [...byId.values()].sort((a, b) => a.epoch_second - b.epoch_second);
+  return { list, watermark: snap.watermark, at: snap.at, fresh: false };
+}
+
+export interface LoadedSubs {
+  list: Submission[];
+  /** kenkoooo から最新の差分を取れたか(false なら手元のデータのまま) */
+  live: boolean;
+  /** list がいつ時点のものか(取れなかったときは手元のデータの時刻) */
+  at: number;
+}
+
 interface InflightSubs {
-  promise: Promise<Submission[]>;
+  promise: Promise<LoadedSubs>;
   onProgress?: (fetched: number) => void;
 }
 
 const inflightSubs = new Map<string, InflightSubs>();
 
 /**
- * 提出履歴の増分キャッシュ。前回取得の最終提出時刻(watermark)以降だけを
+ * 提出履歴の増分キャッシュ。手元の最終提出時刻(watermark)以降だけを
  * APIから取り、IndexedDB内のリストへマージする。
  */
 export function loadSubmissions(
   user: string,
   onProgress?: (fetched: number) => void,
 ): Promise<Submission[]> {
+  return refreshSubmissions(user, onProgress).then((r) => r.list);
+}
+
+/** loadSubmissions と同じだが、最新を取れたかと時点も返す */
+export function refreshSubmissions(
+  user: string,
+  onProgress?: (fetched: number) => void,
+): Promise<LoadedSubs> {
   const key = user.toLowerCase();
   const existing = inflightSubs.get(key);
   if (existing) {
@@ -161,7 +239,7 @@ export function loadSubmissions(
     return existing.promise;
   }
   const entry: InflightSubs = {
-    promise: Promise.resolve([]),
+    promise: Promise.resolve({ list: [], live: false, at: 0 }),
     onProgress,
   };
   entry.promise = doLoadSubmissions(user, (n) => entry.onProgress?.(n)).finally(
@@ -174,24 +252,15 @@ export function loadSubmissions(
 async function doLoadSubmissions(
   user: string,
   onProgress: (fetched: number) => void,
-): Promise<Submission[]> {
+): Promise<LoadedSubs> {
   const key = `subs:${user.toLowerCase()}`;
-  const hit = (await get(key)) as SubsEntry | undefined;
-  if (hit && Date.now() - hit.at < SUBS_FRESH_MS) return hit.list;
+  // 取得の起点。IndexedDBキャッシュとスナップショットの新しいほう(初回訪問者もスナップショットで即座に土台がある)
+  const base = await refreshBase(user);
+  if (base?.fresh) return { list: base.list, live: true, at: base.at };
+  const baseList = base?.list ?? [];
+  const baseWatermark = base?.watermark ?? 0;
 
-  // 取得の起点。IndexedDBキャッシュがあればそれ、無ければ同一オリジンの
-  // スナップショットで初回訪問者にも即座に土台データを渡す。
-  let baseList = hit?.list ?? [];
-  let baseWatermark = hit?.watermark ?? 0;
-  if (!hit) {
-    const snap = await snapshotSubs(user);
-    if (snap) {
-      baseList = snap.list;
-      baseWatermark = snap.watermark;
-    }
-  }
-
-  // 差分だけを kenkoooo からライブ取得する。ブロックやレート制限で失敗しても、
+  // 差分だけを kenkoooo からライブ取得する。ブロックやレート制限・タイムアウトで失敗しても、
   // 土台データがあれば致命扱いにせずそれを表示する(Failed to fetch対策の要)。
   let fresh: Submission[];
   try {
@@ -204,7 +273,7 @@ async function doLoadSubmissions(
         watermark: baseWatermark,
         list: baseList,
       } satisfies SubsEntry);
-      return baseList;
+      return { list: baseList, live: false, at: base?.at ?? 0 };
     }
     throw e;
   }
@@ -216,6 +285,7 @@ async function doLoadSubmissions(
     (a, b) => a.epoch_second - b.epoch_second,
   );
   const watermark = list.length > 0 ? list[list.length - 1].epoch_second : 0;
-  await set(key, { at: Date.now(), watermark, list } satisfies SubsEntry);
-  return list;
+  const at = Date.now();
+  await set(key, { at, watermark, list } satisfies SubsEntry);
+  return { list, live: true, at };
 }

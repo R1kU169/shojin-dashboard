@@ -291,6 +291,21 @@ export function UserPage() {
                   ☆ マイページにする
                 </button>
               )}
+              {data.refreshing && (
+                <span className="sync-note" role="status">
+                  <span className="sync-spinner" aria-hidden="true" />
+                  最新の提出を確認中…
+                </span>
+              )}
+              {data.stale && (
+                <span
+                  className="sync-note"
+                  role="status"
+                  title="AtCoder Problems が混んでいるか止まっています。しばらくしてから再読み込みしてください"
+                >
+                  最新の提出を取得できませんでした{data.staleAt ? `(${timeAgo(data.staleAt)}の時点)` : ""}
+                </span>
+              )}
             </div>
           </div>
           {rating != null && tierColor && (
@@ -436,4 +451,13 @@ export function UserPage() {
       </section>
     </div>
   );
+}
+
+/** 「5分前」「3時間前」「2日前」 */
+function timeAgo(ms: number): string {
+  const min = Math.max(0, Math.round((Date.now() - ms) / 60000));
+  if (min < 60) return `${Math.max(1, min)}分前`;
+  const h = Math.round(min / 60);
+  if (h < 48) return `${h}時間前`;
+  return `${Math.round(h / 24)}日前`;
 }
