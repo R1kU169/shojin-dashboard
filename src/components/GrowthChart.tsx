@@ -56,7 +56,8 @@ export function GrowthChart({ points }: { points: GrowthPoint[] }) {
   const chrome = CHART_CHROME[resolved];
   return (
     <ResponsiveContainer width="100%" height={240}>
-      <ScatterChart margin={{ top: 16, right: 12, left: -8, bottom: 0 }}>
+      {/* 右端の日付(2026-10 など)のラベルが切れないよう右に余白をとる */}
+      <ScatterChart margin={{ top: 16, right: 26, left: -8, bottom: 0 }}>
         <CartesianGrid vertical={false} stroke={chrome.grid} />
         <XAxis
           type="number"

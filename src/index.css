@@ -106,6 +106,9 @@ body {
   min-height: 100svh;
   display: flex;
   flex-direction: column;
+  /* 何かが画面より広くなっても、ページごと横に動かさない(スマホでスティッキーヘッダーごと横にずれて見えるため)。
+     clip はスクロール容器を作らないので position: sticky を壊さない。はみ出しそのものは各所で直す */
+  overflow-x: clip;
 }
 
 h1 {
@@ -306,6 +309,21 @@ a:hover {
     display: none;
   }
 }
+/* スマホ幅では5つのタブ(DS倶楽部 ↗ を含む)を詰めて、横スクロールせずに1行に収める
+   (360px まで収まる。それより狭い端末では従来どおりタブの帯だけが横スクロールする) */
+@media (max-width: 420px) {
+  .app-header nav {
+    gap: 11px;
+  }
+  .app-header nav a {
+    font-size: 13px;
+  }
+}
+@media (max-width: 380px) {
+  .app-header nav {
+    gap: 8px;
+  }
+}
 
 /* ---------- レイアウト ---------- */
 
@@ -437,6 +455,11 @@ a:hover {
   gap: 36px;
   text-align: left;
   padding: 44px 0 16px;
+}
+/* グリッドの項目は既定で中身(英字の見出しなど)より狭くならず、320px 幅ではヒーローからはみ出す */
+.hero-main,
+.hero-side {
+  min-width: 0;
 }
 /* ヒーロー右カラム: 炎アートの下にコンテスト予定カードを積む */
 .hero-side {
@@ -1001,6 +1024,9 @@ button.member-card {
   padding: 5px 10px;
 }
 .ep-form button {
+  /* 狭い幅で入力欄に押されて「連 / 携」と縦に折り返さない */
+  flex: none;
+  white-space: nowrap;
   font: inherit;
   font-size: 13px;
   color: var(--ink-2);
@@ -1140,6 +1166,15 @@ button.member-card {
   display: flex;
   align-items: center;
   gap: 6px;
+}
+/* スマホ幅ではコードの1行目に重なるので、浮かせずにコード欄の上の帯に置く */
+@media (max-width: 560px) {
+  .editor-card-actions {
+    position: static;
+    justify-content: flex-end;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+  }
 }
 .tpl-reset {
   font: inherit;
@@ -1646,6 +1681,39 @@ button.member-card {
   color: var(--muted);
   min-width: 160px;
 }
+/* スマホ幅の内訳: 1行目に「行番号 項」、その下に対象と理由を全幅で縦積みにする(4列だと理由が画面外に出る)。
+   .data-table の既定(後ろで定義)より強くするため .data-table も付ける */
+@media (max-width: 560px) {
+  .data-table.cx-breakdown thead {
+    display: none;
+  }
+  .data-table.cx-breakdown tbody tr {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    align-items: baseline;
+    gap: 3px 12px;
+    padding: 10px 2px;
+    border-bottom: 1px solid var(--grid);
+  }
+  .data-table.cx-breakdown tbody tr:last-child {
+    border-bottom: none;
+  }
+  .data-table.cx-breakdown td {
+    display: block;
+    padding: 0;
+    border-bottom: none;
+  }
+  .data-table.cx-breakdown td:nth-child(n + 3) {
+    grid-column: 1 / -1;
+  }
+  .data-table.cx-breakdown td.num {
+    text-align: left;
+  }
+  .cx-label,
+  .cx-reason {
+    min-width: 0;
+  }
+}
 .cx-unused {
   margin-top: 12px;
   font-size: 13px;
@@ -2006,6 +2074,98 @@ button.member-card {
   font-family: var(--font-mono);
   margin-left: 8px;
   font-size: 11px;
+}
+
+/* 狭い幅でだけ出す短い表記(ランキングの見出し「連続」・未レートの「—」) */
+.narrow-only {
+  display: none;
+}
+/* スマホ幅の表。列を横に並べたままだとカードや画面からはみ出して、ページごと横に動いてしまう */
+@media (max-width: 560px) {
+  .rank-table .narrow-only {
+    display: inline;
+  }
+  /* 問題の表(次に解く問題・復習・最近解いた): 1行目に問題名、2行目に「ラベル 値」を並べる縦積みにする */
+  .stack-table thead {
+    display: none;
+  }
+  .stack-table tbody,
+  .stack-table td {
+    display: block;
+  }
+  .stack-table tbody tr {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 14px;
+    padding: 10px 2px;
+    border-bottom: 1px solid var(--grid);
+  }
+  .stack-table tbody tr:last-child {
+    border-bottom: none;
+  }
+  .stack-table td {
+    padding: 0;
+    border-bottom: none;
+  }
+  /* 問題名・コンテスト名・「エディターで解く」をそれぞれひとかたまりにして、収まらなければ次の行へ回す
+     (問題名の途中で折り返さない。1行に収まらないほど長い問題名だけは中で折り返す) */
+  .stack-table td:first-child {
+    flex: 1 1 100%;
+    min-width: 0;
+    overflow-wrap: anywhere;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 2px 8px;
+  }
+  .stack-table td:first-child > * {
+    margin-left: 0;
+  }
+  .stack-table td:first-child > .tier-dot {
+    margin-right: 0;
+  }
+  .stack-table td.num {
+    font-size: 12px;
+    color: var(--ink-2);
+    text-align: left;
+  }
+  .stack-table td.num::before {
+    content: attr(data-label);
+    margin-right: 5px;
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  /* クラブ内ランキング: 余白と文字を詰めて5列を画面に収める。MVP の札は名前の下へ */
+  .rank-table th,
+  .rank-table td {
+    padding-inline: 4px;
+  }
+  .rank-table td {
+    font-size: 13px;
+  }
+  .rank-table th:first-child,
+  .rank-table td:first-child {
+    padding-left: 0;
+  }
+  .rank-table th:last-child,
+  .rank-table td:last-child {
+    padding-right: 0;
+  }
+  .rank-table .rank-cell {
+    font-size: 14px;
+  }
+  .rank-table td:nth-child(2) {
+    overflow-wrap: anywhere;
+  }
+  .rank-table .wide-only {
+    display: none;
+  }
+  .rank-table .best-chip {
+    display: table;
+    margin: 3px 0 0;
+  }
 }
 
 /* ---------- チャート ---------- */
@@ -2397,5 +2557,21 @@ button.member-card {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+}
+
+
+/* iPhone の Safari は、文字が16px未満の入力欄にフォーカスすると画面を勝手に拡大し、拡大したまま横にずれる。
+   スマホ幅では入力欄をすべて16pxにする(各所の .xxx input の指定より強くするため !important)。
+   コード欄はハイライト層・行番号と文字の大きさをそろえないと2層がずれるので、3つともそろえる */
+@media (max-width: 560px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+  .editor-lines,
+  .editor-highlight {
+    font-size: 16px;
   }
 }

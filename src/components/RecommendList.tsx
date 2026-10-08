@@ -9,7 +9,7 @@ export function RecommendList({ recs }: { recs: Recommendation[] }) {
     return <p className="muted">条件に合う未AC問題が見つかりませんでした。</p>;
   }
   return (
-    <table className="data-table">
+    <table className="data-table stack-table">
       <thead>
         <tr>
           <th>問題</th>
@@ -41,8 +41,8 @@ export function RecommendList({ recs }: { recs: Recommendation[] }) {
                 ✎ エディターで解く
               </Link>
             </td>
-            <td className="num">{r.clippedDifficulty}</td>
-            <td className="num prob-cell">
+            <td className="num" data-label="難易度">{r.clippedDifficulty}</td>
+            <td className="num prob-cell" data-label="AC確率">
               <span className="prob-meter">
                 <span
                   className="prob-fill"

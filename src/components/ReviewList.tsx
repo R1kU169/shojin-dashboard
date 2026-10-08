@@ -33,7 +33,7 @@ export function ReviewList({ items }: { items: ReviewItem[] }) {
     );
   }
   return (
-    <table className="data-table">
+    <table className="data-table stack-table">
       <thead>
         <tr>
           <th>問題</th>
@@ -66,9 +66,9 @@ export function ReviewList({ items }: { items: ReviewItem[] }) {
                   ✎ エディターで解く
                 </Link>
               </td>
-              <td className="num">{clip ?? "—"}</td>
-              <td className="num">{it.count}回</td>
-              <td className="num">{ymd(it.second)}</td>
+              <td className="num" data-label="難易度">{clip ?? "—"}</td>
+              <td className="num" data-label="挑戦">{it.count}回</td>
+              <td className="num" data-label="最終挑戦">{ymd(it.second)}</td>
             </tr>
           );
         })}

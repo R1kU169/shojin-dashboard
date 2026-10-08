@@ -23,7 +23,7 @@ export function RecentList({ items }: { items: RecentSolved[] }) {
     return <p className="muted">ACした問題がまだありません。</p>;
   }
   return (
-    <table className="data-table">
+    <table className="data-table stack-table">
       <thead>
         <tr>
           <th>問題</th>
@@ -48,8 +48,8 @@ export function RecentList({ items }: { items: RecentSolved[] }) {
                 </a>
                 <span className="muted contest-id">{it.contestId}</span>
               </td>
-              <td className="num">{clip ?? "—"}</td>
-              <td className="num">{ymdhm(it.second)}</td>
+              <td className="num" data-label="難易度">{clip ?? "—"}</td>
+              <td className="num" data-label="解いた日時">{ymdhm(it.second)}</td>
             </tr>
           );
         })}

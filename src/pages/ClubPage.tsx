@@ -234,7 +234,7 @@ export function ClubPage() {
         {/* 5列の数値表はmin-contentが366pxあり、狭い幅ではページ全体を横に広げて
             スティッキーヘッダーごと横パンさせてしまう。表の中だけでスクロールさせる */}
         <div className="table-scroll">
-          <table className="data-table">
+          <table className="data-table rank-table">
             <thead>
               <tr>
                 <th className="num">#</th>
@@ -244,7 +244,9 @@ export function ClubPage() {
                   {ind("ac")}
                 </th>
                 <th className="num sortable" onClick={() => sortBy("streak")}>
-                  ストリーク
+                  {/* スマホ幅では名前の列に幅を回すため短い見出しにする */}
+                  <span className="wide-only">ストリーク</span>
+                  <span className="narrow-only">連続</span>
                   {ind("streak")}
                 </th>
                 <th className="num sortable" onClick={() => sortBy("rating")}>
@@ -328,7 +330,16 @@ export function ClubPage() {
                                 TIER_COLORS[resolved][tierIndex(r.rating)],
                             }}
                           />
-                          {r.rating > 0 ? r.rating : "未レート"}
+                          {r.rating > 0 ? (
+                            r.rating
+                          ) : (
+                            <>
+                              <span className="wide-only">未レート</span>
+                              <span className="narrow-only" title="未レート">
+                                —
+                              </span>
+                            </>
+                          )}
                         </>
                       )}
                     </td>

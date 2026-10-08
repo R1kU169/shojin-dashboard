@@ -41,7 +41,8 @@ export function PaceChart({ cumulative }: { cumulative: Point[] }) {
     <ResponsiveContainer width="100%" height={240}>
       <AreaChart
         data={cumulative}
-        margin={{ top: 16, right: 12, left: -8, bottom: 0 }}
+        // 右端の日付(2026-10 など)のラベルが切れないよう右に余白をとる
+        margin={{ top: 16, right: 26, left: -8, bottom: 0 }}
       >
         <CartesianGrid vertical={false} stroke={chrome.grid} />
         <XAxis
