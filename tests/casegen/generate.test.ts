@@ -314,3 +314,141 @@ test("同じ形式・制約からは同じ入力。送れる大きさに縮め�
   assert.ok(k.bytes + k.lines <= 1_000_000);
   assert.ok(k.bytes > 800_000, `縮めすぎ: ${k.bytes}`);
 });
+
+// ---- 点検(2026-10)で見つかった読み違い・作り違いの回帰テスト ----
+
+/** u ≠ v で同じ組が無いか */
+function simpleEdges(n: bigint, edges: bigint[][]): boolean {
+  const seen = new Set<string>();
+  for (const [a, b] of edges) {
+    if (a === b || a < 1n || b < 1n || a > n || b > n) return false;
+    const k = a < b ? `${a} ${b}` : `${b} ${a}`;
+    if (seen.has(k)) return false;
+    seen.add(k);
+  }
+  return true;
+}
+
+test("密なグラフ: 最大のケースも作れる(引数の数の上限で落ちない)", () => {
+  const f = "N M\nA_1 B_1 C_1\n⋮\nA_M B_M C_M";
+  const c = "1≤N≤500\n0≤M≤\\min(N(N-1)/2, 2×10^5)\n1≤A_i,B_i≤N\nA_i≠B_i\n(A_i,B_i) は相異なる\n1≤C_i≤10^9";
+  for (const k of all(f, c, 8_000_000)) {
+    assert.deepEqual(k.notes.filter((n) => /できません/.test(n)), [], k.label);
+    const r = new Reader(k.input);
+    const [N, M] = r.ints();
+    const edges = Array.from({ length: Number(M) }, () => r.ints());
+    r.end();
+    assert.ok(M <= (N * (N - 1n)) / 2n, k.label);
+    assert.ok(simpleEdges(N, edges), k.label);
+    if (k.id === "max") assert.equal(M, 124750n);
+  }
+});
+
+test("分数・\\left / \\right を含む上限を読み、全部の頂点対を並べない", () => {
+  const f = "N M\nu_1 v_1\n⋮\nu_M v_M";
+  const c = "2≤N≤2×10^5\nN-1 ≤ M ≤ \\min\\left(2×10^5, \\frac{N(N-1)}{2}\\right)\n1≤u_i<v_i≤N\nグラフは単純かつ連結";
+  const spec = buildSpec(f, c);
+  assert.deepEqual(spec.unread, []);
+  const t0 = Date.now();
+  const k = one(f, c, "max");
+  assert.ok(Date.now() - t0 < 5000, "時間がかかりすぎ");
+  const r = new Reader(k.input);
+  const [N, M] = r.ints();
+  assert.ok(M <= 200000n && M >= N - 1n, `M = ${M}`);
+});
+
+test("P_i ≠ i / A_i ≠ i: 添字の文字との ≠ を守る(まとめて作るケースも)", () => {
+  for (const k of all("N\nP_1 P_2 \\ldots P_N", "2≤N≤2×10^5\nP は (1,2,…,N) の順列\nP_i \\neq i", 8_000_000)) {
+    const r = new Reader(k.input);
+    const [N] = r.ints();
+    const P = r.ints();
+    assert.equal(P.length, Number(N));
+    assert.deepEqual([...P].sort((a, b) => (a < b ? -1 : 1)), Array.from({ length: Number(N) }, (_, i) => BigInt(i + 1)), `${k.label}: 順列`);
+    assert.ok(P.every((p, i) => p !== BigInt(i + 1)), `${k.label}: P_i ≠ i`);
+  }
+  for (const k of all("N\nA_1 A_2 \\ldots A_N", "2≤N≤10\n1≤A_i≤N\nA_i \\neq i")) {
+    const r = new Reader(k.input);
+    r.ints();
+    assert.ok(r.ints().every((a, i) => a !== BigInt(i + 1)), `${k.label}: A_i ≠ i`);
+  }
+});
+
+test("偶数・u_i ≠ v_i は、すべて同じ値・昇順・降順のケースでも守る", () => {
+  for (const k of all("N\nA_1 A_2 \\ldots A_N", "1≤N≤10\n1≤A_i≤100\nA_i は偶数")) {
+    const r = new Reader(k.input);
+    r.ints();
+    assert.ok(r.ints().every((a) => a % 2n === 0n && a >= 1n && a <= 100n), k.label);
+  }
+  for (const k of all("N M\nu_1 v_1\n⋮\nu_M v_M", "2≤N≤10\n1≤M≤10\n0 \\leq u_i, v_i \\leq N-1\nu_i \\neq v_i")) {
+    const r = new Reader(k.input);
+    const [N, M] = r.ints();
+    for (let i = 0; i < Number(M); i++) {
+      const [u, v] = r.ints();
+      assert.ok(u !== v && u >= 0n && v >= 0n && u < N && v < N, `${k.label}: ${u} ${v}`);
+    }
+  }
+});
+
+test("(0, 1, …, N-1) の順列は 0 始まり", () => {
+  for (const k of all("N\nP_1 P_2 \\ldots P_N", "1≤N≤10\nP は (0,1,…,N-1) の順列")) {
+    const r = new Reader(k.input);
+    const [N] = r.ints();
+    const P = r.ints();
+    assert.deepEqual([...P].sort((a, b) => (a < b ? -1 : 1)), Array.from({ length: Number(N) }, (_, i) => BigInt(i)), k.label);
+  }
+});
+
+test("「連結とは限らない」「単純とは限らない」を逆の意味に読まない", () => {
+  const f = "N M\nu_1 v_1\n⋮\nu_M v_M";
+  const notConnected = all(f, "2≤N≤10\n0≤M≤10\n1≤u_i<v_i≤N\nグラフは連結とは限らない");
+  assert.ok(notConnected.some((k) => new Reader(k.input).ints()[1] === 0n), "M = 0 のケースがある");
+  const notSimple = all(f, "2≤N≤4\n0≤M≤10\n1≤u_i,v_i≤N\nグラフは単純とは限らない");
+  assert.ok(notSimple.some((k) => new Reader(k.input).ints()[1] === 10n), "単純グラフの上限(6本)を超える本数も作る");
+  assert.deepEqual(buildSpec(f, "2≤N≤10\n0≤M≤10\n1≤u_i<v_i≤N\nグラフは連結とは限らない").unread, []);
+});
+
+test("|S| の総和の制約を守る(「S の長さの総和」と同じ)", () => {
+  const f = "T\n\\mathrm{case}_1\n\\mathrm{case}_2\n\\vdots\n\\mathrm{case}_T\n各テストケースは以下の形式で与えられる。\nS";
+  for (const c of [
+    "1≤T≤10^5\nS は英小文字からなる\n1≤|S|≤2×10^5\n|S| の総和は 2×10^5 以下",
+    "1≤T≤10^5\nS は英小文字からなる長さ 1 以上 2×10^5 以下の文字列\nすべてのテストケースにおける |S| の総和は 2×10^5 以下",
+  ]) {
+    for (const k of all(f, c, 8_000_000)) {
+      const lines = k.input.split("\n").filter(Boolean);
+      const sum = lines.slice(1).reduce((a, s) => a + s.length, 0);
+      assert.ok(sum <= 200000, `${k.label}: Σ|S| = ${sum}`);
+      assert.equal(lines.length - 1, Number(lines[0]), k.label);
+    }
+  }
+});
+
+test("相異なる文字列: 乱数で見つからなくても重複させない", () => {
+  for (const k of all("N\nS_1\n\\vdots\nS_N", "1≤N≤26\nS_i は英小文字からなる長さ 1 の文字列\nS_i は相異なる")) {
+    const S = k.input.split("\n").filter(Boolean).slice(1);
+    assert.equal(new Set(S).size, S.length, `${k.label}: ${S.join(" ")}`);
+  }
+});
+
+test("(L_i, R_i) は相異なる + L_i ≤ R_i は区間として作る(L = R もある)", () => {
+  const ks = all("N Q\nL_1 R_1\n⋮\nL_Q R_Q", "1≤N≤4\n1≤Q≤10\n1≤L_i≤R_i≤N\n(L_i,R_i) は相異なる");
+  let equal = false;
+  for (const k of ks) {
+    const r = new Reader(k.input);
+    const [N, Q] = r.ints();
+    for (let i = 0; i < Number(Q); i++) {
+      const [L, R] = r.ints();
+      assert.ok(1n <= L && L <= R && R <= N, `${k.label}: ${L} ${R}`);
+      if (L === R) equal = true;
+    }
+  }
+  assert.ok(equal, "L = R のケースがある");
+  const max = ks.find((k) => k.id === "max")!;
+  const r = new Reader(max.input);
+  assert.equal(r.ints()[1], 10n, "Q は区間の数(10)まで");
+});
+
+test("M の下限が大きくても仕様をすぐ作る(頂点数を1つずつ数えない)", () => {
+  const t0 = Date.now();
+  buildSpec("N M\nu_1 v_1\n⋮\nu_M v_M", "1≤N≤10^9\n10^{18}≤M≤10^{18}\n1≤u_i<v_i≤N\nグラフは単純");
+  assert.ok(Date.now() - t0 < 1000, `${Date.now() - t0}ms`);
+});

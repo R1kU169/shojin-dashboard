@@ -261,6 +261,15 @@ export interface EvalEnv {
   col?: bigint;
 }
 
+/** BigInt の平方根の切り捨て */
+export function isqrt(v: bigint): bigint {
+  if (v < 2n) return v < 0n ? 0n : v;
+  let x = BigInt(Math.floor(Math.sqrt(Number(v))));
+  while (x * x > v) x--;
+  while ((x + 1n) * (x + 1n) <= v) x++;
+  return x;
+}
+
 /** BigInt の床除算(負の数も床へ) */
 function floorDiv(a: bigint, b: bigint): bigint {
   const q = a / b;

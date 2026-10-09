@@ -20,7 +20,8 @@ export type Fact =
   | { k: "string"; ref: CRef }
   | { k: "char"; ref: CRef }
   | { k: "parity"; ref: CRef; odd: boolean }
-  | { k: "perm"; ref: CRef }
+  /** from は値の始まり((0,1,…,N-1) の順列なら 0。書いていなければ 1) */
+  | { k: "perm"; ref: CRef; from?: number }
   | { k: "distinct"; ref: CRef }
   | { k: "pairDistinct"; refs: CRef[] }
   | { k: "sorted"; ref: CRef; strict: boolean }
@@ -272,11 +273,19 @@ function readLine(line: string, facts: Fact[]): boolean {
   // グラフ
   if (/グラフ|木/.test(s) && !/[≤<≥>]/.test(s)) {
     const g: Fact & { k: "graph" } = { k: "graph" };
+    // 「連結とは限らない」「単純とは限りません」「連結でないこともある」は、その性質を約束しないという意味
+    const notSure = (word: string) => new RegExp(`${word}[^、。,]*?(?:とは限ら|でない|ではない|じゃない)`).test(s);
+    // 「自己ループや多重辺は存在しない」なら単純。「…が存在する可能性がある」「…を含むことがある」なら単純ではない
+    const loops = /自己ループ/.test(s) || /多重辺/.test(s);
+    const loopsMayExist = loops && (/ことがあ|場合があ|かもしれ|可能性|あり得|ありう|存在しうる|含みうる/.test(s) || !/ない|無い|ません/.test(s));
     if (/根付き木|を根と/.test(s)) g.rooted = true;
-    else if (/木/.test(s)) g.tree = true;
-    if (/単純/.test(s) || (/自己ループ/.test(s) && /多重辺/.test(s))) g.simple = true;
-    if (/連結/.test(s) && !/非連結/.test(s)) g.connected = true;
-    if (!g.tree && !g.rooted && !g.simple && !g.connected) return false;
+    else if (/木/.test(s) && !notSure("木")) g.tree = true;
+    if ((/単純/.test(s) && !notSure("単純")) || (loops && !loopsMayExist)) g.simple = true;
+    if (/連結/.test(s) && !/非連結/.test(s) && !notSure("連結")) g.connected = true;
+    if (!g.tree && !g.rooted && !g.simple && !g.connected) {
+      // 性質が無いと分かった文(連結とは限らない など)は、読めた制約として何も足さない
+      return notSure("連結") || notSure("単純") || loopsMayExist || /非連結/.test(s);
+    }
     facts.push(g);
     return true;
   }
@@ -287,7 +296,8 @@ function readLine(line: string, facts: Fact[]): boolean {
     const hi = parseExpr(sum[3]);
     if (!hi) return false;
     const subj = sum[1].replace(/^.*(?:における|において|について)[、,]?\s*/, "").replace(/^各テストケースの\s*/, "").trim();
-    const bars = !!sum[2];
+    // 「S の長さの総和」も「|S| の総和」も文字列の長さの和
+    const bars = !!sum[2] || /^\|[^|]+\|$/.test(sum[1].trim().replace(/^.*\s/, ""));
     if (subj.includes(",") || subj.includes("…")) {
       const base = basesIn(subj)[0];
       if (!base) return false;
@@ -307,7 +317,9 @@ function readLine(line: string, facts: Fact[]): boolean {
     const subj = s.split(/\s*は/)[0];
     const bases = basesIn(subj);
     if (bases.length === 0) return false;
-    for (const b of bases) facts.push({ k: "perm", ref: gen(b) });
+    // (0, 1, …, N-1) の順列 / 0 以上 N-1 以下の整数の並べ替え は 0 始まり
+    const from = /\(\s*0\s*,|0\s*以上|0\s*から/.test(s) ? 0 : undefined;
+    for (const b of bases) facts.push({ k: "perm", ref: gen(b), from });
     return true;
   }
 

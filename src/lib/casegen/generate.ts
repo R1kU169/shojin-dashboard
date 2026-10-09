@@ -2,7 +2,7 @@
 //
 // 値は入力形式の順に決める。範囲の式が後で決まる変数を使うとき(K ≤ N で K が先に出る)は、
 // その変数の取りうる範囲の端(hull)で見積もり、後の変数を決めるときに残りの制約で合わせる。
-import { evalExpr, exprRefs, exprToString } from "./expr.ts";
+import { evalExpr, exprRefs, exprToString, isqrt } from "./expr.ts";
 import type { EvalEnv, Expr } from "./expr.ts";
 import type { Item, Node } from "./format.ts";
 import type { Preset, Slot, Spec } from "./spec.ts";
@@ -30,15 +30,14 @@ const minB = (a: bigint, b: bigint) => (a < b ? a : b);
 const maxB = (a: bigint, b: bigint) => (a > b ? a : b);
 const cmpB = (a: bigint, b: bigint) => (a < b ? -1 : a > b ? 1 : 0);
 
-function isqrt(v: bigint): bigint {
-  if (v < 2n) return v < 0n ? 0n : v;
-  let x = BigInt(Math.floor(Math.sqrt(Number(v))));
-  while (x * x > v) x--;
-  while ((x + 1n) * (x + 1n) <= v) x++;
-  return x;
-}
-
 const show = (v: Val) => (typeof v === "bigint" ? v.toString() : v);
+
+const encoder = new TextEncoder();
+/** 送る大きさは UTF-8 のバイト数で数える(英数字だけなら文字数と同じ) */
+function utf8Length(s: string): number {
+  for (let i = 0; i < s.length; i++) if (s.charCodeAt(i) > 0x7f) return encoder.encode(s).length;
+  return s.length;
+}
 
 class Gen {
   private spec: Spec;
@@ -56,6 +55,10 @@ class Gen {
   private row = new Map<string, Val>();
   private rowIdx: bigint | undefined;
   private colIdx: bigint | undefined;
+  /** いま値を決めている要素の添字(P_i ≠ i の右辺の i を引く) */
+  private curIdx: bigint[] | undefined;
+  /** 相異なる値を順に探すときの、次に試す値(最小のケースで毎回下限から数え直さない) */
+  private cursor = new Map<string, bigint>();
   private same = new Map<string, Val>();
   private caseUsed = new Map<string, bigint>();
   private casesLeft = 1;
@@ -102,7 +105,7 @@ class Gen {
   // ---- 出力 ----
 
   private push(line: string) {
-    this.bytes += line.length + this.newline;
+    this.bytes += utf8Length(line) + this.newline;
     if (this.bytes > this.maxBytes) throw new TooBig();
     this.out.push(line);
   }
@@ -146,6 +149,8 @@ class Gen {
 
   private emitRep(n: Node & { k: "rep" }) {
     const count = this.count(n.count);
+    // 1行に最低でも「1文字 × 項目数 + 空白 + 改行」は要る。収まらない行数なら、配列や辺を作る前に縮めて作り直す
+    this.reserve(count * (Math.max(1, n.items.length) * 2 - 1 + this.newline));
     const g = this.spec.graph;
     if (g && g.node === n) this.placeEdges(n, count);
     this.prepare(n.items, count);
@@ -174,6 +179,7 @@ class Gen {
           this.arrays.get(name)?.delete(it.ref.idx.map((e) => evalExpr(e, env) ?? 0n).join(","));
         }
       }
+      if (pair && pairSeen.size < r) this.notes.add(`(${pair.map((k) => this.spec.slots.get(k)!.label).join(", ")}) を相異なる組にできなかった行があります`);
       this.push(line);
     }
     this.setRow(undefined);
@@ -188,6 +194,7 @@ class Gen {
       return "";
     }
     const len = to < from ? 0 : Number((to - from) / it.step) + 1;
+    this.reserve(it.joined ? len : len * 2);
     const g = this.spec.graph;
     if (g && g.parentList === it) this.placeParents(it, from, to);
     this.prepareList(it, from, len);
@@ -203,6 +210,11 @@ class Gen {
     }
     this.setCol(undefined);
     return parts.join(it.joined ? "" : " ");
+  }
+
+  /** これから少なくとも bytes バイト出す。送れる大きさを超えるなら、作り始める前に縮めて作り直す */
+  private reserve(bytes: number) {
+    if (this.bytes + bytes > this.maxBytes) throw new TooBig();
   }
 
   private emitCases(n: Node & { k: "cases" }) {
@@ -275,6 +287,11 @@ class Gen {
     if (idx.length === 0) {
       const v = this.scalars.get(name);
       if (v !== undefined) return asNum(v);
+      // P_i ≠ i / 1 ≤ P_i < i の右辺の i のような添字の文字は、いま作っている要素の番号
+      if (!bars && !slots.has(name) && /^[ijkl]$/.test(name)) {
+        const pos = this.indexLetter(name);
+        if (pos !== undefined) return pos;
+      }
       return dir ? this.estimate(bars ? `|${name}|` : name, dir) : undefined;
     }
     if (this.suffixBases.has(name)) {
@@ -288,6 +305,14 @@ class Gen {
     const v = idx.every((x) => x !== undefined) ? this.arrays.get(name)?.get(idx.join(",")) : this.row.get(name);
     if (v !== undefined) return asNum(v);
     return dir ? this.estimate(bars ? `|${name}[]|` : `${name}[]`, dir) : undefined;
+  }
+
+  /** 添字の文字の値。A_{i,j} なら i は1つ目・j は2つ目の添字、添字が1つならどの文字もその番号 */
+  private indexLetter(name: string): bigint | undefined {
+    const cur = this.curIdx;
+    if (cur && cur.length > 0) return cur.length === 1 ? cur[0] : cur["ijkl".indexOf(name)];
+    if (name === "j") return this.colIdx ?? this.rowIdx;
+    return this.rowIdx ?? this.colIdx;
   }
 
   private depth = 0;
@@ -358,7 +383,13 @@ class Gen {
     let v = arr.get(key);
     if (v === undefined) {
       const s = this.spec.slots.get(`${base}[]`);
-      v = s ? this.value(s) : 1n;
+      const prev = this.curIdx;
+      this.curIdx = iv;
+      try {
+        v = s ? this.value(s) : 1n;
+      } finally {
+        this.curIdx = prev;
+      }
       arr.set(key, v);
     }
     this.row.set(base, v);
@@ -371,11 +402,15 @@ class Gen {
     if (s.type === "char") return this.char(s);
     if (s.type === "str") {
       const lenSlot = this.spec.slots.get(`|${s.key}|`);
-      const len = lenSlot ? Number(s.elem ? this.int(lenSlot) : this.scalarInt(lenSlot)) : 1;
-      let str = this.string(s, Math.max(0, len));
+      const len = Math.max(0, lenSlot ? Number(s.elem ? this.int(lenSlot) : this.scalarInt(lenSlot)) : 1);
+      this.reserve(len);
+      let str = this.string(s, len);
       if (s.distinct) {
         const seen = this.seenOf(s.key);
         for (let t = 0; t < 30 && seen.has(str); t++) str = this.string(s, len, "random");
+        // 乱数で見つからなければ、まだ使っていない文字列を順に数えて探す(英小文字1文字を26個 など)
+        for (let c = 0; seen.has(str) && c < Math.min(100_000, (s.charset?.length ?? 1) ** Math.min(len, 8)); c++) str = this.nthString(s, len, c);
+        if (seen.has(str)) this.notes.add(`${s.label} を相異なる文字列にできなかったものがあります`);
         seen.add(str);
       }
       return str;
@@ -425,6 +460,17 @@ class Gen {
     const pool = mode === "small" ? cs.slice(0, 3) : cs;
     const out = new Array<string>(len);
     for (let i = 0; i < len; i++) out[i] = pool[Math.floor(this.rng.next() * pool.length)];
+    return out.join("");
+  }
+
+  /** 文字の種類を数字とみた c 番目の、長さ len の文字列(末尾から数える) */
+  private nthString(s: Slot, len: number, c: number): string {
+    const cs = s.charset ?? ["a"];
+    const out = new Array<string>(len).fill(cs[0]);
+    for (let i = len - 1; i >= 0 && c > 0; i--) {
+      out[i] = cs[c % cs.length];
+      c = Math.floor(c / cs.length);
+    }
     return out.join("");
   }
 
@@ -561,25 +607,8 @@ class Gen {
       } else v = this.rng.big(lo, hi);
     }
 
-    // 相異なる(まとめて作れなかったとき)
-    if (s.distinct) {
-      const seen = this.seenOf(s.key);
-      for (let t = 0; t < 30 && seen.has(v.toString()); t++) {
-        v = this.preset.value === "min" ? minB(hi, lo + BigInt(seen.size + t)) : this.rng.big(lo, hi);
-      }
-      seen.add(v.toString());
-    }
-    // 偶数・奇数
-    if (s.parity) {
-      const want = s.parity === "odd" ? 1n : 0n;
-      if (((v % 2n) + 2n) % 2n !== want) v = v + 1n <= hi ? v + 1n : v - 1n;
-    }
-    // ≠
-    const exact = this.env(null);
-    for (const e of s.ne) {
-      const x = evalExpr(e, exact);
-      if (x !== undefined && x === v) v = v + 1n <= hi ? v + 1n : v - 1n;
-    }
+    // 偶数・奇数・≠・相異なる(まとめて作れなかったとき)をまとめて満たす
+    v = this.settle(s, v, lo, hi);
 
     for (const c of sums) this.caseUsed.set(c.key, (this.caseUsed.get(c.key) ?? 0n) + this.sumAt(c, v));
     if (es) {
@@ -587,6 +616,54 @@ class Gen {
       es.count--;
     }
     return v;
+  }
+
+  /**
+   * 偶数・奇数、≠(P_i ≠ i の i も含む)、相異なるを満たす値にする。v が満たさなければ近くを、
+   * それでもだめなら下限から順に探す。どうしても見つからなければ v のままにして注記を出す
+   */
+  private settle(s: Slot, v: bigint, lo: bigint, hi: bigint): bigint {
+    const want = s.parity ? (s.parity === "odd" ? 1n : 0n) : null;
+    const exact = this.env(null);
+    const forbidden = s.ne.map((e) => evalExpr(e, exact)).filter((x): x is bigint => x !== undefined);
+    const seen = s.distinct ? this.seenOf(s.key) : null;
+    if (want === null && forbidden.length === 0 && !seen) return v;
+    const parityOk = (c: bigint) => want === null || ((c % 2n) + 2n) % 2n === want;
+    const ok = (c: bigint) => c >= lo && c <= hi && parityOk(c) && !forbidden.includes(c) && !seen?.has(c.toString());
+    const fixParity = (c: bigint) => (parityOk(c) ? c : c + 1n <= hi ? c + 1n : c - 1n);
+    let x = fixParity(v);
+    if (!ok(x)) {
+      let found = false;
+      const step = want === null ? 1n : 2n;
+      for (const c of [x + step, x - step, x + 2n * step, x - 2n * step]) {
+        if (ok(c)) {
+          x = c;
+          found = true;
+          break;
+        }
+      }
+      for (let t = 0; !found && t < 30 && this.preset.value !== "min"; t++) {
+        const c = fixParity(this.rng.big(lo, hi));
+        if (ok(c)) {
+          x = c;
+          found = true;
+        }
+      }
+      if (!found) {
+        const from = maxB(lo, this.cursor.get(s.key) ?? lo);
+        for (let c = from, k = 0; c <= hi && k < 200_000; c++, k++) {
+          if (ok(c)) {
+            x = c;
+            found = true;
+            this.cursor.set(s.key, c + 1n);
+            break;
+          }
+        }
+      }
+      if (!found) this.notes.add(`${s.label} を制約(偶数・奇数・≠・相異なる)どおりにできなかった値があります`);
+    }
+    seen?.add(x.toString());
+    return x;
   }
 
   // ---- 配列をまとめて作る(順列・相異なる・昇順など) ----
@@ -628,17 +705,17 @@ class Gen {
       if (it.k !== "tok" || !this.vectorizable(s)) continue;
       const g = this.spec.graph;
       if (g && (g.u === s.key || g.v === s.key)) continue;
-      const vec = this.vector(s, count);
+      const at = (k: number) => {
+        this.setRow(BigInt(k + 1));
+        return it.ref.idx.map((e) => evalExpr(e, this.env(null)) ?? 0n);
+      };
+      const vec = this.vector(s, count, at);
       let arr = this.arrays.get(it.ref.base);
       if (!arr) {
         arr = new Map();
         this.arrays.set(it.ref.base, arr);
       }
-      for (let r = 1; r <= count; r++) {
-        this.setRow(BigInt(r));
-        const iv = it.ref.idx.map((e) => evalExpr(e, this.env(null)) ?? 0n);
-        arr.set(iv.join(","), vec[r - 1]);
-      }
+      for (let r = 1; r <= count; r++) arr.set(at(r - 1).join(","), vec[r - 1]);
       this.setRow(undefined);
     }
   }
@@ -656,59 +733,123 @@ class Gen {
     const g = this.spec.graph;
     if (g && g.parentList === it) return;
     if (!this.vectorizable(s)) return;
-    const vec = this.vector(s, len);
+    const at = (k: number) => {
+      this.setCol(from + BigInt(k) * it.step);
+      return it.ref.idx.map((e) => evalExpr(e, this.env(null)) ?? 0n);
+    };
+    const vec = this.vector(s, len, at);
     let arr = this.arrays.get(it.ref.base);
     if (!arr) {
       arr = new Map();
       this.arrays.set(it.ref.base, arr);
     }
-    for (let i = 0; i < len; i++) {
-      this.setCol(from + BigInt(i) * it.step);
-      const iv = it.ref.idx.map((e) => evalExpr(e, this.env(null)) ?? 0n);
-      arr.set(iv.join(","), vec[i]);
-    }
+    for (let i = 0; i < len; i++) arr.set(at(i).join(","), vec[i]);
     this.setCol(undefined);
   }
 
-  private vector(s: Slot, len: number): bigint[] {
+  /**
+   * 配列をまとめて作る。at(k) は k 番目(0始まり)の要素の位置に行番号・列番号を合わせ、その添字を返す
+   * (P_i ≠ i のように添字を使う ≠ を確かめるのに使う)
+   */
+  private vector(s: Slot, len: number, at: (k: number) => bigint[]): bigint[] {
     const p = this.preset.value;
     if (s.perm) {
-      const v = Array.from({ length: len }, (_, i) => BigInt(i + 1));
+      const base = s.permFrom ?? 1n;
+      const v = Array.from({ length: len }, (_, i) => base + BigInt(i));
       if (p === "max" || p === "desc") v.reverse();
       else if (p !== "min" && p !== "asc") this.rng.shuffle(v);
-      return v;
+      return this.rearrange(s, v, at);
     }
     const { lo, hi } = this.range(s);
     const asc = (a: bigint[]) => a.sort(cmpB);
+    // 偶数・奇数は、その偶奇の値だけを並べた列(lo2, lo2+2, …)の番号として作る(相異なる・昇順を崩さない)
+    const want = s.parity ? (s.parity === "odd" ? 1n : 0n) : null;
+    const lo2 = want === null ? lo : ((lo % 2n) + 2n) % 2n === want ? lo : lo + 1n;
+    const step = want === null ? 1n : 2n;
+    const cnt = hi < lo2 ? 0n : (hi - lo2) / step + 1n;
+    const val = (t: bigint) => lo2 + t * step;
     if (s.distinct || s.sorted === "lt") {
-      const span = hi - lo + 1n;
-      if (span >= BigInt(len)) {
-        let v: bigint[];
-        if (p === "min") v = Array.from({ length: len }, (_, i) => lo + BigInt(i));
-        else if (p === "max") v = Array.from({ length: len }, (_, i) => hi - BigInt(len - 1 - i));
-        else v = this.sampleDistinct(lo, p === "small" ? minB(hi, lo + BigInt(len * 3 + 10)) : hi, len);
-        if (s.sorted || p === "asc" || p === "min" || p === "max") return asc(v);
-        if (p === "desc") return asc(v).reverse();
-        return this.rng.shuffle(v);
+      if (cnt >= BigInt(len)) {
+        let t: bigint[];
+        if (p === "min") t = Array.from({ length: len }, (_, i) => BigInt(i));
+        else if (p === "max") t = Array.from({ length: len }, (_, i) => cnt - BigInt(len - i));
+        else t = this.sampleDistinct(0n, p === "small" ? minB(cnt - 1n, BigInt(len * 3 + 10)) : cnt - 1n, len);
+        let v = t.map(val);
+        if (s.sorted || p === "asc" || p === "min" || p === "max") v = asc(v);
+        else if (p === "desc") v = asc(v).reverse();
+        else v = this.rng.shuffle(v);
+        return this.rearrange(s, v, at);
       }
       this.notes.add(`${s.label} を相異なる値にできる範囲が足りないので、重複を許しました`);
     }
-    let v: bigint[];
-    if (p === "min") v = new Array<bigint>(len).fill(lo);
-    else if (p === "max") v = new Array<bigint>(len).fill(hi);
+    let t: bigint[];
+    const last = cnt > 0n ? cnt - 1n : 0n;
+    if (p === "min") t = new Array<bigint>(len).fill(0n);
+    else if (p === "max") t = new Array<bigint>(len).fill(last);
     else if (p === "same") {
       let x = this.same.get(s.key);
       if (typeof x !== "bigint") {
         x = this.rng.big(lo, hi);
         this.same.set(s.key, x);
       }
-      v = new Array<bigint>(len).fill(x);
+      const tx = x < lo2 ? 0n : minB(last, (x - lo2) / step);
+      t = new Array<bigint>(len).fill(tx);
     } else {
-      const top = p === "small" ? minB(hi, lo + 9n) : hi;
-      v = Array.from({ length: len }, () => this.rng.big(lo, top));
+      const top = p === "small" ? minB(last, 9n / step) : last;
+      t = Array.from({ length: len }, () => this.rng.big(0n, top));
     }
+    if (cnt === 0n) this.notes.add(`${s.label} の範囲に${s.parity === "odd" ? "奇数" : "偶数"}がありません`);
+    const v = t.map(cnt === 0n ? () => lo : val);
     if (s.sorted || p === "asc") asc(v);
     else if (p === "desc") asc(v).reverse();
+    // ≠ は1つずつ直す(すべて同じ値・昇順などのケースでも u_i ≠ v_i や A_i ≠ i を守る)
+    if (s.ne.length > 0) {
+      for (let k = 0; k < len; k++) {
+        this.curIdx = at(k);
+        const env = this.env(null);
+        for (let r = 0; r < 2; r++) {
+          if (!s.ne.some((e) => evalExpr(e, env) === v[k])) break;
+          v[k] = v[k] + step <= hi ? v[k] + step : v[k] - step;
+        }
+        if (s.ne.some((e) => evalExpr(e, env) === v[k])) this.notes.add(`${s.label} の ≠ を守れなかった値があります`);
+      }
+      this.curIdx = undefined;
+    }
+    return v;
+  }
+
+  /**
+   * 順列・相異なる値の並びで、≠(P_i ≠ i など)を破る位置があれば、値の集合は変えずに並びだけ入れ替える。
+   * 破る位置どうしで値を1つずらし(恒等順列なら巡回になる)、残れば他の位置と入れ替える
+   */
+  private rearrange(s: Slot, v: bigint[], at: (k: number) => bigint[]): bigint[] {
+    if (s.ne.length === 0 || v.length === 0) return v;
+    const forbidden = (k: number): bigint[] => {
+      this.curIdx = at(k);
+      const env = this.env(null);
+      return s.ne.map((e) => evalExpr(e, env)).filter((x): x is bigint => x !== undefined);
+    };
+    const fb = v.map((_, k) => forbidden(k));
+    const bad = (k: number) => fb[k].includes(v[k]);
+    const B: number[] = [];
+    for (let k = 0; k < v.length; k++) if (bad(k)) B.push(k);
+    if (B.length >= 2) {
+      const first = v[B[0]];
+      for (let i = 0; i + 1 < B.length; i++) v[B[i]] = v[B[i + 1]];
+      v[B[B.length - 1]] = first;
+    }
+    let left = 0;
+    for (const k of B) {
+      for (let t = 0; t < 60 && bad(k); t++) {
+        const j = t < 2 ? (k + 1 + t) % v.length : this.rng.int(0, v.length - 1);
+        if (j === k) continue;
+        [v[k], v[j]] = [v[j], v[k]];
+        if (bad(k) || bad(j)) [v[k], v[j]] = [v[j], v[k]];
+      }
+      if (bad(k)) left++;
+    }
+    this.curIdx = undefined;
+    if (left > 0) this.notes.add(`${s.label} の ≠ を守れなかった位置が ${left} 個あります`);
     return v;
   }
 
@@ -782,10 +923,22 @@ class Gen {
         }
       }
       if (m - edges.length > maxE / 2) {
-        const rest: [number, number][] = [];
-        for (let x = 1; x <= n; x++) for (let y = x + 1; y <= n; y++) if (!set.has(key(x, y))) rest.push([x, y]);
-        rng.shuffle(rest);
-        edges.push(...rest.slice(0, m - edges.length));
+        // 辺が多いとき(密なグラフ)は、使わない組を乱数で選び、残りの組を全部使う。
+        // 全部の組を配列にしない(頂点数が多いと組の数が膨大になる)。push(...大きな配列) も引数の数の上限で落ちる
+        const skip = new Set<number>();
+        const skipCount = maxE - set.size - (m - edges.length);
+        while (skip.size < skipCount) {
+          const x = rng.int(1, n);
+          const y = rng.int(1, n);
+          if (x !== y && !set.has(key(x, y))) skip.add(key(x, y));
+        }
+        for (let x = 1; x <= n; x++) {
+          for (let y = x + 1; y <= n; y++) {
+            const k = key(x, y);
+            if (!set.has(k) && !skip.has(k)) edges.push([x, y]);
+          }
+        }
+        rng.shuffle(edges);
       } else {
         while (edges.length < m) {
           const x = rng.int(1, n);
@@ -849,8 +1002,12 @@ export function generateCase(spec: Spec, preset: Preset, seedText: string, maxBy
     best = attempt(scale);
   }
   // 半分ずつ縮めると小さくなりすぎるので、大きさの比で1回だけ戻す
+  // (送るときの大きさ = UTF-8 のバイト数 + 改行ごとに newlineBytes - 1 バイト)
   if (best && best.scale < 1 && best.text.length > 0) {
-    const next = Math.min(failed * 0.97, best.scale * (maxBytes / (best.text.length * newlineBytes)) * 0.95);
+    let lines = 0;
+    for (let i = 0; i < best.text.length; i++) if (best.text.charCodeAt(i) === 10) lines++;
+    const size = utf8Length(best.text) + lines * (newlineBytes - 1);
+    const next = Math.min(failed * 0.97, best.scale * (maxBytes / size) * 0.95);
     if (next > best.scale * 1.1) best = attempt(next) ?? best;
   }
   if (!best) {
@@ -874,7 +1031,7 @@ export function generateCase(spec: Spec, preset: Preset, seedText: string, maxBy
     label: preset.label,
     purpose: preset.purpose,
     input: text,
-    bytes: text.length,
+    bytes: utf8Length(text),
     lines,
     summary: best.g.summary(),
     shrunk: best.scale < 1,

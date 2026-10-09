@@ -225,7 +225,7 @@ function SpecView({
                           />
                         </span>
                       ) : s.perm ? (
-                        <span className="muted">1〜(個数) の並べ替え</span>
+                        <span className="muted">{s.permFrom === 0n ? "0〜(個数−1)" : "1〜(個数)"} の並べ替え</span>
                       ) : (
                         <span className="muted">—</span>
                       )}

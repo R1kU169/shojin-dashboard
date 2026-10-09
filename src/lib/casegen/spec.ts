@@ -1,5 +1,5 @@
 // 入力形式と制約を突き合わせ、変数ごとの「範囲・種類・性質」と、作るケースの一覧をまとめる。
-import { bin, evalExpr, exprRefs, exprToString, num, parseExpr } from "./expr.ts";
+import { bin, evalExpr, exprRefs, exprToString, isqrt, num, parseExpr } from "./expr.ts";
 import type { EvalEnv, Expr } from "./expr.ts";
 import { parseFormat } from "./format.ts";
 import type { Format, Item, Node } from "./format.ts";
@@ -28,6 +28,8 @@ export interface Slot {
   charset?: string[];
   parity?: "even" | "odd";
   perm?: boolean;
+  /** 順列の値の始まり((0,1,…,N-1) の順列なら 0n。無ければ 1 始まり) */
+  permFrom?: bigint;
   distinct?: boolean;
   sorted?: "le" | "lt";
   /** 行数・個数・長さに使う(最大のケースで最大にする) */
@@ -173,6 +175,14 @@ function applyFacts(slots: Map<string, Slot>, facts: Fact[], spec: Spec, graphFa
     if (!k) missing.add(r.sub ? `${r.base}_${r.sub}` : r.base);
     return k;
   };
+  // 長さの制約(1 ≤ |S| ≤ 2×10^5 など)がある変数。「S は英小文字からなる」だけでも、長さがあれば文字列
+  const hasLength = new Set<string>();
+  for (const f of facts) {
+    if ((f.k === "lo" || f.k === "hi") && f.ref.bars) {
+      const k = resolveKey(slots, { ...f.ref, bars: false });
+      if (k) hasLength.add(k);
+    }
+  }
   // 1回目: 文字列かどうか(|S| を長さと読むか絶対値と読むかが変わる)
   for (const f of facts) {
     if (f.k !== "charset" && f.k !== "string" && f.k !== "char" && f.k !== "choices") continue;
@@ -182,7 +192,7 @@ function applyFacts(slots: Map<string, Slot>, facts: Fact[], spec: Spec, graphFa
     if (f.k === "charset") s.charset = f.chars;
     else if (f.k === "string") s.type = "str";
     else if (f.k === "char") {
-      if (s.type !== "str") s.type = "char";
+      if (s.type !== "str") s.type = hasLength.has(k) && !s.joined ? "str" : "char";
     } else {
       s.choices = f.values;
       if (!f.values.every((v) => /^-?\d+$/.test(v)) && s.type === "int") s.type = s.joined ? "char" : "str";
@@ -233,6 +243,7 @@ function applyFacts(slots: Map<string, Slot>, facts: Fact[], spec: Spec, graphFa
       case "distinct": {
         const t = target(f.ref);
         if (t) t.slot[f.k] = true;
+        if (t && f.k === "perm" && f.from !== undefined) t.slot.permFrom = BigInt(f.from);
         break;
       }
       case "sorted": {
@@ -291,6 +302,18 @@ function refersTo(es: Expr[], name: string): boolean {
   return es.some((e) => exprRefs(e).has(name));
 }
 
+/** u と v が同じ値になれないと制約から分かるか(u_i < v_i / u_i ≠ v_i)。L_i ≤ R_i のように等しくてよいものは false */
+function endsDiffer(u: Slot, v: Slot, ubase: string, vbase: string): boolean {
+  const isRef = (e: Expr, name: string) => e.k === "ref" && e.name === name && !e.bars;
+  const shifted = (e: Expr, name: string, op: "+" | "-") => e.k === "bin" && e.op === op && isRef(e.a, name) && e.b.k === "num" && e.b.v === 1n;
+  return (
+    u.hi.some((e) => shifted(e, vbase, "-")) ||
+    v.lo.some((e) => shifted(e, ubase, "+")) ||
+    u.ne.some((e) => isRef(e, vbase)) ||
+    v.ne.some((e) => isRef(e, ubase))
+  );
+}
+
 function findGraph(spec: Spec, g: { tree: boolean; simple: boolean; connected: boolean; rooted: boolean }): GraphPlan | null {
   const { slots } = spec;
   const reps: Node[] = [];
@@ -312,6 +335,8 @@ function findGraph(spec: Spec, g: { tree: boolean; simple: boolean; connected: b
     if (slots.get(u)?.type !== "int" || slots.get(v)?.type !== "int") continue;
     const pair = spec.pairDistinct.some((p) => p.length === 2 && p.includes(u) && p.includes(v));
     if (!g.tree && !g.simple && !g.connected && !g.rooted && !pair) continue;
+    // 「(L_i, R_i) は相異なる」だけでは、L_i = R_i もありうる区間かもしれない。両端が等しくなれないときだけ辺とみる
+    if (!g.tree && !g.simple && !g.connected && !g.rooted && !endsDiffer(slots.get(u)!, slots.get(v)!, a.ref.base, b.ref.base)) continue;
     const bu = boundScalars(slots, u);
     const n = [...boundScalars(slots, v)].find((x) => bu.has(x));
     if (!n) continue;
@@ -526,8 +551,10 @@ export function buildSpec(formatText: string, constraintsText: string, overrides
     const m = slots.get(gp.node.count.name)?.hull.lo ?? null;
     const n = slots.get(gp.n);
     if (m !== null && m > 0n && n) {
-      let v = 2n;
+      // v(v-1)/2 ≥ m となる最小の v(M の下限が 10^18 のような値でも1つずつ数えない)
+      let v = maxB(2n, (1n + isqrt(8n * m + 1n)) / 2n)!;
       while ((v * (v - 1n)) / 2n < m) v++;
+      while (v > 2n && ((v - 1n) * (v - 2n)) / 2n >= m) v--;
       if (n.hull.lo === null || n.hull.lo < v) {
         n.lo.push(num(v));
         computeHull(spec);

@@ -42,6 +42,72 @@ function looksLikeKatexCopy(s: string): boolean {
   return !s.includes("\\") && /\d \n\d+\n /.test(s);
 }
 
+/** s[i] から始まる {…} の中身と、閉じかっこの次の位置(\frac12 のような1文字の引数も読む) */
+function texArg(s: string, i: number): { arg: string; end: number } | null {
+  while (s[i] === " ") i++;
+  if (s[i] === "{") {
+    let depth = 0;
+    for (let j = i; j < s.length; j++) {
+      if (s[j] === "{") depth++;
+      else if (s[j] === "}" && --depth === 0) return { arg: s.slice(i + 1, j), end: j + 1 };
+    }
+    return null;
+  }
+  return /[0-9A-Za-z]/.test(s[i] ?? "") ? { arg: s[i], end: i + 1 } : null;
+}
+
+/** 2引数の命令(\frac{a}{b} など)を1つずつ書き換える。読めない形は残す(その行は読み取れなかった制約になる) */
+function rewrite2(s: string, cmd: RegExp, to: (a: string, b: string) => string | null): string {
+  for (let from = 0, guard = 0; guard < 100; guard++) {
+    cmd.lastIndex = from;
+    const m = cmd.exec(s);
+    if (!m) break;
+    const a = texArg(s, m.index + m[0].length);
+    const b = a && texArg(s, a.end);
+    const out = a && b ? to(a.arg, b.arg) : null;
+    if (!a || !b || out === null) {
+      from = m.index + m[0].length;
+      continue;
+    }
+    s = s.slice(0, m.index) + out + s.slice(b.end);
+    from = m.index;
+  }
+  return s;
+}
+
+/**
+ * 分数・二項係数・床と天井を、式として読める形にする。割り算は切り捨てとして読む。
+ *   \min\left(2×10^5, \frac{N(N-1)}{2}\right) → \min(2×10^5, ((N(N-1))/(2)))
+ *   \binom{N}{2} → ((N)*((N)-1)/2)、\left\lfloor \frac{N}{2} \right\rfloor → (((N)/(2)))
+ *   \lceil \frac{a}{b} \rceil → (((a)+(b)-1)/(b))
+ * 分数でない天井は床と同じに読む(上限なら小さめに見積もるので、制約を破るケースは作らない)
+ */
+function expandTexFunctions(s: string): string {
+  if (!s.includes("\\") && !/[⌊⌋⌈⌉]/.test(s)) return s;
+  s = s.replace(/\\(?:left|right|bigl|bigr|Bigl|Bigr|biggl|biggr|big|Big|bigg|Bigg)(?![a-zA-Z])\s*/g, "");
+  // 分数の天井は (a + b - 1) / b にする(閉じの \rceil まで読めたときだけ)
+  for (let guard = 0; guard < 50; guard++) {
+    const m = /\\lceil\s*\\[dt]?frac(?![a-zA-Z])/.exec(s);
+    if (!m) break;
+    const a = texArg(s, m.index + m[0].length);
+    const b = a && texArg(s, a.end);
+    const close = b ? /^\s*\\rceil(?![a-zA-Z])/.exec(s.slice(b.end)) : null;
+    if (!a || !b || !close) break;
+    s = s.slice(0, m.index) + `(((${a.arg})+(${b.arg})-1)/(${b.arg}))` + s.slice(b.end + close[0].length);
+  }
+  s = rewrite2(s, /\\[dt]?frac(?![a-zA-Z])/g, (a, b) => `((${a})/(${b}))`);
+  s = rewrite2(s, /\\[dt]?binom(?![a-zA-Z])/g, (n, k) => {
+    const kk = k.trim();
+    if (kk === "1") return `(${n})`;
+    if (kk === "2") return `((${n})*((${n})-1)/2)`;
+    if (kk === "3") return `((${n})*((${n})-1)*((${n})-2)/6)`;
+    return null;
+  });
+  return s
+    .replace(/\\lfloor(?![a-zA-Z])|⌊|\\lceil(?![a-zA-Z])|⌈/g, "(")
+    .replace(/\\rfloor(?![a-zA-Z])|⌋|\\rceil(?![a-zA-Z])|⌉/g, ")");
+}
+
 /**
  * 貼り付けた文字列を素の書き方にそろえる。行の区切りは保つ。
  * 添字は A_{1} / A_{N-1} / A_{i,j}、累乗は 10^{5} のように中かっこで包む(包まない A_1 も残る)。
@@ -51,6 +117,7 @@ export function normalizeText(raw: string): string {
   if (looksLikeKatexCopy(s)) s = decodeKatexCopy(s);
   // 全角英数字・全角空白を半角に。… は NFKC で ... になるので、あとで省略の記号として読む
   s = s.normalize("NFKC");
+  s = expandTexFunctions(s);
   s = s
     .replace(/\\\(|\\\)|\$/g, "")
     .replace(/\\(?:leqq|leq|le)(?![a-zA-Z])/g, "≤")
