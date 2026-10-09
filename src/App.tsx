@@ -1,4 +1,4 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { Link, NavLink, Route, Routes, useLocation } from "react-router-dom";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { ClubPage } from "./pages/ClubPage";
@@ -44,15 +44,53 @@ function NotFound() {
   );
 }
 
+/**
+ * 狭い画面ではタブの帯が横にスクロールする(320px 幅など)。続きがある側の端をぼかして知らせ、
+ * ページを移ったら選んでいるタブが見える位置まで帯をスクロールする
+ */
+function useNavScroll(pathname: string) {
+  const ref = useRef<HTMLElement>(null);
+  const [more, setMore] = useState<"left" | "right" | "both" | undefined>();
+  useEffect(() => {
+    const nav = ref.current;
+    if (!nav) return;
+    const update = () => {
+      const left = nav.scrollLeft > 1;
+      const right = nav.scrollLeft + nav.clientWidth < nav.scrollWidth - 1;
+      setMore(left && right ? "both" : left ? "left" : right ? "right" : undefined);
+    };
+    update();
+    nav.addEventListener("scroll", update, { passive: true });
+    window.addEventListener("resize", update);
+    return () => {
+      nav.removeEventListener("scroll", update);
+      window.removeEventListener("resize", update);
+    };
+  }, []);
+  useEffect(() => {
+    const nav = ref.current;
+    if (!nav || nav.scrollWidth <= nav.clientWidth) return;
+    const a = nav.querySelector<HTMLElement>("a.active");
+    if (!a) return;
+    // scrollIntoView はページごと縦に動かすことがあるので、帯の横位置だけを合わせる
+    const r = a.getBoundingClientRect();
+    const n = nav.getBoundingClientRect();
+    if (r.left < n.left) nav.scrollLeft -= n.left - r.left + 12;
+    else if (r.right > n.right) nav.scrollLeft += r.right - n.right + 12;
+  }, [pathname]);
+  return { ref, more };
+}
+
 export default function App() {
   const { pathname } = useLocation();
+  const nav = useNavScroll(pathname);
   return (
     <ThemeProvider>
       <header className="app-header">
         <NavLink to="/" className="brand">
           <span className="flame">🔥</span> 精進ボード
         </NavLink>
-        <nav>
+        <nav ref={nav.ref} data-more={nav.more}>
           <NavLink to="/me">マイページ</NavLink>
           {/* .nav-long は狭い幅で畳まれる補足語 (→「ランキング」「DS倶楽部 ↗」) */}
           <NavLink to="/club">

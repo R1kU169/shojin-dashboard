@@ -5,11 +5,14 @@
   --surface: #fcfcfb;
   --ink: #0b0b0b;
   --ink-2: #52514e;
-  --muted: #898781;
+  /* 小さい文字(12px 前後)にも使うので、背景に対して 4.5:1 以上にする */
+  --muted: #737169;
   --grid: #e1e0d9;
   --baseline: #c3c2b7;
   --border: rgba(11, 11, 11, 0.1);
   --accent: #2a78d6;
+  /* 白い文字を載せるボタンの地(白に対して 4.5:1 以上) */
+  --accent-solid: #2366c2;
   --accent-2: #1baf7a;
   /* ブランド装飾は炎の暖色。データ(チャート/リンク)は--accent系のまま役割を分ける */
   --brand-a: #eda100;
@@ -55,6 +58,7 @@
   --baseline: #383835;
   --border: rgba(255, 255, 255, 0.1);
   --accent: #3987e5;
+  --accent-solid: #2b6cc4;
   --accent-2: #199e70;
   --brand-a: #c98500;
   --brand-b: #d95926;
@@ -100,6 +104,17 @@ body {
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
   transition: color 0.25s ease;
+}
+
+/* 固定のヘッダーの下に、フォーカスやスクロールで移った先が隠れないようにする(ヘッダーの高さ + 余白)。
+   スマホ幅ではタブが2段目に下りてヘッダーが高くなる */
+html {
+  scroll-padding-top: 72px;
+}
+@media (max-width: 760px) {
+  html {
+    scroll-padding-top: 108px;
+  }
 }
 
 #root {
@@ -302,6 +317,19 @@ a:hover {
   .app-header nav::-webkit-scrollbar {
     display: none;
   }
+  /* 横にスクロールして続きがある側の端をぼかす(App.tsx が data-more を付ける) */
+  .app-header nav[data-more="right"] {
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+    mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+  }
+  .app-header nav[data-more="left"] {
+    -webkit-mask-image: linear-gradient(to left, #000 calc(100% - 28px), transparent);
+    mask-image: linear-gradient(to left, #000 calc(100% - 28px), transparent);
+  }
+  .app-header nav[data-more="both"] {
+    -webkit-mask-image: linear-gradient(to right, transparent, #000 28px, #000 calc(100% - 28px), transparent);
+    mask-image: linear-gradient(to right, transparent, #000 28px, #000 calc(100% - 28px), transparent);
+  }
   .app-header nav a {
     padding-inline: 0;
   }
@@ -405,9 +433,12 @@ a:hover {
     transform 0.18s var(--ease-out),
     box-shadow 0.18s var(--ease-out);
 }
-.stat-card:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-lift);
+/* 指で触る端末ではタップのあとホバーの状態が残り、浮いたままになるので、マウスのときだけ */
+@media (hover: hover) {
+  .stat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-lift);
+  }
 }
 .stat-label {
   font-size: 12px;
@@ -691,7 +722,8 @@ a:hover {
 .input-group button {
   border: none;
   border-radius: 999px;
-  background: linear-gradient(120deg, var(--brand-b), #e34948);
+  /* 白い文字に対して 4.5:1 以上になる濃さの炎の色 */
+  background: linear-gradient(120deg, #c4501f, #c0392b);
   color: #fff;
   font-family: var(--font-sans);
   font-size: 14px;
@@ -864,9 +896,13 @@ a:hover {
 }
 .member-card:hover {
   border-color: var(--accent);
-  transform: translateY(-1px);
-  box-shadow: var(--shadow-card);
   text-decoration: none;
+}
+@media (hover: hover) {
+  .member-card:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-card);
+  }
 }
 .avatar {
   width: 38px;
@@ -956,7 +992,7 @@ button.member-card {
   font-weight: 700;
   font-size: 14px;
   color: #fff;
-  background: var(--accent);
+  background: var(--accent-solid);
   border: none;
   border-radius: 999px;
   padding: 7px 22px;
@@ -997,7 +1033,7 @@ button.member-card {
 .ep-submit {
   font-weight: 700;
   color: #fff;
-  background: var(--accent);
+  background: var(--accent-solid);
   border-radius: 999px;
   padding: 4px 14px;
   transition: filter 0.15s;
@@ -1145,6 +1181,7 @@ button.member-card {
     right: 0;
     width: auto;
     max-height: 50vh;
+    max-height: 50dvh;
   }
 }
 .to-editor {
@@ -1201,6 +1238,8 @@ button.member-card {
   /* 画面の高さに応じて広く使う(小さい画面でも380pxは確保)。
      ユーザーがドラッグしたあとはインラインstyleの高さが優先される */
   height: clamp(380px, 58vh, 800px);
+  /* スマホのアドレスバーの出し入れで高さが跳ねないよう、小さいほうのビューポートの高さで決める */
+  height: clamp(380px, 58svh, 800px);
   /* 高さは下端のつまみ(.editor-grip)が inline style で書き換える。
      textarea自体はハイライト層に絶対配置で重ねてあるので、
      高さを持っているこの箱を対象にしている */
@@ -1665,7 +1704,7 @@ button.member-card {
 .token.comment,
 .token.prolog,
 .token.cdata {
-  color: #8c8c85;
+  color: #6f6f69;
 }
 .token.string,
 .token.char,
@@ -1777,7 +1816,7 @@ button.member-card {
   word-break: break-all;
 }
 .io-err {
-  color: #e34948;
+  color: #c42f2e;
   margin-top: 6px;
 }
 /* 警告だけのコンパイラメッセージ。エラーと同じ赤にすると「直さないと動かない」と
@@ -1832,7 +1871,8 @@ button.member-card {
 :root[data-theme="dark"] .exit-chip.warn {
   color: #e0a34a;
 }
-:root[data-theme="dark"] .error-text {
+:root[data-theme="dark"] .error-text,
+:root[data-theme="dark"] .io-err {
   color: #ff7a79;
 }
 
@@ -1960,16 +2000,18 @@ button.member-card {
   font-family: var(--font-mono);
   font-size: 12px;
   overflow-wrap: anywhere;
-  min-width: 140px;
+  /* 2段組みの最も狭い幅(880px で列幅 370px)でも枠に収まる最小幅 */
+  min-width: 100px;
 }
 .cx-term {
   font-family: var(--font-mono);
-  white-space: nowrap;
+  /* 長い項(N·M·log(N+M))は折り返す。折り返さないと 880〜1100px 幅で「理由」の列が枠の外に出る */
+  overflow-wrap: anywhere;
 }
 .cx-reason {
   font-size: 12px;
   color: var(--muted);
-  min-width: 160px;
+  min-width: 120px;
 }
 /* スマホ幅の内訳: 1行目に「行番号 項」、その下に対象と理由を全幅で縦積みにする(4列だと理由が画面外に出る)。
    .data-table の既定(後ろで定義)より強くするため .data-table も付ける */
@@ -2080,9 +2122,14 @@ button.member-card {
   display: flex;
   flex-direction: column;
 }
+.user-title {
+  min-width: 0;
+}
 .user-title h1 {
   font-size: 24px;
   line-height: 1.25;
+  /* 24文字の ID でもスマホ幅からはみ出さない */
+  overflow-wrap: anywhere;
 }
 .profile-link {
   font-size: 12px;
@@ -2166,6 +2213,13 @@ button.member-card {
   color: var(--muted);
   cursor: pointer;
   text-decoration: underline;
+}
+/* 指で触る端末では、文字の大きさのままだと押しにくいので押せる範囲を 24px 以上にする */
+@media (pointer: coarse) {
+  .linklike {
+    min-height: 24px;
+    padding: 2px 0;
+  }
 }
 .linklike:hover {
   color: var(--accent);
@@ -2535,13 +2589,18 @@ button.member-card {
   height: 12px;
   border-radius: 3px;
 }
+/* 横スクロールの枠で切れないよう、画面に対して固定の位置に出す(位置は Heatmap.tsx が画面の内側に収める) */
 .heatmap-tip {
-  position: absolute;
+  position: fixed;
+  z-index: 20;
   transform: translate(-50%, -100%);
   pointer-events: none;
   white-space: nowrap;
   font-family: var(--font-mono);
   font-size: 11px;
+}
+.heatmap-tip.below {
+  transform: translate(-50%, 0);
 }
 
 @media (max-width: 560px) {
@@ -2870,9 +2929,10 @@ button.member-card {
 
 
 /* iPhone の Safari は、文字が16px未満の入力欄にフォーカスすると画面を勝手に拡大し、拡大したまま横にずれる。
-   スマホ幅では入力欄をすべて16pxにする(各所の .xxx input の指定より強くするため !important)。
+   スマホ幅と、指で操作する端末(横向きのスマホ・タブレットは幅が 560px を超える)では入力欄をすべて16pxにする
+   (各所の .xxx input の指定より強くするため !important)。
    コード欄はハイライト層・行番号と文字の大きさをそろえないと2層がずれるので、3つともそろえる */
-@media (max-width: 560px) {
+@media (max-width: 560px), (pointer: coarse) {
   input,
   select,
   textarea {
