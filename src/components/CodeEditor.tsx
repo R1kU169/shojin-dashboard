@@ -3,7 +3,7 @@
 // Tab/Shift+Tab のブロックインデント・Ctrl+/ のコメント・識別子補完・高さ変更のつまみを持つ。
 // 2つのタブで入力の感触がずれないよう、コード欄の振る舞いはすべてここに置く。
 // Ctrl/Cmd+Enter(実行・解析)はページ全体のリスナーが受ける(ここでは素通しする)。
-import { useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
+import { useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type {
   ChangeEvent,
   KeyboardEvent,
@@ -562,6 +562,30 @@ export function CodeEditor({
       setEditorHeight(el.getBoundingClientRect().height - step);
     }
   };
+
+  // Windows などスクロールバーが幅を取る環境では、textarea だけ表示領域がスクロールバーの分狭くなり、
+  // 右端・下端までスクロールするとハイライト層と行番号がスクロールしきれずに文字がずれる。
+  // スクロールバーの分だけ、両者の表示領域も同じように狭める(macOS のように幅を取らなければ 0)
+  const syncGutter = () => {
+    const el = codeRef.current;
+    if (!el) return;
+    const sw = el.offsetWidth - el.clientWidth;
+    const sh = el.offsetHeight - el.clientHeight;
+    if (hlRef.current) {
+      hlRef.current.style.right = sw ? `${sw}px` : "";
+      hlRef.current.style.bottom = sh ? `${sh}px` : "";
+    }
+    if (linesRef.current) linesRef.current.style.paddingBottom = sh ? `${14 + sh}px` : "";
+  };
+  // 行が増えて縦のスクロールバーが出たときなど、中身が変わるたびに合わせ直す
+  useLayoutEffect(syncGutter, [code]);
+  useEffect(() => {
+    const el = codeRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(syncGutter);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   const onScroll = (e: UIEvent<HTMLTextAreaElement>) => {
     const { scrollTop, scrollLeft } = e.currentTarget;
