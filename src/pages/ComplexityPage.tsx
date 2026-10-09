@@ -7,13 +7,15 @@
 // nth-child の時間差アニメーションがずれないようにするため。
 // コード欄はエディタータブと同じ CodeEditor(ハイライト・行番号・入力支援)を使い、インデント幅もエディターの設定に従う。
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
-import type { ChangeEvent } from "react";
+import type { ChangeEvent, ClipboardEvent } from "react";
 import { useSearchParams } from "react-router-dom";
 import { CodeEditor } from "../components/CodeEditor";
 import type { CodeEditorHandle } from "../components/CodeEditor";
 import { StatCard } from "../components/StatCard";
 import { EDITOR_LANGS } from "../lib/wandbox";
-import { analyzeCode, BASIC_LANGS, evaluate, formatOps, isSupported, LANG_NOTES, parseBoundValue, SPEED } from "../lib/complexity";
+import { katexHtmlToText } from "../lib/katexPaste";
+import { readStore, writeStore } from "../lib/storage";
+import { analyzeCode, BASIC_LANGS, differentLanguage, evaluate, formatOps, guessLanguage, isSupported, LANG_NOTES, parseBoundValue, SPEED } from "../lib/complexity";
 import type { Analysis, BreakdownItem, Confidence, TimeVerdict } from "../lib/complexity";
 
 const LANG_KEY = "shojin:complexity:lang";
@@ -26,19 +28,14 @@ const EDITOR_LANG_KEY = "shojin:editor:lang";
 const EDITOR_CODE_KEY = (lang: string) => `shojin:editor:code:${lang}`;
 const EDITOR_INDENT_KEY = "shojin:editor:indent";
 
-function load(key: string): string | null {
-  try {
-    return localStorage.getItem(key);
-  } catch {
-    return null;
-  }
-}
-function save(key: string, value: string): void {
-  try {
-    localStorage.setItem(key, value);
-  } catch {
-    // 保存できなくても(プライベートモード・容量超過)ページは動かす
-  }
+const load = readStore;
+// 保存できなくても(プライベートモード・容量超過)ページは動かす
+const save = (key: string, value: string): void => void writeStore(key, value);
+
+/** 制限時間の入力(2 / 2.5 / 2,5 / 全角)を秒にする。読めなければ NaN */
+function parseSeconds(raw: string): number {
+  const s = raw.normalize("NFKC").trim().replace(/,/g, ".").replace(/秒$/, "");
+  return s === "" ? NaN : Number(s);
 }
 
 const knownLang = (key: string | null): key is string => !!key && EDITOR_LANGS.some((l) => l.key === key);
@@ -89,7 +86,7 @@ const KIND_LABEL: Record<BreakdownItem["kind"], string> = {
   func: "関数",
 };
 
-/** 範囲の値の表示(20万までは桁区切り、それより大きければ 2×10^5 の形) */
+/** 範囲の値の表示(1000万未満は桁区切り、それより大きければ 10^7 の形) */
 function showValue(n: number): string {
   if (!Number.isInteger(n)) return String(n);
   return n < 1e7 ? n.toLocaleString("en-US") : formatOps(n);
@@ -123,6 +120,10 @@ export function ComplexityPage() {
     const t = setTimeout(() => save(CODE_KEY(langKey), code), 400);
     return () => clearTimeout(t);
   }, [code, langKey]);
+  // 保存待ちのうちにページを離れても、最後のコードを保存する
+  const latest = useRef({ code, langKey });
+  latest.current = { code, langKey };
+  useEffect(() => () => save(CODE_KEY(latest.current.langKey), latest.current.code), []);
   useEffect(() => {
     save(RANGES_KEY, JSON.stringify(rawBounds));
   }, [rawBounds]);
@@ -146,7 +147,8 @@ export function ComplexityPage() {
       setResult(null);
       return;
     }
-    setError(r.status === "error" ? (r.warnings[0]?.message ?? "解析に失敗しました") : "");
+    // 解析できなかった理由は解析メモの警告に出るので、ここでは二重に出さない
+    setError(r.status === "error" && r.warnings.length === 0 ? "解析に失敗しました" : "");
     setResult(r);
     setAnalyzed({ code: src, lang: key });
   };
@@ -165,13 +167,35 @@ export function ComplexityPage() {
     return () => document.removeEventListener("keydown", onKey, true);
   }, []);
 
-  const switchLang = (key: string) => {
+  /**
+   * 言語を切り替える。ふつうは切り替え先で前に書いていたコードを読み込む。keepCode なら今のコードのまま
+   * 解析する(貼ったコードが別の言語だと分かったとき)。解析済みなら、切り替えた言語で解析し直す
+   * (前の言語の解析結果に新しい言語の速さを掛けた概算を出さない)
+   */
+  const switchLang = (key: string, keepCode = false) => {
     save(CODE_KEY(langKey), code);
+    const next = keepCode ? code : (load(CODE_KEY(key)) ?? "");
     setLangKey(key);
-    setCode(load(CODE_KEY(key)) ?? "");
+    setCode(next);
     save(LANG_KEY, key);
+    if (keepCode) save(CODE_KEY(key), next);
     setError("");
+    if ((result || keepCode) && next.trim() !== "") analyzeNow(next, key);
+    else {
+      setResult(null);
+      setAnalyzed(null);
+    }
   };
+
+  const onCodeChange = (c: string) => {
+    setCode(c);
+    // 「コードを貼り付けてください」のような前の解析のエラーは、書き換えたら消す
+    if (error) setError("");
+  };
+
+  // 貼ったコードが選んでいる言語と別のものに見えたら知らせる(勝手には切り替えない)
+  const guessed = useMemo(() => guessLanguage(code), [code]);
+  const suggest = differentLanguage(langKey, guessed) ? EDITOR_LANGS.find((l) => l.key === guessed) : undefined;
 
   /** エディターで書いているコードと言語を読み込んで、そのまま解析する */
   const importFromEditor = () => {
@@ -212,8 +236,8 @@ export function ComplexityPage() {
     for (const [k, v] of Object.entries(rawBounds)) out[k] = v.trim() === "" ? null : parseBoundValue(v);
     return out;
   }, [rawBounds]);
-  const tl = Number(rawTl);
-  const tlValid = rawTl.trim() !== "" && Number.isFinite(tl) && tl > 0;
+  const tl = parseSeconds(rawTl);
+  const tlValid = Number.isFinite(tl) && tl > 0;
   const ok = result !== null && result.status === "ok";
   const est = useMemo(() => {
     if (!ok || !result) return null;
@@ -234,6 +258,20 @@ export function ComplexityPage() {
       return next;
     });
   };
+  // 問題ページの制約をコピーして貼ると、KaTeX の表示では累乗が「10 改行 5」に割れ、入力欄は改行を捨てるので
+  // 「105」になってしまう。HTML に元の TeX があればそれを、無ければ改行を空白にして入れる
+  const pasteBound = (name: string) => (e: ClipboardEvent<HTMLInputElement>) => {
+    const html = e.clipboardData.getData("text/html");
+    const tex = html ? katexHtmlToText(html) : null;
+    const plain = e.clipboardData.getData("text/plain");
+    if (tex === null && !/[\n\u200b]/.test(plain)) return; // ふつうの貼り付けはそのまま
+    e.preventDefault();
+    const text = (tex ?? plain).replace(/\u200b/g, "").replace(/\s*\n\s*/g, " ").trim();
+    const el = e.currentTarget;
+    const a = el.selectionStart ?? el.value.length;
+    const b = el.selectionEnd ?? a;
+    setBound(name, el.value.slice(0, a) + text + el.value.slice(b));
+  };
   const clearBounds = () => {
     if (!result) return;
     setRawBounds((prev) => {
@@ -251,7 +289,10 @@ export function ComplexityPage() {
 
   let timeSub = "「解析 ▶」で推定";
   if (result && !ok) timeSub = result.status === "unsupported" ? "この言語はまだ解析できません" : "解析できませんでした";
-  else if (est && est.missing.length === 0) timeSub = `≒ ${est.opsText} 回`;
+  else if (est && est.missing.length === 0) {
+    // スマホでは判定のチップが下の「変数の範囲」まで行かないと見えないので、ここにも出す
+    timeSub = `≒ ${est.opsText} 回${est.verdict && tlValid ? `(${VERDICT_CHIP[est.verdict].text})` : ""}`;
+  }
   else if (est) timeSub = `${est.missing.join(", ")} の上限を入力すると回数を概算`;
 
   return (
@@ -280,10 +321,18 @@ export function ComplexityPage() {
       <section className="card editor-card cx-code-card">
         {error && <p className="error-text cx-msg">{error}</p>}
         {!error && stale && <p className="muted cx-msg">コードが変更されています。もう一度解析してください</p>}
+        {suggest && (
+          <p className="muted cx-msg">
+            このコードは {suggest.label} のようです。{" "}
+            <button type="button" className="linklike" onClick={() => switchLang(suggest.key, true)}>
+              {suggest.label} として解析する
+            </button>
+          </p>
+        )}
         <CodeEditor
           ref={editorRef}
           code={code}
-          onChange={setCode}
+          onChange={onCodeChange}
           langKey={langKey}
           indentWidth={indentWidth}
           heightKey={HEIGHT_KEY}
@@ -383,6 +432,7 @@ export function ComplexityPage() {
                               placeholder="例: 2e5"
                               value={raw}
                               onChange={(e) => setBound(v.name, e.target.value)}
+                              onPaste={pasteBound(v.name)}
                               aria-label={`${v.name} の範囲`}
                               aria-invalid={bad}
                               aria-describedby="cx-total"
@@ -431,6 +481,7 @@ export function ComplexityPage() {
                   <>
                     合計演算回数の概算 ≒ {est.opsText} 回
                     {est.verdict && tlValid && <span className={VERDICT_CHIP[est.verdict].cls}>{VERDICT_CHIP[est.verdict].text}</span>}
+                    {!tlValid && <span className="error-text"> 制限時間を秒で入れると判定します(例: 2)</span>}
                   </>
                 ) : (
                   <span className="muted">{est?.missing.join(", ")} の範囲を入れると概算します</span>

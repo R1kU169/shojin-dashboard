@@ -14,6 +14,7 @@ import { parseProgram } from "./frontend.ts";
 import { LANG_SPECS } from "./langTable.ts";
 
 export { evaluate, formatOps, parseBoundValue, SPEED, TIGHT_RATIO } from "./evaluate.ts";
+export { differentLanguage, guessLanguage } from "./detect.ts";
 export { format, formatO } from "./expr.ts";
 export type { Analysis, AnalysisWarning, BreakdownItem, Confidence, EvalResult, Expr, TimeVerdict, Variable } from "./ir.ts";
 

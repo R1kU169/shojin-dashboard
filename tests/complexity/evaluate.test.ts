@@ -68,3 +68,26 @@ test("指数と階乗は大きな値で打ち切る", () => {
   assert.equal(r.opsText, "10^300 以上");
   assert.equal(r.verdict, "tle");
 });
+
+test("問題ページからコピーした形・TeX・下限 0 や負の値も読む", () => {
+  const cases: [string, { lo: number | null; hi: number }][] = [
+    ["2×10 5", { lo: null, hi: 200000 }],
+    ["1≤N≤2×10\n5", { lo: 1, hi: 200000 }],
+    ["2×10⁵", { lo: null, hi: 200000 }],
+    ["10⁹", { lo: null, hi: 1e9 }],
+    ["0 ≤ K ≤ 10^9", { lo: 0, hi: 1e9 }],
+    ["-10^9 ≤ A ≤ 10^9", { lo: -1e9, hi: 1e9 }],
+    ["N ≤ 2×10^5", { lo: null, hi: 200000 }],
+    ["N<=200000", { lo: null, hi: 200000 }],
+    ["1 \\le N \\le 2 \\times 10^5", { lo: 1, hi: 200000 }],
+    ["2・10^5", { lo: null, hi: 200000 }],
+    ["10 000", { lo: null, hi: 10000 }],
+  ];
+  for (const [s, want] of cases) assert.deepEqual(parseBoundValue(s), want, s);
+});
+
+test("2^(H·W) の値が足りないときは H・W の名前で知らせる", () => {
+  const r = evaluate([{ coef: 1, factors: [{ v: "2^(H·W)", pow: 1, log: 0, exp: 0, fact: 0 }] }], { H: 3 }, "cpp", 2);
+  assert.deepEqual(r.missing, ["W"]);
+  assert.equal(formatOps(Number.NaN), "—");
+});

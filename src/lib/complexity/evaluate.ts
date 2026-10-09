@@ -37,8 +37,12 @@ export const SPEED: Record<string, number> = {
  */
 export const TIGHT_RATIO = 0.3;
 
-/** 単一の値: 2e5 / 2*10^5 / 2×10^5 / 10**9 / 1<<20 / 2,000 / 200_000 */
-function parseSingle(s: string): number | null {
+/** 単一の値: 2e5 / 2*10^5 / 2×10^5 / 10**9 / 1<<20 / 2,000 / 200_000。下限(lower)なら 0 や負の値(-10^9)も読む */
+function parseSingle(s: string, lower = false): number | null {
+  if (lower && s.startsWith("-")) {
+    const v = parseSingle(s.slice(1));
+    return v === null ? null : -v;
+  }
   if (s === "") return null;
   let v = 1;
   for (const part of s.split("*")) {
@@ -46,22 +50,41 @@ function parseSingle(s: string): number | null {
     if (!m) return null;
     v *= Math.pow(Number(m[1]), m[2] ? Number(m[2]) : 1);
   }
-  return Number.isFinite(v) && v > 0 && v < 1e30 ? v : null;
+  return Number.isFinite(v) && (lower ? v >= 0 : v > 0) && v < 1e30 ? v : null;
 }
 
+const SUPERSCRIPT: Record<string, string> = { "⁰": "0", "¹": "1", "²": "2", "³": "3", "⁴": "4", "⁵": "5", "⁶": "6", "⁷": "7", "⁸": "8", "⁹": "9" };
+
 /**
- * 範囲の入力を読む。上限だけ(2e5)でも、制約の書き方(1 ≤ N ≤ 2×10^5)でもよい。
- * 最悪ケースの評価には hi を使う。lo は表示にだけ使う。読めなければ null。
+ * 範囲の入力を読む。上限だけ(2e5)でも、制約の書き方(1 ≤ N ≤ 2×10^5 / N ≤ 2×10^5 / 1 \le N \le 2 \times 10^5)でもよい。
+ * 最悪ケースの評価には hi を使う。lo は表示にだけ使う(0 や負の値でもよい)。読めなければ null。
  */
 export function parseBoundValue(input: string): { lo: number | null; hi: number } | null {
-  let s = input.normalize("NFKC").toLowerCase();
-  s = s.replace(/[\s,_']/g, "").replace(/[×·]/g, "*").replace(/\*\*/g, "^");
+  // 上付きの数字(10⁵)は NFKC で 105 になってしまうので、先に ^5 にする
+  let s = input.replace(/[⁰¹²³⁴⁵⁶⁷⁸⁹]+/g, (m) => `^${[...m].map((c) => SUPERSCRIPT[c]).join("")}`);
+  s = s.normalize("NFKC").toLowerCase();
+  // TeX の書き方
+  s = s
+    .replace(/\\(?:leqq|leq|le)(?![a-z])/g, "≤")
+    .replace(/\\(?:geqq|geq|ge)(?![a-z])/g, "≥")
+    .replace(/\\lt(?![a-z])/g, "<")
+    .replace(/\\(?:times|cdot)(?![a-z])/g, "×")
+    .replace(/\\[,;: !]|[{}$]/g, " ");
+  // 問題ページの表示(KaTeX)をコピーすると累乗が「10 5」「10 改行 5」に割れる。10 の後ろの空白と1〜2桁の数は指数
+  s = s.replace(/(^|[^\d.])10[ \t\r\n]+(\d{1,2})(?!\d)/g, "$110^$2");
+  s = s.replace(/[\s,_']/g, "").replace(/[×·・⋅∙]/g, "*").replace(/\*\*/g, "^").replace(/[−–]/g, "-");
   s = s.replace(/≦|=</g, "<=").replace(/≧/g, ">=").replace(/≤/g, "<=");
   // 1<<20 は範囲の区切りの < と取り違えないよう、区切りを探す前に 1*2^20 にする
   s = s.replace(/(\d+)<<(\d+)/g, "$1*2^$2");
   // lo <= X <= hi / lo < X < hi(X は変数名なので読み捨てる)
   const cmp = /^([^<]+?)<=?[a-z|()_\d]*?[a-z|()][a-z|()_\d]*<=?(.+)$/.exec(s);
   if (cmp) return range(cmp[1], cmp[2]);
+  // X <= hi(下限を書かない制約)
+  const upper = /^[a-z|()_\d]*?[a-z|()][a-z|()_\d]*<=?(.+)$/.exec(s);
+  if (upper) {
+    const hi = parseSingle(upper[1]);
+    return hi === null ? null : { lo: null, hi };
+  }
   const sep = /^(.+?)(?:〜|~|\.\.)(.+)$/.exec(s);
   if (sep) return range(sep[1], sep[2]);
   const hi = parseSingle(s);
@@ -69,7 +92,7 @@ export function parseBoundValue(input: string): { lo: number | null; hi: number 
 }
 
 function range(a: string, b: string): { lo: number; hi: number } | null {
-  const lo = parseSingle(a);
+  const lo = parseSingle(a, true);
   const hi = parseSingle(b);
   if (lo === null || hi === null || lo > hi) return null;
   return { lo, hi };
@@ -107,7 +130,10 @@ export function evaluate(e: Expr, values: Record<string, number>, lang: string, 
       if (n === undefined) {
         const p = pseudoValue(x.v, values);
         if (p === null) {
-          missing.add(x.v);
+          // 2^(H·W) のような疑似記号は、範囲を入れる欄のある元の変数(H, W)の名前で知らせる
+          const parts = /^2\^\((.+)\)$/.exec(x.v)?.[1].split("·");
+          if (parts) for (const part of parts) if (values[part] === undefined) missing.add(part);
+          if (!parts) missing.add(x.v);
           continue;
         }
         n = p;
@@ -130,6 +156,7 @@ export function evaluate(e: Expr, values: Record<string, number>, lang: string, 
 
 /** 演算回数の表示: 10^4 未満はカンマ区切りの整数、それ以上は有効2桁 */
 export function formatOps(n: number): string {
+  if (Number.isNaN(n)) return "—";
   if (!Number.isFinite(n) || n >= 1e300) return "10^300 以上";
   const r = Math.round(n);
   if (r < 1e4) return r.toLocaleString("en-US");
