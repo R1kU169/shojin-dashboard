@@ -35,20 +35,28 @@ export function useUserData(userId: string): UserDataState {
       return;
     }
     setState({ phase: "loading", progress: 0 });
+    // ページを離れたら、kenkoooo からの差分の取得を打ち切る(次のページのリクエストの順番を食わない)
+    const ctl = new AbortController();
     (async () => {
       // 問題データの読み込みと、提出履歴(手元を見て、古ければ kenkoooo から差分)の取得は並べて進める
       const resources = Promise.all([getProblems(), getProblemModels()]);
+      resources.catch(() => {}); // 失敗は下の await で扱う(手元のデータを待つ間に未処理にしない)
       const local = await peekSubmissions(userId).catch(() => null);
       const shown = !!local && local.list.length > 0;
       const refresh = local?.fresh
         ? null
-        : refreshSubmissions(userId, (n) => {
-            if (!cancelled && !shown) setState((s) => ({ ...s, progress: n }));
-          });
+        : refreshSubmissions(
+            userId,
+            (n) => {
+              if (!cancelled && !shown) setState((s) => ({ ...s, progress: n }));
+            },
+            ctl.signal,
+          );
       refresh?.catch(() => {}); // 失敗は下の await で扱う(問題データを待つ間に未処理にしない)
       const [problems, models] = await resources;
       if (cancelled) return;
-      // 手元のデータで先に表示する(10分以内に取ったものなら、提出0件でもそのまま確定)
+      // 手元のデータで先に表示する(10分以内に取ったものなら、提出0件でもそのまま確定)。
+      // 10分以内に取得に失敗したばかりのときは取り直さないので、最初から「古い」と出す
       if (local && (shown || !refresh)) {
         setState({
           phase: "ready",
@@ -56,7 +64,9 @@ export function useUserData(userId: string): UserDataState {
           subs: local.list,
           problems,
           models,
-          refreshing: !!refresh,
+          refreshing: !!refresh && !local.cooldown,
+          stale: local.cooldown,
+          staleAt: local.cooldown ? local.at || undefined : undefined,
         });
       }
       if (!refresh) return;
@@ -70,12 +80,12 @@ export function useUserData(userId: string): UserDataState {
           problems,
           models,
           stale: !r.live,
-          staleAt: r.live ? undefined : r.at,
+          staleAt: r.live ? undefined : r.at || undefined,
         });
       } catch (e) {
         if (cancelled) return;
         // 先に表示したデータがあれば、それを残して「最新を取れなかった」とだけ伝える
-        if (shown) setState((s) => ({ ...s, refreshing: false, stale: true, staleAt: local.at }));
+        if (shown) setState((s) => ({ ...s, refreshing: false, stale: true, staleAt: local.at || undefined }));
         else setState({ phase: "error", progress: 0, error: String(e) });
       }
     })().catch((e) => {
@@ -83,6 +93,7 @@ export function useUserData(userId: string): UserDataState {
     });
     return () => {
       cancelled = true;
+      ctl.abort();
     };
   }, [userId]);
 

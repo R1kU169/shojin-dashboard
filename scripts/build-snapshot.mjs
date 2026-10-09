@@ -17,6 +17,8 @@ const BASE = "https://kenkoooo.com/atcoder";
 const PAGE_SIZE = 500;
 const PAGE_INTERVAL_MS = 1100; // API規約: アクセス間隔は1秒以上
 const MEMBER_INTERVAL_MS = 1000;
+// 差分は前回の最後の提出の1日前から取り直す(kenkoooo に遅れて載った提出・判定が変わった提出を拾う保険)
+const OVERLAP_SEC = 24 * 60 * 60;
 const UA = "shojin-dashboard-snapshot (+https://github.com/R1kU169/shojin-dashboard)";
 
 // ローカル確認用: SNAPSHOT_LIMIT=1 で先頭N人だけ取得する
@@ -69,10 +71,11 @@ async function main() {
   await mkdir(path.join(OUT, "subs"), { recursive: true });
 
   console.log("[snapshot] problems.json / problem-models.json を取得中…");
-  const [problems, models] = await Promise.all([
-    getJson(`${BASE}/resources/problems.json`),
-    getJson(`${BASE}/resources/problem-models.json`),
-  ]);
+  // 利用規約の間隔(1秒以上)を守るため、並べずに順に取る
+  const problems = await getJson(`${BASE}/resources/problems.json`);
+  await sleep(PAGE_INTERVAL_MS);
+  const models = await getJson(`${BASE}/resources/problem-models.json`);
+  await sleep(PAGE_INTERVAL_MS);
   await writeFile(path.join(OUT, "problems.json"), JSON.stringify(problems));
   await writeFile(path.join(OUT, "problem-models.json"), JSON.stringify(models));
   console.log(
@@ -84,8 +87,10 @@ async function main() {
   for (const m of targets) {
     const key = m.id.toLowerCase();
     const prev = await readJson(`subs/${key}.json`);
-    const fromSecond = prev?.watermark ?? 0;
+    const fromSecond = prev?.watermark ? Math.max(0, prev.watermark - OVERLAP_SEC) : 0;
     let list;
+    // 取れたときだけ「最新まで取れた時刻」を進める(失敗して前回分を使うときは前回の時刻のまま)
+    let at = Date.now();
     try {
       const fresh = await fetchSubsSince(m.id, fromSecond);
       const byId = new Map();
@@ -97,6 +102,7 @@ async function main() {
       if (prev) {
         // 一時的な失敗なら前回分を維持してビルドは続行する
         list = prev.list;
+        at = prev.at ?? 0;
         console.warn(`[snapshot] ${m.id}: 取得失敗、前回分を維持 (${e})`);
       } else {
         console.warn(`[snapshot] ${m.id}: 取得失敗、スキップ (${e})`);
@@ -108,7 +114,7 @@ async function main() {
     const watermark = list.length > 0 ? list[list.length - 1].epoch_second : 0;
     await writeFile(
       path.join(OUT, `subs/${key}.json`),
-      JSON.stringify({ at: Date.now(), watermark, list }),
+      JSON.stringify({ at, watermark, list }),
     );
     index.members.push({ id: m.id, ok: true, count: list.length });
     await sleep(MEMBER_INTERVAL_MS);

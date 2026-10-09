@@ -18,6 +18,8 @@ console.log("[smoke] 静的リソースを取得中…");
 const models = await getJson(
   "https://kenkoooo.com/atcoder/resources/problem-models.json",
 );
+// API 利用規約: アクセス間隔は1秒以上
+await new Promise((r) => setTimeout(r, 1100));
 const problems = await getJson(
   "https://kenkoooo.com/atcoder/resources/problems.json",
 );
@@ -25,6 +27,7 @@ console.log(
   `[smoke] problems=${problems.length} models=${Object.keys(models).length}`,
 );
 
+await new Promise((r) => setTimeout(r, 1100));
 console.log(`[smoke] ${user} の提出を取得中…`);
 const subs = await fetchSubmissionsSince(user, 0, (n) =>
   process.stdout.write(`\r  ${n}件`),
