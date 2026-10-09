@@ -19,5 +19,5 @@
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["tests", "src/lib/complexity", "src/lib/casegen"]
+  "include": ["tests", "src/lib/complexity", "src/lib/casegen", "src/lib/irt.ts", "src/lib/colors.ts", "src/lib/types.ts"]
 }

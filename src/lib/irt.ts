@@ -1,4 +1,4 @@
-import type { Problem, ProblemModels } from "./types";
+import type { Problem, ProblemModels } from "./types.ts";
 import { clipDifficulty } from "./colors.ts";
 
 // kenkoooo の難易度推定と同じ 2PL ロジスティックモデル:
@@ -29,28 +29,39 @@ export function collectIrtItems(
   return items;
 }
 
+const THETA_MIN = -2000;
+const THETA_MAX = 5000;
+
 /**
- * θのMAP推定(Newton-Raphson)。失敗観測が少ないとMLEは発散するため、
+ * θのMAP推定。失敗観測が少ないとMLEは発散するため、
  * 弱い事前分布 θ~N(600, 1200²) で正則化する。ACが1問もなければ null。
+ *
+ * 対数事後は θ について凹(勾配が単調減少)なので、勾配が 0 になる点を二分探索で求める。
+ * Newton 法は 600 から全幅で進むと、観測がすべて 600 から遠い初心者(A を解いて B を落とした人)で
+ * 曲率がほぼ 0 になって数千も跳び、振動したまま上限・下限に張り付く。
  */
 export function estimateTheta(items: IrtItem[]): number | null {
   if (!items.some((i) => i.solved)) return null;
   const priorMu = 600;
   const priorVar = 1200 * 1200;
-  let theta = priorMu;
-  for (let iter = 0; iter < 100; iter++) {
-    let grad = -(theta - priorMu) / priorVar;
-    let hess = -1 / priorVar;
+  const grad = (theta: number) => {
+    let g = -(theta - priorMu) / priorVar;
     for (const it of items) {
       const p = 1 / (1 + Math.exp(-it.a * (theta - it.b)));
-      grad += it.a * ((it.solved ? 1 : 0) - p);
-      hess -= it.a * it.a * p * (1 - p);
+      g += it.a * ((it.solved ? 1 : 0) - p);
     }
-    const step = grad / hess;
-    theta -= step;
-    if (Math.abs(step) < 0.5) break;
+    return g;
+  };
+  if (grad(THETA_MIN) <= 0) return THETA_MIN;
+  if (grad(THETA_MAX) >= 0) return THETA_MAX;
+  let lo = THETA_MIN;
+  let hi = THETA_MAX;
+  while (hi - lo > 0.5) {
+    const mid = (lo + hi) / 2;
+    if (grad(mid) > 0) lo = mid;
+    else hi = mid;
   }
-  return Math.max(-2000, Math.min(5000, theta));
+  return (lo + hi) / 2;
 }
 
 export function solveProbability(theta: number, rawDifficulty: number, a: number): number {
