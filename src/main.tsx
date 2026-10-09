@@ -4,9 +4,10 @@ import { HashRouter } from "react-router-dom";
 import "./index.css";
 import App from "./App.tsx";
 
-// デプロイをまたいで開いたままのタブでは、古いチャンク(計算量タブ)が無くなって遅延読み込みが失敗する。
-// 1回だけ再読み込みして新しい版を取る(続けて失敗したら ErrorBoundary が再読み込みのボタンを出す)
-window.addEventListener("vite:preloadError", (e) => {
+// デプロイをまたいで開いたままのタブでは、古いチャンク(個人ページ・エディター・計算量タブ)が無くなって
+// 遅延読み込みが失敗する。1回だけ再読み込みして新しい版を取る(続けて失敗したら ErrorBoundary が
+// 再読み込みのボタンを出す)。失敗そのものは握りつぶさない(握ると読み込んだ値が undefined になって別の例外になる)
+window.addEventListener("vite:preloadError", () => {
   const KEY = "shojin:chunkReloadAt";
   try {
     const last = Number(sessionStorage.getItem(KEY));
@@ -15,7 +16,6 @@ window.addEventListener("vite:preloadError", (e) => {
   } catch {
     return;
   }
-  e.preventDefault();
   location.reload();
 });
 

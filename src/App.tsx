@@ -2,14 +2,18 @@ import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { Link, NavLink, Route, Routes, useLocation } from "react-router-dom";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { ClubPage } from "./pages/ClubPage";
-import { EditorPage } from "./pages/EditorPage";
 import { Home } from "./pages/Home";
-import { UserPage } from "./pages/UserPage";
 import { MyPage } from "./pages/MyPage";
 import { ThemeProvider, useTheme } from "./theme";
 
-// 計算量タブは解析器(約6,000行)ごと別のチャンクにして、ほかのページの読み込みを重くしない
+// 重いページは別のチャンクにして、最初に開くページ(トップ・ランキング)の読み込みを軽くする。
+// 計算量タブは解析器(約6,000行)、エディターはハイライト・ケース生成、個人ページはグラフ(Recharts)を持つ
 const ComplexityPage = lazy(() => import("./pages/ComplexityPage").then((m) => ({ default: m.ComplexityPage })));
+const EditorPage = lazy(() => import("./pages/EditorPage").then((m) => ({ default: m.EditorPage })));
+const loadUserPage = () => import("./pages/UserPage");
+const UserPage = lazy(() => loadUserPage().then((m) => ({ default: m.UserPage })));
+
+const loading = <p className="muted">読み込み中…</p>;
 
 function ThemeToggle() {
   const { pref, cycle } = useTheme();
@@ -84,6 +88,11 @@ function useNavScroll(pathname: string) {
 export default function App() {
   const { pathname } = useLocation();
   const nav = useNavScroll(pathname);
+  // 個人ページはほとんどの人が開くので、最初のページを出し終えたら裏で読み込んでおく
+  useEffect(() => {
+    const t = setTimeout(() => void loadUserPage().catch(() => {}), 1500);
+    return () => clearTimeout(t);
+  }, []);
   return (
     <ThemeProvider>
       <header className="app-header">
@@ -124,13 +133,27 @@ export default function App() {
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/me" element={<MyPage />} />
-            <Route path="/u/:userId" element={<UserPage />} />
+            <Route
+              path="/u/:userId"
+              element={
+                <Suspense fallback={loading}>
+                  <UserPage />
+                </Suspense>
+              }
+            />
             <Route path="/club" element={<ClubPage />} />
-            <Route path="/editor" element={<EditorPage />} />
+            <Route
+              path="/editor"
+              element={
+                <Suspense fallback={loading}>
+                  <EditorPage />
+                </Suspense>
+              }
+            />
             <Route
               path="/complexity"
               element={
-                <Suspense fallback={<p className="muted">読み込み中…</p>}>
+                <Suspense fallback={loading}>
                   <ComplexityPage />
                 </Suspense>
               }
