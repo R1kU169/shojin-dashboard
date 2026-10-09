@@ -1,5 +1,6 @@
-// 実行バックエンドの切り替え。通常はWandboxで実行し、Wandbox側の障害を
-// 検出した時だけCompiler Explorerにフォールバックする。
+// 実行バックエンドの切り替え。通常の実行はWandboxで行い、Wandbox側の障害を検出したときと
+// 入力が大きくて送れないときだけCompiler Explorerにフォールバックする(runCode)。
+// コーナーケースのまとめて実行は、実行時間を測れるCompiler Explorerを先に使う(runCase)。
 //
 // 背景: Wandboxは実行サンドボックス(コンテナ)だけが落ちることがあり、その間は
 // どの言語・どんなコードでも "OCI runtime error: crun: clone: Resource

@@ -34,7 +34,10 @@ export function ProblemSearch({
 }: {
   onPick: (p: LinkedProblem) => void;
 }) {
+  // query は入力欄の文字列(変換中も含めて常に入力欄と同じにする。そうしないと React が値を戻して
+  // 日本語の変換が壊れる)。searchText は検索に使う、変換を確定した文字列
   const [query, setQuery] = useState("");
+  const [searchText, setSearchText] = useState("");
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(-1); // -1 = 入力行(候補未選択)
   const [problems, setProblems] = useState<Problem[] | null>(null);
@@ -63,7 +66,7 @@ export function ProblemSearch({
 
   const ix = useMemo(() => (problems ? buildIndex(problems) : null), [problems]);
   // 実測で1クエリ1ms未満なのでタイマーによるデバウンスは要らない
-  const deferred = useDeferredValue(query);
+  const deferred = useDeferredValue(searchText);
   const trimmed = deferred.trim();
   const looksUrl = /atcoder\.jp\/contests\//.test(trimmed);
 
@@ -131,9 +134,19 @@ export function ProblemSearch({
     return () => document.removeEventListener("pointerdown", onDown);
   }, [open]);
 
+  /** 検索の結果がまだ打った文字列に追いついていないとき(素早く打って Enter)に、その場で引き直す */
+  const rowsFor = (text: string): Problem[] => {
+    if (!ix || /atcoder\.jp\/contests\//.test(text)) return [];
+    const h = searchProblems(ix, text, LIMIT + 1);
+    const id = PROBLEM_ID.test(text) ? (findById(ix.problems, text) ?? null) : null;
+    const base = (id ? [id, ...h.filter((p) => p.id !== id.id)] : h).slice(0, LIMIT);
+    return base.length > 0 ? base : searchContests(ix, text, true).flatMap((g) => g.problems);
+  };
+
   const pick = (p: Problem) => {
     onPick(toLinked(p, ix?.contests ?? new Set([p.contest_id])));
     setQuery("");
+    setSearchText("");
     setOpen(false);
     setActive(-1);
     setErr("");
@@ -148,12 +161,15 @@ export function ProblemSearch({
     if (fromUrl) {
       onPick(fromUrl);
       setQuery("");
+      setSearchText("");
       setOpen(false);
       setErr("");
       return;
     }
-    if (rows.length > 0) {
-      pick(rows[Math.max(active, 0)]);
+    // 候補の表示が今の文字列のものなら選んでいる行を、まだ前の文字列のものなら引き直した先頭を使う
+    const current = trimmed === s ? rows : rowsFor(s);
+    if (current.length > 0) {
+      pick(current[trimmed === s ? Math.max(active, 0) : 0]);
       return;
     }
     if (PROBLEM_ID.test(s)) {
@@ -223,9 +239,11 @@ export function ProblemSearch({
           onCompositionEnd={(e) => {
             composing.current = false;
             setQuery(e.currentTarget.value);
+            setSearchText(e.currentTarget.value);
           }}
           onChange={(e) => {
-            if (!composing.current) setQuery(e.target.value);
+            setQuery(e.target.value);
+            if (!composing.current) setSearchText(e.target.value);
             setActive(-1);
             setOpen(true);
             setErr("");

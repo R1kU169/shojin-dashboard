@@ -274,7 +274,7 @@ export function ComplexityPage() {
         <button type="button" className="linklike" onClick={importFromEditor}>
           エディターのコードを読み込む
         </button>
-        <span className="muted editor-hint">Ctrl+Enterで解析 / Ctrl+/でコメント</span>
+        <span className="muted editor-hint">Ctrl+Enterで解析 / Ctrl+/でコメント / Esc→Tabで欄の外へ</span>
       </div>
 
       <section className="card editor-card cx-code-card">

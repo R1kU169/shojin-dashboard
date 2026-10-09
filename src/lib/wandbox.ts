@@ -273,6 +273,10 @@ export interface RunResult {
   timeMs?: number;
   /** 実行時間の上限で打ち切られた(Compiler Explorer だけが返す) */
   timedOut?: boolean;
+  /** コンパイルに失敗した(Compiler Explorer だけが返す。そのとき標準エラーに Build failed が入る) */
+  buildFailed?: boolean;
+  /** 出力が長すぎて途中で打ち切られ、終了コードが分からない(Wandbox は 128KiB で打ち切って status を空にする) */
+  truncated?: boolean;
 }
 
 /** Wandbox に送るリクエストの本文 */
@@ -295,6 +299,9 @@ function requestBody(lang: EditorLang, code: string, stdin: string): string {
  * 超えると 413 が返る。2026-10 に実測: 1.04MB は通り、1.06MB は 413)
  */
 export const WANDBOX_MAX_BODY = 1024 * 1024;
+
+/** Wandbox が返す出力の上限(2026-10 に実測。超えた分は切られる) */
+const WANDBOX_OUTPUT_LIMIT = 131072;
 
 /** このコードと入力を Wandbox に送れるか */
 export function fitsWandbox(lang: EditorLang, code: string, stdin: string): boolean {
@@ -323,11 +330,16 @@ export async function runCode(
     program_output?: string;
     program_error?: string;
   };
+  const stdout = j.program_output ?? "";
+  const stderr = j.program_error ?? "";
+  // 出力が上限(131072 文字)に達すると、Wandbox は出力を切り、終了コードもシグナルも空で返す
+  const truncated = !j.status && !j.signal && (stdout.length >= WANDBOX_OUTPUT_LIMIT || stderr.length >= WANDBOX_OUTPUT_LIMIT);
   return {
     status: j.status ?? "",
     signal: j.signal ?? "",
     compilerError: j.compiler_error ?? j.compiler_message ?? "",
-    stdout: j.program_output ?? "",
-    stderr: j.program_error ?? "",
+    stdout,
+    stderr,
+    ...(truncated ? { truncated: true } : {}),
   };
 }

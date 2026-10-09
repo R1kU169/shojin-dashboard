@@ -8,6 +8,7 @@ import { ProblemSearch } from "../components/ProblemSearch";
 import { EDITOR_LANGS } from "../lib/wandbox";
 import { isWarningOnly, runCode } from "../lib/run";
 import type { RunOutcome } from "../lib/run";
+import { readStore, removeStore, writeStore } from "../lib/storage";
 import type { LinkedProblem } from "../lib/types";
 
 const CODE_KEY = (lang: string) => `shojin:editor:code:${lang}`;
@@ -19,14 +20,45 @@ const PROBLEM_KEY = "shojin:editor:problem";
 const INDENT_KEY = "shojin:editor:indent";
 const HEIGHT_KEY = "shojin:editor:height";
 const INDENT_WIDTHS = [2, 4, 8];
+// 標準入力はこれより大きければ保存しない(コーナーケースの大きい入力で localStorage の容量を使い切り、
+// コードまで保存できなくなるのを防ぐ。古い入力が戻るよりは空の方がよい)
+const STDIN_SAVE_MAX = 1_000_000;
+// 標準出力はこれより長ければ先頭だけを表示する(数MBの出力でページが固まらないように)
+const OUTPUT_SHOW_MAX = 100_000;
 
 function loadProblem(): LinkedProblem | null {
   try {
-    const raw = localStorage.getItem(PROBLEM_KEY);
+    const raw = readStore(PROBLEM_KEY);
     return raw ? (JSON.parse(raw) as LinkedProblem) : null;
   } catch {
     return null;
   }
+}
+
+/** クリップボードの API が使えないとき(古い WebView・http)の代わり。選択してコピーする */
+function copyByCommand(text: string): boolean {
+  const ta = document.createElement("textarea");
+  ta.value = text;
+  ta.setAttribute("readonly", "");
+  ta.style.position = "fixed";
+  ta.style.top = "-1000px";
+  document.body.appendChild(ta);
+  ta.select();
+  let ok = false;
+  try {
+    ok = document.execCommand("copy");
+  } catch {
+    ok = false;
+  }
+  ta.remove();
+  return ok;
+}
+
+/** 長い出力は先頭だけにする */
+function clip(s: string): string {
+  return s.length > OUTPUT_SHOW_MAX
+    ? `${s.slice(0, OUTPUT_SHOW_MAX)}\n…(全 ${s.length.toLocaleString()} 文字のうち先頭 ${OUTPUT_SHOW_MAX.toLocaleString()} 文字を表示)`
+    : s;
 }
 
 // テンプレート(wandbox.ts)が書かれているインデント幅
@@ -49,24 +81,24 @@ function reindent(code: string, oldW: number, newW: number): string {
 export function EditorPage() {
   const [params, setParams] = useSearchParams();
   const [langKey, setLangKey] = useState(
-    () => localStorage.getItem(LANG_KEY) ?? EDITOR_LANGS[0].key,
+    () => readStore(LANG_KEY) ?? EDITOR_LANGS[0].key,
   );
   const lang =
     EDITOR_LANGS.find((l) => l.key === langKey) ?? EDITOR_LANGS[0];
   // インデント幅(スペース数)。入力支援(Enter/Tab)とtab-size表示・テンプレ変換に効く
   const [indentWidth, setIndentWidth] = useState(() => {
-    const n = Number(localStorage.getItem(INDENT_KEY));
+    const n = Number(readStore(INDENT_KEY));
     return INDENT_WIDTHS.includes(n) ? n : 2;
   });
   // 保存済みコードを読む。全削除(空白のみ)された保存分はテンプレートに戻す
   const loadCode = (key: string, template: string): string => {
-    const saved = localStorage.getItem(CODE_KEY(key));
+    const saved = readStore(CODE_KEY(key));
     if (saved != null && saved.trim() !== "") return saved;
     return reindent(template, TEMPLATE_WIDTH, indentWidth);
   };
   const [code, setCode] = useState(() => loadCode(langKey, lang.template));
   const [stdin, setStdin] = useState(
-    () => localStorage.getItem(STDIN_KEY) ?? "",
+    () => readStore(STDIN_KEY) ?? "",
   );
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<RunOutcome | null>(null);
@@ -75,6 +107,8 @@ export function EditorPage() {
   // 「コードをコピーして提出」を押した直後の表示切り替え
   const [copied, setCopied] = useState(false);
   const [copyErr, setCopyErr] = useState(false);
+  // コードを保存できなかった(localStorage の容量切れなど)。再読み込みで消えることを知らせる
+  const [saveFailed, setSaveFailed] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const editorRef = useRef<CodeEditorHandle>(null);
 
@@ -89,13 +123,13 @@ export function EditorPage() {
       title: params.get("title") ?? undefined,
     };
     setProblem(p);
-    localStorage.setItem(PROBLEM_KEY, JSON.stringify(p));
+    writeStore(PROBLEM_KEY, JSON.stringify(p));
     setParams({}, { replace: true }); // URLを綺麗に保つ(再訪時はlocalStorageから復元)
   }, [params, setParams]);
 
   const applyProblem = (p: LinkedProblem) => {
     setProblem(p);
-    localStorage.setItem(PROBLEM_KEY, JSON.stringify(p));
+    writeStore(PROBLEM_KEY, JSON.stringify(p));
   };
 
   /**
@@ -107,30 +141,39 @@ export function EditorPage() {
    * ⌘クリックや中クリックも生きる。コピーに失敗しても遷移は止めない。
    */
   const copyForSubmit = () => {
+    const done = (ok: boolean) => {
+      setCopied(ok);
+      setCopyErr(!ok);
+      // 次に押したときのために、少ししたら元の文言に戻す
+      setTimeout(() => {
+        setCopied(false);
+        setCopyErr(false);
+      }, ok ? 2000 : 4000);
+    };
     // ユーザー操作の直後である必要があるので、最初の文で同期的に呼ぶ
     const p = navigator.clipboard?.writeText(code);
-    if (!p) return;
+    if (!p) {
+      done(copyByCommand(code));
+      return;
+    }
     void p.then(
-      () => {
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
-      },
-      () => setCopyErr(true),
+      () => done(true),
+      () => done(false),
     );
   };
 
   const unlinkProblem = () => {
     setProblem(null);
-    localStorage.removeItem(PROBLEM_KEY);
+    removeStore(PROBLEM_KEY);
   };
 
   // 言語切替: 現在のコードを保存し、切替先の保存分(無ければ/空ならテンプレ)を読む
   const switchLang = (key: string) => {
-    localStorage.setItem(CODE_KEY(langKey), code);
+    writeStore(CODE_KEY(langKey), code);
     const next = EDITOR_LANGS.find((l) => l.key === key) ?? EDITOR_LANGS[0];
     setLangKey(key);
     setCode(loadCode(key, next.template));
-    localStorage.setItem(LANG_KEY, key);
+    writeStore(LANG_KEY, key);
   };
 
   // コードを現在の言語のテンプレートに戻す(確認つき・undoで復帰可能)
@@ -154,13 +197,13 @@ export function EditorPage() {
   const changeIndent = (n: number) => {
     const newCode = reindent(code, indentWidth, n);
     setIndentWidth(n);
-    localStorage.setItem(INDENT_KEY, String(n));
+    writeStore(INDENT_KEY, String(n));
     for (const l of EDITOR_LANGS) {
       if (l.key === langKey) continue;
-      const saved = localStorage.getItem(CODE_KEY(l.key));
+      const saved = readStore(CODE_KEY(l.key));
       if (saved == null) continue;
       const conv = reindent(saved, indentWidth, n);
-      if (conv !== saved) localStorage.setItem(CODE_KEY(l.key), conv);
+      if (conv !== saved) writeStore(CODE_KEY(l.key), conv);
     }
     if (newCode === code) return;
     // undo履歴を保って全置換(キャレット位置は保つ)
@@ -170,24 +213,30 @@ export function EditorPage() {
   };
 
   // コード/入力は自動保存(リロードしても消えない)
+  const saveCode = (key: string, c: string) => setSaveFailed(!writeStore(CODE_KEY(key), c));
+  const saveStdin = (s: string) => {
+    // コーナーケースの大きい入力は保存しない(容量を使い切るとコードまで保存できなくなる)
+    if (s.length > STDIN_SAVE_MAX || !writeStore(STDIN_KEY, s)) removeStore(STDIN_KEY);
+  };
   useEffect(() => {
-    const t = setTimeout(
-      () => localStorage.setItem(CODE_KEY(langKey), code),
-      400,
-    );
+    const t = setTimeout(() => saveCode(langKey, code), 400);
     return () => clearTimeout(t);
   }, [code, langKey]);
   useEffect(() => {
-    const t = setTimeout(() => {
-      // コーナーケースの大きい入力は localStorage に入りきらないことがある。古い入力が戻るよりは空の方がよい
-      try {
-        localStorage.setItem(STDIN_KEY, stdin);
-      } catch {
-        localStorage.removeItem(STDIN_KEY);
-      }
-    }, 400);
+    const t = setTimeout(() => saveStdin(stdin), 400);
     return () => clearTimeout(t);
   }, [stdin]);
+  // 保存待ち(400ms)のうちにページを離れても、最後のコードと入力を保存する
+  const latest = useRef({ code, langKey, stdin });
+  latest.current = { code, langKey, stdin };
+  useEffect(
+    () => () => {
+      const { code: c, langKey: k, stdin: s } = latest.current;
+      writeStore(CODE_KEY(k), c);
+      saveStdin(s);
+    },
+    [],
+  );
 
   const run = async () => {
     if (running) {
@@ -231,14 +280,11 @@ export function EditorPage() {
     return () => document.removeEventListener("keydown", onKey, true);
   }, []);
 
-  // クリップボードが使えない環境(古いWebView等)では従来の文言のままにする
-  const copyLabel = !navigator.clipboard
-    ? "AtCoderで提出 ↗"
-    : copied
-      ? "コピーしました ✓"
-      : copyErr
-        ? "コピーできませんでした(提出ページへ) ↗"
-        : "コードをコピーして提出 ↗";
+  const copyLabel = copied
+    ? "コピーしました ✓"
+    : copyErr
+      ? "コピーできませんでした(提出ページへ) ↗"
+      : "コードをコピーして提出 ↗";
   const exitOk = result !== null && result.status === "0" && !result.signal;
   // コンパイラの出力が警告(=実行を妨げないもの)だけかどうか。
   // 判定できないときはfalseになり、従来どおりエラー扱いの赤で出る
@@ -287,7 +333,7 @@ export function EditorPage() {
           {running ? "中断" : "実行 ▶"}
         </button>
         <span className="muted editor-hint">
-          Ctrl+Enterで実行 / Ctrl+/でコメント
+          Ctrl+Enterで実行 / Ctrl+/でコメント / Esc→Tabで欄の外へ
         </span>
         <div className="editor-problem">
           {problem ? (
@@ -329,12 +375,9 @@ export function EditorPage() {
             className="editor-cx-link"
             to="/complexity?from=editor"
             onClick={() => {
-              try {
-                localStorage.setItem(CODE_KEY(langKey), code);
-                localStorage.setItem(LANG_KEY, langKey);
-              } catch {
-                // 保存できなくても移動はする(計算量タブ側でエラーを出す)
-              }
+              // 保存できなくても移動はする(計算量タブ側でエラーを出す)
+              writeStore(CODE_KEY(langKey), code);
+              writeStore(LANG_KEY, langKey);
             }}
             title="このコードの計算量を計算量タブで調べます(コードは送信しません)"
           >
@@ -357,6 +400,11 @@ export function EditorPage() {
           indentWidth={indentWidth}
           heightKey={HEIGHT_KEY}
         />
+        {saveFailed && (
+          <p className="error-text editor-save-err">
+            コードをブラウザに保存できませんでした(保存領域がいっぱいか、プライベートモードです)。再読み込みすると消えます。
+          </p>
+        )}
       </section>
 
       <div className="two-col editor-io">
@@ -380,7 +428,9 @@ export function EditorPage() {
               <span className={exitOk ? "exit-chip ok" : "exit-chip ng"}>
                 {result.signal
                   ? `シグナル: ${result.signal}`
-                  : `終了コード ${result.status}`}
+                  : result.truncated
+                    ? "出力が長すぎて打ち切り(終了コード不明)"
+                    : `終了コード ${result.status || "不明"}`}
               </span>
             )}
           </div>
@@ -397,21 +447,26 @@ export function EditorPage() {
                   で実行しました({result.backendVersion})
                 </p>
               )}
-              <pre className="io-out">{result.stdout || "(出力なし)"}</pre>
+              {result.truncated && (
+                <p className="fallback-note">
+                  ⚠ 出力が Wandbox の上限(約128KB)を超えたため、途中で切られています
+                </p>
+              )}
+              <pre className="io-out">{result.stdout ? clip(result.stdout) : "(出力なし)"}</pre>
               {result.compilerError && (
                 <>
                   <div className="io-label">
                     {warnOnly ? "コンパイラの警告" : "コンパイラメッセージ"}
                   </div>
                   <pre className={warnOnly ? "io-out io-warn" : "io-out io-err"}>
-                    {result.compilerError}
+                    {clip(result.compilerError)}
                   </pre>
                 </>
               )}
               {result.stderr && (
                 <>
                   <div className="io-label">標準エラー出力</div>
-                  <pre className="io-out io-err">{result.stderr}</pre>
+                  <pre className="io-out io-err">{clip(result.stderr)}</pre>
                 </>
               )}
             </>
@@ -429,11 +484,11 @@ export function EditorPage() {
         <a href="https://wandbox.org" target="_blank" rel="noreferrer">
           Wandbox
         </a>
-        (停止中は{" "}
+        (停止中や入力が約1MBを超えるときは{" "}
         <a href="https://godbolt.org" target="_blank" rel="noreferrer">
           Compiler Explorer
         </a>
-        )上で行われます(コードは外部サービスに送信されます)。
+        )で、コーナーケースのまとめて実行は実行時間を測れる Compiler Explorer を先に使います(コードは外部サービスに送信されます)。
       </p>
     </div>
   );

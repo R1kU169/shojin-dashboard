@@ -96,6 +96,8 @@ export function CodeEditor({
   const composingRef = useRef(false);
   // edit()由来のinputイベントで候補を開き直さないための目印
   const skipAcRef = useRef(false);
+  // 直前のキーが Esc だった(次の Tab はインデントせず、フォーカスを欄の外へ移す)
+  const escapedRef = useRef(false);
 
   // シンタックスハイライト(textareaの背後に重ねる)。末尾に改行を足して
   // 最終行の高さがtextareaとずれないようにする
@@ -163,8 +165,13 @@ export function CodeEditor({
       for (let i = lineFrom - 1; i < lineTo && i < lines.length; i++) end += lines[i].length + 1;
       end = Math.max(start, Math.min(end - 1, el.value.length));
       setAc(null);
-      el.focus();
+      // スマホ(指で操作する端末)では focus するとキーボードが開いて画面の半分が隠れるので、
+      // 選択だけ付けてコード欄をその行までスクロールする
+      const touch = window.matchMedia?.("(pointer: coarse)").matches;
+      if (!touch) el.focus({ preventScroll: true });
       el.setSelectionRange(start, end);
+      // コード欄が画面の外(固定のヘッダーの下を含む)なら見える位置まで動かす。上の余白は CSS の scroll-padding-top
+      el.scrollIntoView({ block: "nearest" });
       // Chrome / Safari は選択位置まで自動でスクロールしないので、行の高さから計算する。
       // scrollTop / scrollLeft を書くと scroll イベント経由でハイライト層と行番号も追随する
       const lh = parseFloat(getComputedStyle(el).lineHeight) || 20;
@@ -210,11 +217,18 @@ export function CodeEditor({
     // キャレットがコード欄の外へスクロールされていたら出さない
     if (top + lineH < r.top || top > r.bottom || x < r.left - 1 || x > r.right)
       return null;
+    // 見えている範囲。スマホでキーボードが開いているとき・拡大しているときは
+    // window.innerHeight より狭いので visualViewport を使う(キーボードの裏に出さない)
+    const vv = window.visualViewport;
+    const viewTop = vv ? vv.offsetTop : 0;
+    const viewLeft = vv ? vv.offsetLeft : 0;
+    const viewBottom = vv ? vv.offsetTop + vv.height : window.innerHeight;
+    const viewRight = vv ? vv.offsetLeft + vv.width : window.innerWidth;
     // 画面下に入らなければキャレットの上に出す
-    const above = top + lineH + AC_H > window.innerHeight - 8;
+    const above = top + lineH + AC_H > viewBottom - 8;
     return {
-      x: Math.max(8, Math.min(x, window.innerWidth - AC_W - 8)),
-      y: above ? Math.max(8, top - AC_H) : top + lineH,
+      x: Math.max(viewLeft + 8, Math.min(x, viewRight - AC_W - 8)),
+      y: above ? Math.max(viewTop + 8, top - AC_H) : top + lineH,
       above,
     };
   };
@@ -262,11 +276,15 @@ export function CodeEditor({
   useEffect(() => {
     if (!ac) return;
     const close = () => setAc(null);
+    const vv = window.visualViewport;
     window.addEventListener("scroll", close, true);
     window.addEventListener("resize", close);
+    // スマホのキーボードの開閉・拡大でも見えている範囲が変わる
+    vv?.addEventListener("resize", close);
     return () => {
       window.removeEventListener("scroll", close, true);
       window.removeEventListener("resize", close);
+      vv?.removeEventListener("resize", close);
     };
   }, [ac]);
 
@@ -283,6 +301,16 @@ export function CodeEditor({
     const v = el.value;
     const s = el.selectionStart;
     const t = el.selectionEnd;
+
+    // Tab はインデントに使うので、キーボードだけで欄の外へ出られるよう「Esc の直後の Tab」は素通しする
+    // (ブラウザの既定どおり次の要素へフォーカスが移る)
+    const escaped = escapedRef.current;
+    escapedRef.current = false;
+    if (e.key === "Tab" && escaped && !ac) return;
+    if (e.key === "Escape" && !ac) {
+      escapedRef.current = true;
+      return;
+    }
 
     // 補完ポップアップが開いている間のキー操作。修飾キー付きは素通しする
     if (ac && !e.altKey && !e.ctrlKey && !e.metaKey) {
@@ -403,6 +431,8 @@ export function CodeEditor({
         const newBlock = e.shiftKey
           ? lines.map((l) => l.replace(dedent, "")).join("\n")
           : lines.map((l) => INDENT + l).join("\n");
+        // 字下げの無い行で Shift+Tab を押したときは何も変えない(空の編集で undo の履歴を汚さない)
+        if (newBlock === v.slice(blockStart, blockEnd)) return;
         edit(el, blockStart, blockEnd, newBlock, blockStart, blockStart + newBlock.length);
       } else {
         edit(el, s, t, INDENT, s + INDENT.length, s + INDENT.length);

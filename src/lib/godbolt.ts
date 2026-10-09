@@ -1,5 +1,6 @@
 // Compiler Explorer (https://godbolt.org) でコードをコンパイル・実行する。
-// Wandboxのサンドボックスが落ちている間のフォールバック先(run.ts が切り替える)。
+// 通常の実行では Wandbox が止まっているとき・入力が約1MBを超えるときの代わり、
+// コーナーケースのまとめて実行では実行時間を測れるので先に使う(run.ts が切り替える)。
 // CORS全開放・APIキー不要なのでブラウザから直接叩ける。
 // 注意: コードと標準入力は外部サービス(godbolt.org)に送信される。
 import type { RunResult } from "./wandbox";
@@ -114,5 +115,6 @@ export async function runCodeGodbolt(
     stderr: j.timedOut ? `${stderr}実行時間の上限を超えました\n` : stderr,
     ...(j.didExecute !== false && buildCode === 0 && typeof j.execTime === "number" ? { timeMs: j.execTime } : {}),
     ...(j.timedOut ? { timedOut: true } : {}),
+    ...(buildCode !== 0 ? { buildFailed: true } : {}),
   };
 }
