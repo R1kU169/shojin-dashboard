@@ -7,6 +7,7 @@ import { MEMBERS } from "../data/members";
 import { useMemberTiers } from "../hooks/useMemberTiers";
 import { isValidAtcoderId } from "../lib/api";
 import { CHART_CHROME, TIER_COLORS } from "../lib/colors";
+import { getLastUser } from "../lib/me";
 import { useTheme } from "../theme";
 
 // アートカードの炎パターン(7x5、0=空き 4=一番熱い)
@@ -19,7 +20,8 @@ const ART_PATTERN = [
 ];
 
 export function Home() {
-  const [input, setInput] = useState("");
+  // 前回見たIDを入れておく(README の「前回見たIDを記憶」)
+  const [input, setInput] = useState(() => getLastUser() ?? "");
   const [err, setErr] = useState("");
   const nav = useNavigate();
   const { resolved } = useTheme();

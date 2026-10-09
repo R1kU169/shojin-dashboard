@@ -2,11 +2,11 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { StatCard } from "../components/StatCard";
 import { MEMBERS } from "../data/members";
-import { getProblemModels, getRating, peekSubmissions, refreshSubmissions } from "../lib/cache";
+import { getRating, peekSubmissions, refreshSubmissions } from "../lib/cache";
 import { TIER_COLORS, TIER_LABELS, tierIndex } from "../lib/colors";
 import { computeStats, todayEpochDay } from "../lib/stats";
 import type { UserStats } from "../lib/stats";
-import type { Member } from "../lib/types";
+import type { Member, ProblemModels } from "../lib/types";
 import { useTheme } from "../theme";
 
 interface Row {
@@ -25,11 +25,14 @@ type Period = "week" | "month" | "all";
 type SortKey = "ac" | "streak" | "rating";
 
 const RANK_BADGES = ["🥇", "🥈", "🥉"];
-const PERIODS: { key: Period; label: string; days: number }[] = [
-  { key: "week", label: "今週", days: 7 },
-  { key: "month", label: "今月", days: 30 },
-  { key: "all", label: "全期間", days: 0 },
+const PERIODS: { key: Period; label: string; note: string }[] = [
+  { key: "week", label: "今週", note: "今日を含む直近7日" },
+  { key: "month", label: "今月", note: "今日を含む直近30日" },
+  { key: "all", label: "全期間", note: "これまでの累計" },
 ];
+// ランキングで使うのは AC 数・ストリークだけで、難易度(帯別の内訳)は使わない。
+// 難易度データ(数MB)を待たず、取れなくても表示できるよう空のまま渡す
+const NO_MODELS: ProblemModels = {};
 
 // 期間内の新規AC数(週=7日/月=30日/全期間=累計)。dailyNewAc から集計する。
 function periodAc(stats: UserStats, period: Period): number {
@@ -52,26 +55,35 @@ export function ClubPage() {
 
   useEffect(() => {
     let cancel = false;
+    // ページを離れたら kenkoooo からの取得を打ち切る(残りの部員の分まで順番を待たせない)
+    const ctl = new AbortController();
     const update = (id: string, patch: Partial<Row>) =>
       setRows((rs) =>
         rs.map((r) => (r.member.id === id ? { ...r, ...patch } : r)),
       );
+    // 公式レーティングは届いた人から出す
+    for (const m of MEMBERS) {
+      getRating(m.id)
+        .then((rating) => {
+          if (!cancel) update(m.id, { rating });
+        })
+        .catch(() => {});
+    }
     (async () => {
-      const models = await getProblemModels().catch(() => null);
-      if (!models || cancel) return;
-      // 1. 手元のデータ(IndexedDB のキャッシュか、6時間ごとに更新するスナップショット)で全員をすぐ並べる。
+      // 1. 手元のデータ(IndexedDB のキャッシュか、6時間ごとに更新するスナップショット)で、読めた人からすぐ並べる。
       //    kenkoooo を1人ずつ待つと、応答の遅い人のところで後ろの全員が止まってしまう
-      const [locals, ratings] = await Promise.all([
-        Promise.all(MEMBERS.map((m) => peekSubmissions(m.id).catch(() => null))),
-        Promise.all(MEMBERS.map((m) => getRating(m.id).catch(() => null))),
-      ]);
-      if (cancel) return;
-      setRows(
-        MEMBERS.map((m, i) => {
-          const local = locals[i];
-          return local
-            ? { member: m, status: "done", progress: 0, stats: computeStats(local.list, models), rating: ratings[i], refreshing: !local.fresh }
-            : { member: m, status: "pending", progress: 0, rating: ratings[i] };
+      const locals = await Promise.all(
+        MEMBERS.map(async (m) => {
+          const local = await peekSubmissions(m.id).catch(() => null);
+          if (!cancel && local) {
+            update(m.id, {
+              status: "done",
+              stats: computeStats(local.list, NO_MODELS),
+              refreshing: !local.fresh && !local.cooldown,
+              stale: local.cooldown,
+            });
+          }
+          return local;
         }),
       );
       // 2. 古い人だけ、kenkoooo から最新の提出を順に取って差し替える(リクエストの間隔は api.ts が1秒以上あける)
@@ -81,10 +93,14 @@ export function ClubPage() {
         if (local?.fresh) continue;
         if (!local) update(m.id, { status: "loading" });
         try {
-          const r = await refreshSubmissions(m.id, (n) => {
-            if (!cancel && !local) update(m.id, { progress: n });
-          });
-          if (!cancel) update(m.id, { status: "done", stats: computeStats(r.list, models), refreshing: false, stale: !r.live });
+          const r = await refreshSubmissions(
+            m.id,
+            (n) => {
+              if (!cancel && !local) update(m.id, { progress: n });
+            },
+            ctl.signal,
+          );
+          if (!cancel) update(m.id, { status: "done", stats: computeStats(r.list, NO_MODELS), refreshing: false, stale: !r.live });
         } catch {
           if (!cancel) update(m.id, local ? { refreshing: false, stale: true } : { status: "error" });
         }
@@ -92,6 +108,7 @@ export function ClubPage() {
     })();
     return () => {
       cancel = true;
+      ctl.abort();
     };
   }, []);
 
@@ -113,6 +130,13 @@ export function ClubPage() {
     });
   const rest = rows.filter((r) => r.status !== "done");
   const ordered = [...done, ...rest];
+  // 同点は同じ順位にする(1, 2, 2, 4)。昇順は先頭が最下位なので並び順の番号のまま
+  const rankOf = (i: number): number => {
+    if (sortDir === "asc") return i + 1;
+    let k = i;
+    while (k > 0 && metric(ordered[k - 1]) === metric(ordered[i])) k--;
+    return k + 1;
+  };
 
   const sortBy = (key: SortKey) => {
     if (key === sortKey) {
@@ -125,8 +149,10 @@ export function ClubPage() {
 
   const ind = (key: SortKey) =>
     sortKey === key ? (
-      <span className="sort-ind">{sortDir === "desc" ? "▼" : "▲"}</span>
+      <span className="sort-ind" aria-hidden="true">{sortDir === "desc" ? "▼" : "▲"}</span>
     ) : null;
+  const ariaSort = (key: SortKey) =>
+    sortKey === key ? (sortDir === "desc" ? "descending" : "ascending") : undefined;
 
   // 部全体サマリー(読み込み済みの部員から集計。期間トグルに連動)
   const periodWord =
@@ -171,6 +197,7 @@ export function ClubPage() {
             </button>
           ))}
         </div>
+        <span className="muted rank-toolbar-label">{PERIODS.find((p) => p.key === period)?.note}</span>
       </div>
 
       <section className="card">
@@ -239,33 +266,40 @@ export function ClubPage() {
               <tr>
                 <th className="num">#</th>
                 <th>部員</th>
-                <th className="num sortable" onClick={() => sortBy("ac")}>
-                  {acLabel}
-                  {ind("ac")}
+                {/* 並び替えはキーボードでも操作できるよう見出しの中のボタンで行う */}
+                <th className="num sortable" aria-sort={ariaSort("ac")}>
+                  <button type="button" className="th-sort" onClick={() => sortBy("ac")}>
+                    {acLabel}
+                    {ind("ac")}
+                  </button>
                 </th>
-                <th className="num sortable" onClick={() => sortBy("streak")}>
-                  {/* スマホ幅では名前の列に幅を回すため短い見出しにする */}
-                  <span className="wide-only">ストリーク</span>
-                  <span className="narrow-only">連続</span>
-                  {ind("streak")}
+                <th className="num sortable" aria-sort={ariaSort("streak")}>
+                  <button type="button" className="th-sort" onClick={() => sortBy("streak")}>
+                    {/* スマホ幅では名前の列に幅を回すため短い見出しにする */}
+                    <span className="wide-only">ストリーク</span>
+                    <span className="narrow-only">連続</span>
+                    {ind("streak")}
+                  </button>
                 </th>
-                <th className="num sortable" onClick={() => sortBy("rating")}>
-                  レート
-                  {ind("rating")}
+                <th className="num sortable" aria-sort={ariaSort("rating")}>
+                  <button type="button" className="th-sort" onClick={() => sortBy("rating")}>
+                    レート
+                    {ind("rating")}
+                  </button>
                 </th>
               </tr>
             </thead>
             <tbody>
               {ordered.map((r, i) => {
-                // 昇順(sortDir="asc")では先頭が最下位なので、メダルもMVPも付けない
-                const ranked = sortDir === "desc";
+                // 昇順(sortDir="asc")では先頭が最下位なので、メダルもMVPも付けない。
+                // 0問・0日・未レートの人にもメダルは付けない(全員0のときに上から3人が表彰されないように)
+                const ranked = sortDir === "desc" && r.status === "done" && metric(r) > 0;
+                const rank = rankOf(i);
                 const isTop =
                   ranked &&
-                  r.status === "done" &&
-                  i === 0 &&
+                  rank === 1 &&
                   sortKey === "ac" &&
-                  period !== "all" &&
-                  metric(r) > 0;
+                  period !== "all";
                 return (
                   <tr
                     key={r.member.id}
@@ -275,8 +309,8 @@ export function ClubPage() {
                       {r.status !== "done"
                         ? "—"
                         : ranked
-                          ? (RANK_BADGES[i] ?? i + 1)
-                          : i + 1}
+                          ? (RANK_BADGES[rank - 1] ?? rank)
+                          : rank}
                     </td>
                     <td>
                       <Link to={`/u/${r.member.id}`}>{r.member.name}</Link>

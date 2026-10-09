@@ -12,6 +12,16 @@ export function epochDayToDateStr(epochDay: number): string {
   return new Date(epochDay * 86400 * 1000).toISOString().slice(0, 10);
 }
 
+/** epoch秒 → JST の "YYYY-MM-DD"(ヒートマップ・ストリークと同じ日付の区切り。端末のタイムゾーンによらない) */
+export function jstDateStr(epochSecond: number): string {
+  return epochDayToDateStr(jstEpochDay(epochSecond));
+}
+
+/** epoch秒 → JST の "YYYY-MM-DD HH:MM" */
+export function jstDateTimeStr(epochSecond: number): string {
+  return new Date((epochSecond + JST_OFFSET) * 1000).toISOString().slice(0, 16).replace("T", " ");
+}
+
 export function todayEpochDay(): number {
   return jstEpochDay(Math.floor(Date.now() / 1000));
 }

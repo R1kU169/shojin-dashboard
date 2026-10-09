@@ -13,6 +13,7 @@ import { RecommendList } from "../components/RecommendList";
 import { ReviewList } from "../components/ReviewList";
 import { StatCard } from "../components/StatCard";
 import { useUserData } from "../hooks/useUserData";
+import { isValidAtcoderId } from "../lib/api";
 import { getRating, getRatingHistory } from "../lib/cache";
 import {
   TIER_COLORS,
@@ -21,13 +22,18 @@ import {
   tierIndex,
 } from "../lib/colors";
 import { collectIrtItems, estimateTheta, recommend } from "../lib/irt";
-import { getMyId, sameId, setMyId } from "../lib/me";
+import { getMyId, sameId, setLastUser, setMyId } from "../lib/me";
 import { computeStats, todayEpochDay } from "../lib/stats";
 import type { RatePoint } from "../lib/types";
 import { useTheme } from "../theme";
 
 export function UserPage() {
   const { userId = "" } = useParams();
+  // 別の人のページへ移ったら状態ごと作り直す(前の人の数字が新しい人の名前の下に一瞬出ないように)
+  return <UserDashboard key={userId} userId={userId} />;
+}
+
+function UserDashboard({ userId }: { userId: string }) {
   const nav = useNavigate();
   const { resolved } = useTheme();
   const data = useUserData(userId);
@@ -38,7 +44,7 @@ export function UserPage() {
   const [history, setHistory] = useState<RatePoint[]>([]);
 
   useEffect(() => {
-    if (userId) localStorage.setItem("shojin:lastUser", userId);
+    if (isValidAtcoderId(userId)) setLastUser(userId);
   }, [userId]);
 
   useEffect(() => {
@@ -146,17 +152,11 @@ export function UserPage() {
   }, [data.subs, data.problems, data.models]);
 
   // 使用言語の内訳(上位5言語+その他)。
-  // "C++ 20 (gcc 12.2)" → "C++"、"Python (CPython 3.11)" → "Python" に正規化。
-  // 末尾の数字はC++だけ落とす(C++14/17/23は規格の違いなのでまとめる)。
-  // Python3/PyPy3 の数字は言語そのものの区別なので残す。
   const langStats = useMemo(() => {
     if (!data.subs || data.subs.length === 0) return [];
     const counts = new Map<string, number>();
     for (const s of data.subs) {
-      const noParen = s.language.replace(/\s*\(.*$/, "").trim();
-      const base = /^C\+\+/.test(noParen)
-        ? "C++"
-        : noParen || s.language;
+      const base = languageFamily(s.language);
       counts.set(base, (counts.get(base) ?? 0) + 1);
     }
     const sorted = [...counts.entries()].sort((a, b) => b[1] - a[1]);
@@ -427,6 +427,8 @@ export function UserPage() {
         </div>
         {theta !== null ? (
           <RecommendList recs={recs} />
+        ) : stats.totalAc > 0 ? (
+          <p className="muted">難易度の推定がある問題のACがまだないため推定できません。</p>
         ) : (
           <p className="muted">AC実績がまだないため推定できません。</p>
         )}
@@ -451,6 +453,21 @@ export function UserPage() {
       </section>
     </div>
   );
+}
+
+/**
+ * 提出の言語名を言語ごとにまとめる。
+ * "C++ 20 (gcc 12.2)" / "C++23 (GCC 15.2.0)" → "C++"、"Python (CPython 3.11.4)" / "Python3 (3.4.3)" → "Python"、
+ * "Python (PyPy 3.10-v7.3.12)" / "PyPy3 (7.3.0)" → "PyPy"、"Java11 (OpenJDK 11.0.6)" → "Java"。
+ * 版や規格の違いはまとめ、CPython と PyPy は実行速度の違う別の処理系なので分ける。
+ */
+function languageFamily(language: string): string {
+  if (/pypy/i.test(language)) return "PyPy";
+  const noParen = language.replace(/\s*\(.*$/, "").trim();
+  if (noParen === "") return language;
+  if (/^Perl ?6$/i.test(noParen)) return "Raku";
+  // 末尾の版の数字("C++ 20"、"Java11"、"Python3")を落とす。"C#" "F#" はそのまま
+  return noParen.replace(/\s*\d+(?:\.\d+)*$/, "") || noParen;
 }
 
 /** 「5分前」「3時間前」「2日前」 */

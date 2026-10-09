@@ -1,5 +1,6 @@
 import { lazy, Suspense } from "react";
-import { NavLink, Route, Routes } from "react-router-dom";
+import { Link, NavLink, Route, Routes, useLocation } from "react-router-dom";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import { ClubPage } from "./pages/ClubPage";
 import { EditorPage } from "./pages/EditorPage";
 import { Home } from "./pages/Home";
@@ -34,7 +35,17 @@ function ThemeToggle() {
   );
 }
 
+function NotFound() {
+  return (
+    <div className="notice">
+      <p>ページが見つかりませんでした。</p>
+      <Link to="/">トップへ戻る</Link>
+    </div>
+  );
+}
+
 export default function App() {
+  const { pathname } = useLocation();
   return (
     <ThemeProvider>
       <header className="app-header">
@@ -71,21 +82,24 @@ export default function App() {
         <ThemeToggle />
       </header>
       <main className="container">
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/me" element={<MyPage />} />
-          <Route path="/u/:userId" element={<UserPage />} />
-          <Route path="/club" element={<ClubPage />} />
-          <Route path="/editor" element={<EditorPage />} />
-          <Route
-            path="/complexity"
-            element={
-              <Suspense fallback={<p className="muted">読み込み中…</p>}>
-                <ComplexityPage />
-              </Suspense>
-            }
-          />
-        </Routes>
+        <ErrorBoundary key={pathname}>
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/me" element={<MyPage />} />
+            <Route path="/u/:userId" element={<UserPage />} />
+            <Route path="/club" element={<ClubPage />} />
+            <Route path="/editor" element={<EditorPage />} />
+            <Route
+              path="/complexity"
+              element={
+                <Suspense fallback={<p className="muted">読み込み中…</p>}>
+                  <ComplexityPage />
+                </Suspense>
+              }
+            />
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </ErrorBoundary>
       </main>
       <footer className="app-footer">
         <span className="footer-brand">

@@ -11,6 +11,7 @@ import {
 import { useReducedMotion } from "../hooks/useReducedMotion";
 import { CHART_CHROME, TIER_COLORS, tierIndex } from "../lib/colors";
 import { useTheme } from "../theme";
+import { jstDateStr } from "../lib/stats";
 
 export interface GrowthPoint {
   /** 初AC時刻(epoch秒) */
@@ -18,12 +19,6 @@ export interface GrowthPoint {
   /** クリップ済み難易度 */
   d: number;
   title: string;
-}
-
-function ymd(t: number): string {
-  const dt = new Date(t * 1000);
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${dt.getFullYear()}-${p(dt.getMonth() + 1)}-${p(dt.getDate())}`;
 }
 
 function GrowthTip({
@@ -39,7 +34,7 @@ function GrowthTip({
     <div className="chart-tip">
       <div className="tip-value">{p.title}</div>
       <div className="tip-label">
-        難易度 {p.d} · {ymd(p.t)}
+        難易度 {p.d} · {jstDateStr(p.t)}
       </div>
     </div>
   );
@@ -63,7 +58,7 @@ export function GrowthChart({ points }: { points: GrowthPoint[] }) {
           type="number"
           dataKey="t"
           domain={["dataMin", "dataMax"]}
-          tickFormatter={(t: number) => ymd(t).slice(0, 7)}
+          tickFormatter={(t: number) => jstDateStr(t).slice(0, 7)}
           tickLine={false}
           axisLine={{ stroke: chrome.grid }}
           tick={{ fill: chrome.muted, fontSize: 11 }}

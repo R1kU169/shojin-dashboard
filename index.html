@@ -9,6 +9,19 @@
     <!-- ブラウザUIの色はテーマ(auto)に追随させる。manifestのtheme_colorより優先される -->
     <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f9f9f7" />
     <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0d0d0d" />
+    <script>
+      // テーマを最初の描画の前に当てる。React の起動(theme.tsx)を待つと、ダーク設定でも一瞬ライトで表示される
+      (function () {
+        var t = null;
+        try {
+          t = localStorage.getItem("shojin:theme");
+        } catch (e) {}
+        if (t !== "light" && t !== "dark") {
+          t = window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+        }
+        document.documentElement.dataset.theme = t;
+      })();
+    </script>
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />

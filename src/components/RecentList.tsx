@@ -1,4 +1,5 @@
 import { CHART_CHROME, TIER_COLORS, clipDifficulty, tierIndex } from "../lib/colors";
+import { jstDateTimeStr } from "../lib/stats";
 import { useTheme } from "../theme";
 
 export interface RecentSolved {
@@ -8,13 +9,6 @@ export interface RecentSolved {
   url: string;
   difficulty?: number;
   second: number;
-}
-
-function ymdhm(sec: number): string {
-  const d = new Date(sec * 1000);
-  const p = (n: number) => String(n).padStart(2, "0");
-  const date = `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
-  return `${date} ${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
 export function RecentList({ items }: { items: RecentSolved[] }) {
@@ -49,7 +43,7 @@ export function RecentList({ items }: { items: RecentSolved[] }) {
                 <span className="muted contest-id">{it.contestId}</span>
               </td>
               <td className="num" data-label="難易度">{clip ?? "—"}</td>
-              <td className="num" data-label="解いた日時">{ymdhm(it.second)}</td>
+              <td className="num" data-label="解いた日時">{jstDateTimeStr(it.second)}</td>
             </tr>
           );
         })}

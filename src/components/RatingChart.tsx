@@ -12,6 +12,7 @@ import { useReducedMotion } from "../hooks/useReducedMotion";
 import { CHART_CHROME, TIER_COLORS } from "../lib/colors";
 import type { RatePoint } from "../lib/types";
 import { useTheme } from "../theme";
+import { jstDateStr } from "../lib/stats";
 
 interface Row {
   label: string;
@@ -20,12 +21,6 @@ interface Row {
 
 // 帯の境界(このレートで色が変わる)。境界線を帯色で薄く引いて色帯を示す。
 const TIER_BOUNDS = [400, 800, 1200, 1600, 2000, 2400, 2800];
-
-function ymd(t: number): string {
-  const d = new Date(t * 1000);
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
-}
 
 function RatingTip({
   active,
@@ -55,7 +50,7 @@ export function RatingChart({
   const reduced = useReducedMotion();
   const chrome = CHART_CHROME[resolved];
   const line = color ?? chrome.accent;
-  const data: Row[] = history.map((p) => ({ label: ymd(p.t), r: p.r }));
+  const data: Row[] = history.map((p) => ({ label: jstDateStr(p.t), r: p.r }));
   const rs = history.map((p) => p.r);
   const min = Math.min(...rs);
   const max = Math.max(...rs);

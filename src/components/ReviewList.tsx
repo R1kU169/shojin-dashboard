@@ -6,6 +6,7 @@ import {
   tierIndex,
 } from "../lib/colors";
 import { useTheme } from "../theme";
+import { jstDateStr } from "../lib/stats";
 
 export interface ReviewItem {
   id: string;
@@ -17,12 +18,6 @@ export interface ReviewItem {
   second: number;
   /** 挑戦(非AC提出)回数 */
   count: number;
-}
-
-function ymd(sec: number): string {
-  const d = new Date(sec * 1000);
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 
 export function ReviewList({ items }: { items: ReviewItem[] }) {
@@ -68,7 +63,7 @@ export function ReviewList({ items }: { items: ReviewItem[] }) {
               </td>
               <td className="num" data-label="難易度">{clip ?? "—"}</td>
               <td className="num" data-label="挑戦">{it.count}回</td>
-              <td className="num" data-label="最終挑戦">{ymd(it.second)}</td>
+              <td className="num" data-label="最終挑戦">{jstDateStr(it.second)}</td>
             </tr>
           );
         })}
