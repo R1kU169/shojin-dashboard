@@ -119,11 +119,11 @@ const PQ_METHODS: Record<string, BuiltinRule> = table([
 for (const n of ["push", "emplace", "add", "offer", "insert", "Enqueue", "push_back"]) PQ_METHODS[n] = r(logS, { grows: true });
 
 const DEQUE_METHODS: Record<string, BuiltinRule> = table([
-  ["push_back push_front pop_front pop_back append appendleft popleft pop push offer poll addFirst addLast pollFirst pollLast offerFirst offerLast removeFirst removeLast peekFirst peekLast front back enqueue dequeue shift unshift Enqueue Dequeue Peek size empty len is_empty isEmpty Count clear add remove element addLast popFirst popLast", r(one)],
+  ["push_back push_front pop_front pop_back append appendleft popleft pop push offer poll addFirst addLast pollFirst pollLast offerFirst offerLast removeFirst removeLast peekFirst peekLast front back enqueue dequeue shift unshift Enqueue Dequeue Peek size empty len is_empty isEmpty Count clear add remove element addLast popFirst popLast top peek Push Pop", r(one)],
   ["rotate", r(B(0))],
   ["index count contains remove_item", r(S)],
 ]);
-for (const n of ["push_back", "push_front", "append", "appendleft", "push", "offer", "addFirst", "addLast", "offerFirst", "offerLast", "enqueue", "Enqueue", "add", "unshift"]) DEQUE_METHODS[n] = r(one, { grows: true });
+for (const n of ["push_back", "push_front", "append", "appendleft", "push", "offer", "addFirst", "addLast", "offerFirst", "offerLast", "enqueue", "Enqueue", "add", "unshift", "Push"]) DEQUE_METHODS[n] = r(one, { grows: true });
 
 const STRING_METHODS: Record<string, BuiltinRule> = table([
   ["find rfind replace split join count strip lstrip rstrip upper lower reverse reversed startswith endswith index rindex indexOf lastIndexOf contains includes starts_with ends_with trim chars bytes lines split_whitespace to_string to_owned substr substring slice repeat Replace Split Contains IndexOf Substring ToUpper ToLower Trim ToCharArray each_char gsub sub tr scan to_s capitalize swapcase center ljust rjust zfill format encode decode count_chars toCharArray charAt? toUpperCase toLowerCase", r(S)],

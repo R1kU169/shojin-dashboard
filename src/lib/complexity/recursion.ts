@@ -64,6 +64,8 @@ export interface RecEstimate {
   conf: Confidence;
   reason: string;
   warn?: string;
+  /** 訪問済みの判定があるグラフの DFS(全体で頂点 + 辺。呼び出し元のループで掛けないことがある) */
+  graph?: boolean;
 }
 
 type ArgClass = "same" | "step-down" | "step-up" | "half" | "uf" | "graph" | "other";
@@ -310,6 +312,7 @@ export function estimateRecursion(inp: RecInput): RecEstimate {
       calls: V,
       conf: checked ? "high" : "low",
       reason: "グラフの深さ優先探索(頂点 + 辺)",
+      graph: checked,
       warn: checked ? undefined : `${fn.loc.line}行目: DFS に訪問済みの判定が見つかりません。木なら O(N+M)、そうでなければ指数時間になりえます`,
     };
   }

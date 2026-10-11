@@ -47,13 +47,17 @@ export interface BoundEnv {
 }
 
 export interface Special {
-  kind: "harmonic" | "amortized" | "adjacency";
+  kind: "harmonic" | "amortized" | "adjacency" | "traversal";
   /** 合成する相手: 調和級数は外側のループ変数、隣接走査は頂点の変数 */
   anchor: string;
-  /** 調和級数は上限 E、償却は全体の回数、隣接走査は辺の数 */
+  /** 調和級数は上限 E、償却は全体の回数、隣接走査は辺の数、探索は探索全体の時間 */
   total: Expr;
   /** 償却を合成するループ(このループに着くまでは外側のループの回数を掛けない)。無ければ一番内側の外側のループ */
   anchorNode?: LoopNode;
+  /** 探索: 訪問済みの配列。外側のループがこれを作り直さない限り、ループの回数を掛けない */
+  visited?: string[];
+  /** 探索: 探索の行(キューの while・探索の関数の呼び出し) */
+  line?: number;
 }
 
 export interface LoopFactor {
@@ -64,6 +68,8 @@ export interface LoopFactor {
   info?: string;
   special?: Special;
   popped?: string[];
+  /** キューが空になるまでの while(BFS / Dijkstra)のキュー */
+  queue?: string;
 }
 
 const Q: Expr = [{ coef: 1, factors: [{ v: "?", pow: 1, log: 0, exp: 0, fact: 0 }] }];
@@ -819,7 +825,7 @@ function whileLoop(loop: LoopNode, env: BoundEnv): LoopFactor {
     if (b.bind) b.bind.forEach((n) => popped.add(n));
     const V = env.vertices();
     const isQ = singleSym(V) === "?";
-    return { expr: V, conf: "medium", reason: `キュー ${q} が空になるまで(頂点数)`, popped: [...popped], warn: isQ ? `${line}行目: キューに入る回数を推定できないので N 回とみなしました` : undefined };
+    return { expr: V, conf: "medium", reason: `キュー ${q} が空になるまで(頂点数)`, popped: [...popped], queue: q, warn: isQ ? `${line}行目: キューに入る回数を推定できないので N 回とみなしました` : undefined };
   }
 
   // L19' 入力を読み切るまで

@@ -2193,6 +2193,329 @@ const CASES: Golden[] = [
     time: "O(N² log N)",
     warn: /推定できない/,
   },
+  {
+    id: "追加54 未訪問の頂点ごとに DFS(連結成分)は全体で頂点 + 辺",
+    lang: "python",
+    code: `
+      import sys
+      sys.setrecursionlimit(10**6)
+      n, m = map(int, input().split())
+      g = [[] for _ in range(n)]
+      for _ in range(m):
+          a, b = map(int, input().split())
+          g[a-1].append(b-1)
+          g[b-1].append(a-1)
+      seen = [False] * n
+      def dfs(v):
+          seen[v] = True
+          for u in g[v]:
+              if not seen[u]:
+                  dfs(u)
+      ans = 0
+      for i in range(n):
+          if not seen[i]:
+              ans += 1
+              dfs(i)
+      print(ans)`,
+    time: "O(N + M)",
+    space: "O(N + M)",
+    warn: /共有しているので/,
+  },
+  {
+    id: "追加55 C++: auto&& self の再帰ラムダを未訪問の頂点ごとに呼ぶ",
+    lang: "cpp",
+    code: `
+      int main() {
+          int n, m; cin >> n >> m;
+          vector<vector<int>> g(n);
+          for (int i = 0; i < m; i++) {
+              int a, b; cin >> a >> b;
+              g[a].push_back(b);
+              g[b].push_back(a);
+          }
+          vector<int> vis(n);
+          auto dfs = [&](auto&& self, int v) -> void {
+              vis[v] = 1;
+              for (int u : g[v]) if (!vis[u]) self(self, u);
+          };
+          int c = 0;
+          for (int i = 0; i < n; i++) if (!vis[i]) { c++; dfs(dfs, i); }
+          cout << c << endl;
+      }`,
+    time: "O(N + M)",
+    space: "O(N + M)",
+    noWarn: true,
+  },
+  {
+    id: "追加56 グリッドの全マスから DFS(島の数え上げ)",
+    lang: "python",
+    code: `
+      import sys
+      sys.setrecursionlimit(10**6)
+      H, W = map(int, input().split())
+      S = [input() for _ in range(H)]
+      vis = [[False] * W for _ in range(H)]
+      def dfs(i, j):
+          vis[i][j] = True
+          for di, dj in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+              ni, nj = i + di, j + dj
+              if 0 <= ni < H and 0 <= nj < W and S[ni][nj] == '.' and not vis[ni][nj]:
+                  dfs(ni, nj)
+      cnt = 0
+      for i in range(H):
+          for j in range(W):
+              if S[i][j] == '.' and not vis[i][j]:
+                  cnt += 1
+                  dfs(i, j)
+      print(cnt)`,
+    time: "O(H·W)",
+    space: "O(H·W)",
+  },
+  {
+    id: "追加57 C++: 未訪問の頂点ごとに BFS(二部グラフ判定)",
+    lang: "cpp",
+    code: `
+      int main() {
+          int n, m; cin >> n >> m;
+          vector<vector<int>> g(n);
+          for (int i = 0; i < m; i++) {
+              int a, b; cin >> a >> b;
+              g[a].push_back(b);
+              g[b].push_back(a);
+          }
+          vector<int> col(n, -1);
+          bool ok = true;
+          for (int s = 0; s < n; s++) {
+              if (col[s] != -1) continue;
+              col[s] = 0;
+              queue<int> q; q.push(s);
+              while (!q.empty()) {
+                  int v = q.front(); q.pop();
+                  for (int u : g[v]) {
+                      if (col[u] == -1) { col[u] = col[v] ^ 1; q.push(u); }
+                      else if (col[u] == col[v]) ok = false;
+                  }
+              }
+          }
+          cout << (ok ? "Yes" : "No") << endl;
+      }`,
+    time: "O(N + M)",
+    space: "O(N + M)",
+  },
+  {
+    id: "追加58 グリッドの全マスから BFS",
+    lang: "python",
+    code: `
+      from collections import deque
+      H, W = map(int, input().split())
+      S = [input() for _ in range(H)]
+      vis = [[False] * W for _ in range(H)]
+      cnt = 0
+      for i in range(H):
+          for j in range(W):
+              if S[i][j] == '#' or vis[i][j]:
+                  continue
+              cnt += 1
+              vis[i][j] = True
+              q = deque([(i, j)])
+              while q:
+                  x, y = q.popleft()
+                  for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                      nx, ny = x + dx, y + dy
+                      if 0 <= nx < H and 0 <= ny < W and S[nx][ny] == '.' and not vis[nx][ny]:
+                          vis[nx][ny] = True
+                          q.append((nx, ny))
+      print(cnt)`,
+    time: "O(H·W)",
+    space: "O(H·W)",
+  },
+  {
+    id: "追加59 集合 seen で訪問済みを持つ BFS を未訪問の頂点ごとに",
+    lang: "python",
+    code: `
+      from collections import deque
+      n, m = map(int, input().split())
+      g = [[] for _ in range(n)]
+      for _ in range(m):
+          a, b = map(int, input().split())
+          g[a-1].append(b-1)
+      seen = set()
+      c = 0
+      for s in range(n):
+          if s in seen:
+              continue
+          c += 1
+          seen.add(s)
+          q = deque([s])
+          while q:
+              v = q.popleft()
+              for u in g[v]:
+                  if u not in seen:
+                      seen.add(u)
+                      q.append(u)
+      print(c)`,
+    time: "O(N + M)",
+    space: "O(N + M)",
+  },
+  {
+    id: "追加60 BFS の関数を未訪問の頂点ごとに呼ぶ",
+    lang: "python",
+    code: `
+      from collections import deque
+      n, m = map(int, input().split())
+      g = [[] for _ in range(n)]
+      for _ in range(m):
+          a, b = map(int, input().split())
+          g[a-1].append(b-1)
+          g[b-1].append(a-1)
+      dist = [-1] * n
+      def bfs(s):
+          dist[s] = 0
+          q = deque([s])
+          while q:
+              v = q.popleft()
+              for u in g[v]:
+                  if dist[u] == -1:
+                      dist[u] = dist[v] + 1
+                      q.append(u)
+      cnt = 0
+      for s in range(n):
+          if dist[s] == -1:
+              cnt += 1
+              bfs(s)
+      print(cnt)`,
+    time: "O(N + M)",
+    space: "O(N + M)",
+  },
+  {
+    id: "追加61 始点ごとに dist を作り直す BFS は始点の数だけ掛ける",
+    lang: "python",
+    code: `
+      from collections import deque
+      n, m = map(int, input().split())
+      g = [[] for _ in range(n)]
+      for _ in range(m):
+          a, b = map(int, input().split())
+          g[a-1].append(b-1)
+          g[b-1].append(a-1)
+      ans = 0
+      for s in range(n):
+          dist = [-1] * n
+          dist[s] = 0
+          q = deque([s])
+          while q:
+              v = q.popleft()
+              for u in g[v]:
+                  if dist[u] == -1:
+                      dist[u] = dist[v] + 1
+                      q.append(u)
+          ans = max(ans, max(dist))
+      print(ans)`,
+    time: "O(N² + N·M)",
+  },
+  {
+    id: "追加62 C++: クエリごとに fill / assign で作り直す探索はクエリの数だけ掛ける",
+    lang: "cpp",
+    code: `
+      vector<vector<int>> g;
+      vector<int> vis;
+      void dfs(int v) {
+          vis[v] = 1;
+          for (int u : g[v]) if (!vis[u]) dfs(u);
+      }
+      int main() {
+          int n, m, Q; cin >> n >> m >> Q;
+          g.resize(n);
+          for (int i = 0; i < m; i++) { int a, b; cin >> a >> b; g[a].push_back(b); }
+          vector<int> dist(n, -1);
+          for (int k = 0; k < Q; k++) {
+              int s; cin >> s;
+              vis.assign(n, 0);
+              dfs(s);
+              fill(dist.begin(), dist.end(), -1);
+              dist[s] = 0;
+              queue<int> q; q.push(s);
+              while (!q.empty()) {
+                  int v = q.front(); q.pop();
+                  for (int u : g[v]) if (dist[u] < 0) { dist[u] = dist[v] + 1; q.push(u); }
+              }
+          }
+      }`,
+    time: "O(N·Q + M·Q)",
+  },
+  {
+    id: "追加63 マルチテストの中で seen を作り直す連結成分の DFS",
+    lang: "python",
+    code: `
+      import sys
+      sys.setrecursionlimit(10**6)
+      T = int(input())
+      for _ in range(T):
+          n, m = map(int, input().split())
+          g = [[] for _ in range(n)]
+          for _ in range(m):
+              a, b = map(int, input().split())
+              g[a-1].append(b-1)
+          seen = [False] * n
+          def dfs(v):
+              seen[v] = True
+              for u in g[v]:
+                  if not seen[u]:
+                      dfs(u)
+          c = 0
+          for i in range(n):
+              if not seen[i]:
+                  c += 1
+                  dfs(i)
+          print(c)`,
+    time: "O(T·N + T·M)",
+  },
+  {
+    id: "追加64 印を戻すバックトラックの DFS は指数時間になりうると警告し、呼び出し元のループで償却しない",
+    lang: "python",
+    code: `
+      n, m = map(int, input().split())
+      g = [[] for _ in range(n)]
+      for _ in range(m):
+          a, b = map(int, input().split())
+          g[a-1].append(b-1)
+      seen = [False] * n
+      best = 0
+      def dfs(v, d):
+          global best
+          best = max(best, d)
+          seen[v] = True
+          for u in g[v]:
+              if not seen[u]:
+                  dfs(u, d + 1)
+          seen[v] = False
+      for s in range(n):
+          dfs(s, 0)
+      print(best)`,
+    time: "O(N² + N·M)",
+    warn: /バックトラック/,
+    conf: "low",
+  },
+  {
+    id: "追加65 C++: stack の top で回す DFS",
+    lang: "cpp",
+    code: `
+      int main() {
+          int n, m; cin >> n >> m;
+          vector<vector<int>> g(n);
+          for (int i = 0; i < m; i++) { int a, b; cin >> a >> b; g[a].push_back(b); }
+          vector<bool> vis(n);
+          stack<int> st; st.push(0);
+          while (!st.empty()) {
+              int v = st.top(); st.pop();
+              if (vis[v]) continue;
+              vis[v] = true;
+              for (int u : g[v]) if (!vis[u]) st.push(u);
+          }
+      }`,
+    time: "O(N + M)",
+    noWarn: true,
+  },
 ];
 
 for (const g of CASES) test(g.id, () => void check(g));

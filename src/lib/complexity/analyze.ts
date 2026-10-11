@@ -70,6 +70,30 @@ function settle(c: Cost): Cost {
   return { ...c, time: add(c.time, addOpt(c.exitOnce, c.breakOnce) ?? ONE), exitOnce: undefined, breakOnce: undefined };
 }
 
+/**
+ * 関数の結果。shared は、訪問済みの配列を呼び出し元と共有する探索(DFS / BFS)の時間 part と、それ以外の時間 rest
+ * (time = rest + part)。呼び出し元のループが訪問済みの配列を作り直さない限り、part はループの回数を掛けずに1回ぶん数える
+ */
+interface FuncResult {
+  time: Expr;
+  alloc: Expr;
+  grow: Map<string, Expr>;
+  conf: Confidence;
+  shared?: { rest: Expr; part: Expr; visited: string[] };
+}
+
+/** 探索の特別扱いを、合成できなかったものとして時間と成長に戻す */
+function foldTraversals(c: Cost): Cost {
+  let time = c.time;
+  let grow = c.grow;
+  for (const s of c.specials) {
+    if (s.sp.kind !== "traversal") continue;
+    time = add(time, s.fallback);
+    grow = addGrow(grow, s.grow);
+  }
+  return { ...c, time, grow, specials: c.specials.filter((s) => s.sp.kind !== "traversal") };
+}
+
 interface Frame {
   list: readonly IrNode[];
   upto: number;
@@ -129,7 +153,7 @@ export class Analyzer {
   items: BreakdownItem[] = [];
   called = new Set<string>();
   unknownCalls = new Set<string>();
-  funcCache = new Map<FuncNode, { time: Expr; alloc: Expr; grow: Map<string, Expr>; conf: Confidence }>();
+  funcCache = new Map<FuncNode, FuncResult>();
   inProgress: FuncNode[] = [];
   pass: 1 | 2 = 1;
   /** 1回目で集めた成長(ローカルのコンテナが関数やループを抜ける前の値) */
@@ -488,10 +512,12 @@ export class Analyzer {
       for (const dim of d.dims) v = mul(v, boundOf(dim, this.boundEnv(env))?.expr ?? Q);
       return v;
     }
-    // 隣接リストの大きさ
+    // 隣接リストの大きさ(q = deque([s]) のように大きさが定数のキューは除く)
     for (const [name] of this.growTotals) {
       const d = this.declOf(name);
-      if (d && d.dims.length === 1) return boundOf(d.dims[0], this.boundEnv(env))?.expr ?? Q;
+      if (!d || d.dims.length !== 1) continue;
+      const v = boundOf(d.dims[0], this.boundEnv(env))?.expr ?? Q;
+      if (!isConst(v)) return v;
     }
     return Q;
   }
@@ -726,7 +752,9 @@ export class Analyzer {
     if (!reading) this.item({ axis: "time", kind: "loop", loc: { line, endLine: line }, label: "内包表記", expr: factor, text: "", reason: "内包表記のループ", conf: "high" });
     // Haskell のリストは遅延なので、length [ … ] のように作ったそばから消費するなら領域はとらない
     const alloc = this.lang === "haskell" ? pre.alloc : add(pre.alloc, factor);
-    return { time: add(pre.time, total), alloc, grow: addGrow(pre.grow, mulGrow(body.grow, factor)), specials: [] };
+    // 内包表記の中の探索([dfs(i) for i in range(n) if not seen[i]])は回数を掛けずに持ち上げる
+    const traversals = [...pre.specials, ...body.specials].filter((s) => s.sp.kind === "traversal");
+    return { time: add(pre.time, total), alloc, grow: addGrow(pre.grow, mulGrow(body.grow, factor)), specials: traversals };
   }
 
   // ---- 呼び出し -----------------------------------------------------------------
@@ -842,7 +870,7 @@ export class Analyzer {
     if (v.kind === "lambda") return this.lambdaCost(v, env, line);
     if (v.kind === "sym" && !env.params.has(v.name) && !this.decls.has(v.name) && !this.inputs.has(v.name)) {
       const fn = this.funcs.get(v.name);
-      if (fn && !env.selfNames.has(v.name)) return this.userCall(fn, [], env, line);
+      if (fn && !env.selfNames.has(v.name)) return foldTraversals(this.userCall(fn, [], env, line));
     }
     return null;
   }
@@ -851,7 +879,7 @@ export class Analyzer {
     if (l.kind !== "lambda") return empty();
     const inner: WalkEnv = { ...env, params: new Set([...env.params, ...l.params]), before: [...env.before] };
     const c = l.body.length ? this.walkNodes(l.body, inner) : this.exprCost(l.expr, inner, false, line);
-    return { ...settle(c), specials: [] };
+    return { ...foldTraversals(settle(c)), specials: [] };
   }
 
   userCall(fn: FuncNode, args0: SExpr[], env: WalkEnv, line: number): Cost {
@@ -867,20 +895,26 @@ export class Analyzer {
     let time = res.time;
     let alloc = res.alloc;
     let grow = res.grow;
+    let rest = res.shared?.rest ?? ONE;
+    let part = res.shared?.part ?? ONE;
     const benv = this.boundEnv(env);
     fn.params.forEach((p, i) => {
       const a = args[i];
       if (!a) return;
       const pSym = this.symbolOf(p);
       const b = boundOf(a, benv);
-      if (b && vars(time).includes(pSym)) time = rename(time, pSym, b.expr);
-      if (b && vars(alloc).includes(pSym)) alloc = rename(alloc, pSym, b.expr);
       const pSize = `|${p}|`;
-      if (vars(time).includes(pSize) || vars(alloc).includes(pSize)) {
-        const s = this.sizeOf(a, env);
-        time = rename(time, pSize, s);
-        alloc = rename(alloc, pSize, s);
-      }
+      let s: Expr | null = null;
+      const sub = (e: Expr): Expr => {
+        let out = e;
+        if (b && vars(out).includes(pSym)) out = rename(out, pSym, b.expr);
+        if (vars(out).includes(pSize)) out = rename(out, pSize, (s ??= this.sizeOf(a, env)));
+        return out;
+      };
+      time = sub(time);
+      alloc = sub(alloc);
+      rest = sub(rest);
+      part = sub(part);
       if (b) {
         const g2 = new Map<string, Expr>();
         for (const [k, v] of grow) g2.set(k, vars(v).includes(pSym) ? rename(v, pSym, b.expr) : v);
@@ -888,10 +922,14 @@ export class Analyzer {
       }
     });
     if (!isConst(time)) this.item({ axis: "time", kind: "call", loc: { line, endLine: line }, label: `${fn.name}(…)`, expr: time, text: "", reason: `関数 ${fn.name} の計算量`, conf: res.conf });
+    if (res.shared) {
+      const sp: Special = { kind: "traversal", anchor: "", total: part, visited: res.shared.visited, line };
+      return { time: rest, alloc, grow: new Map(), specials: [{ sp, body: ONE, fallback: part, grow }] };
+    }
     return { time, alloc, grow, specials: [] };
   }
 
-  funcResult(fn: FuncNode): { time: Expr; alloc: Expr; grow: Map<string, Expr>; conf: Confidence } {
+  funcResult(fn: FuncNode): FuncResult {
     const cached = this.funcCache.get(fn);
     if (cached) return cached;
     const env: WalkEnv = { outer: [], params: new Set(fn.params), func: fn, selfNames: new Set([fn.name, ...(fn.selfParam ? [fn.selfParam] : [])]), selfCalls: [], before: [], inAdjacency: false };
@@ -902,14 +940,34 @@ export class Analyzer {
     let alloc = cost.alloc;
     let grow = cost.grow;
     let conf: Confidence = "high";
+    // 関数の中で宣言したコンテナ(関数を抜けたら捨てられる)
+    const local = new Set<string>();
+    const visit = (nodes: readonly IrNode[]) => {
+      for (const n of nodes) {
+        if (n.kind === "decl" && !n.isGlobal) local.add(n.name);
+        else if (n.kind === "loop") visit(n.body);
+        else if (n.kind === "branch") n.branches.forEach(visit);
+        else if (n.kind === "assign" && n.op === "=" && n.target.kind === "sym" && n.value && allocOf(n.value, this.spec.typeKind)) local.add(n.target.name);
+      }
+    };
+    visit(fn.body);
+    // 訪問済みの配列を呼び出し元と共有する探索か(関数の中で作った・受け取った・作り直す配列なら共有しない)
+    const sharable = (names: string[], line: number, loopWrites: boolean) =>
+      names.length > 0 && names.every((x) => !local.has(x) && !fn.params.includes(x)) && !resetsVisited(fn.body, names, line, loopWrites, this.funcs);
+    let shared: { part: Expr; visited: string[] } | undefined;
+    const selfCalls = env.selfCalls ?? [];
     // 関数の直下の、仮引数の頂点を起点にした隣接リストの走査
     const adjs = cost.specials.filter((s) => s.sp.kind === "adjacency" && env.params.has(s.sp.anchor));
     const others = cost.specials.filter((s) => !adjs.includes(s));
     for (const s of others) {
+      if (s.sp.kind === "traversal" && selfCalls.length === 0 && sharable(s.sp.visited ?? [], s.sp.line ?? -1, true)) {
+        shared = { part: add(shared?.part ?? ONE, s.fallback), visited: [...new Set([...(shared?.visited ?? []), ...(s.sp.visited ?? [])])] };
+        grow = addGrow(grow, s.grow);
+        continue;
+      }
       time = add(time, s.fallback);
       grow = addGrow(grow, s.grow);
     }
-    const selfCalls = env.selfCalls ?? [];
     if (selfCalls.length > 0) {
       const adjacency = adjs.length ? { edges: adjs.reduce((acc, s) => add(acc, s.sp.total), ONE), body: adjs.reduce((acc, s) => add(acc, s.body), ONE) } : null;
       const est = estimateRecursion({ fn, selfCalls, body: time, adjacency, env: this.boundEnv(env) });
@@ -922,8 +980,18 @@ export class Analyzer {
       grow = mulGrow(grow, est.calls);
       for (const s of adjs) grow = addGrow(grow, s.grow);
       conf = est.conf;
+      if (est.graph) {
+        const visited = visitedArrays(fn.body);
+        if (unmarks(fn.body, visited, fn.params)) {
+          conf = "low";
+          this.warn(`${fn.loc.line}行目: DFS が訪問済みの印を戻しています(バックトラック)。経路の数だけ呼ばれるので、指数時間になりえます`, "warn", fn.loc.line);
+        } else if (sharable(visited, -1, false)) {
+          shared = { part: time, visited };
+          time = ONE;
+        }
+      }
       if (est.warn) this.warn(est.warn, "warn", fn.loc.line);
-      this.item({ axis: "time", kind: "recursion", loc: fn.loc, label: `${fn.name} の再帰`, expr: time, text: "", reason: est.reason, conf: est.conf });
+      this.item({ axis: "time", kind: "recursion", loc: fn.loc, label: `${fn.name} の再帰`, expr: shared ? shared.part : time, text: "", reason: est.reason, conf: est.conf });
       this.item({ axis: "space", kind: "recursion", loc: fn.loc, label: `${fn.name} の再帰の深さ`, expr: est.depth, text: "", reason: "呼び出しのスタック", conf: est.conf });
     } else {
       for (const s of adjs) {
@@ -932,23 +1000,13 @@ export class Analyzer {
       }
     }
     // 関数の中で宣言したコンテナの成長は、関数を抜けたら領域(max)に回す
-    const local = new Set<string>();
-    const visit = (nodes: readonly IrNode[]) => {
-      for (const n of nodes) {
-        if (n.kind === "decl" && !n.isGlobal) local.add(n.name);
-        else if (n.kind === "loop") visit(n.body);
-        else if (n.kind === "branch") n.branches.forEach(visit);
-        else if (n.kind === "assign" && n.op === "=" && n.target.kind === "sym" && n.value && allocOf(n.value, this.spec.typeKind)) local.add(n.target.name);
-      }
-    };
-    visit(fn.body);
     const kept = new Map<string, Expr>();
     for (const [k, v] of grow) {
       this.recordGrow(k, v);
       if (local.has(k) && fn.name !== "<module>") alloc = add(alloc, v);
       else kept.set(k, v);
     }
-    const res = { time, alloc, grow: kept, conf };
+    const res: FuncResult = shared ? { time: add(time, shared.part), alloc, grow: kept, conf, shared: { rest: time, ...shared } } : { time, alloc, grow: kept, conf };
     this.funcCache.set(fn, res);
     return res;
   }
@@ -1125,8 +1183,23 @@ export class Analyzer {
     const bodyGrow = new Map([...body.grow].filter(([k]) => !bounded.has(k) && !declared.has(k)));
     let grow = addGrow(mulGrow(addGrow(bodyGrow, head.grow), F.expr), bounded);
     const up: SpecialCost[] = [];
+    let extraPer: Expr | undefined;
     for (const sc of body.specials) {
       const sp = sc.sp;
+      // 訪問済みの配列を共有する探索は、このループがその配列を作り直すなら1回ごとに1回ぶん、
+      // 作り直さないなら(for s in range(n): if not seen[s]: dfs(s))回数を掛けずに持ち上げる
+      if (sp.kind === "traversal") {
+        const names = sp.visited ?? [];
+        if (resetsVisited(loop.body, names, sp.line ?? -1, true, this.funcs)) {
+          total = add(total, mul(F.expr, sc.fallback));
+          grow = addGrow(grow, mulGrow(sc.grow, F.expr));
+          extraPer = addOpt(extraPer, sc.fallback);
+        } else {
+          up.push(sc);
+          this.warn(`${sp.line}行目: 探索は訪問済みの ${names.join(", ")} を外側のループと共有しているので、ループ全体で合わせて1回ぶんと数えました`, "info", sp.line);
+        }
+        continue;
+      }
       if (sp.kind === "harmonic" && sp.anchor === loopVar) {
         total = add(total, mul(mul(sp.total, logOfExpr(sp.total)), sc.body));
         grow = addGrow(grow, mulGrow(sc.grow, logOfExpr(sp.total)));
@@ -1164,7 +1237,15 @@ export class Analyzer {
     // break で終わる分岐はこのループの1回の実行で1度だけ。return / exit で終わる分岐は関数の境目まで持ち上げる
     if (F.special) {
       const specialGrow = mulGrow(addGrow(bodyGrow, head.grow), F.special.total);
-      return { time: addOpt(once.time, body.breakOnce)!, alloc: add(once.alloc, alloc), grow: addGrow(addGrow(once.grow, bounded), bucketGrow), specials: [...up, { sp: F.special, body: perIter, fallback: total, grow: specialGrow }], exitOnce: body.exitOnce };
+      return { time: addOpt(once.time, body.breakOnce)!, alloc: add(once.alloc, alloc), grow: addGrow(addGrow(once.grow, bounded), bucketGrow), specials: [...up, { sp: F.special, body: addOpt(perIter, extraPer)!, fallback: total, grow: specialGrow }], exitOnce: body.exitOnce };
+    }
+    // キューが空になるまでの探索(BFS / Dijkstra)で、訪問済みの配列があるなら、外側のループで掛けるかは外側で決める
+    if (F.queue) {
+      const visited = visitedArrays(loop.body).filter((x) => x !== F.queue);
+      if (visited.length > 0) {
+        const sp: Special = { kind: "traversal", anchor: "", total, visited, line };
+        return { time: addOpt(once.time, body.breakOnce)!, alloc: add(once.alloc, alloc), grow: addGrow(once.grow, bucketGrow), specials: [...up, { sp, body: ONE, fallback: total, grow }], exitOnce: body.exitOnce };
+      }
     }
     return { time: addOpt(add(once.time, total), body.breakOnce)!, alloc: add(once.alloc, alloc), grow: addGrow(addGrow(once.grow, grow), bucketGrow), specials: up, exitOnce: body.exitOnce };
   }
@@ -1585,7 +1666,7 @@ export class Analyzer {
         this.warn(this.spec.implicitMain ? "main が無いので、各関数を個別に評価しました" : "トップレベルの処理が無いので、各関数を個別に評価しました", "info");
       }
     }
-    return { cost, entries };
+    return { cost: foldTraversals(cost), entries };
   }
 
   run(): Analysis {
@@ -1776,6 +1857,135 @@ function refills(nodes: readonly IrNode[], name: string): boolean {
     if (n.kind === "decl" && n.name === name && n.dims.length > 0) return true;
     if (n.kind === "loop" && refills(n.body, name)) return true;
     if (n.kind === "branch" && n.branches.some((b) => refills(b, name))) return true;
+  }
+  return false;
+}
+
+/** 添字の根の名前(vis[i][j] → vis) */
+function indexBase(e: SExpr): string | null {
+  let x = e;
+  while (x.kind === "index") x = x.of;
+  return x.kind === "sym" ? x.name : null;
+}
+
+const SET_ADD = new Set(["add", "insert", "Add", "incl"]);
+
+/** 文が訪問済みの印をつける配列・集合(seen[v] = true / dist[u] = dist[v] + 1 / seen.add(u)) */
+function markedBy(n: IrNode): string | null {
+  if (n.kind === "assign" && n.op === "=" && n.target.kind === "index") return indexBase(n.target);
+  if (n.kind === "expr" && n.e.kind === "member" && SET_ADD.has(n.e.name) && n.e.args?.length === 1 && n.e.of.kind === "sym") return n.e.of.name;
+  return null;
+}
+
+/**
+ * 探索の訪問済みの配列: 本体のどこかで印をつけ、かつ条件で読む(if seen[u] / dist[u] == -1 / u not in seen)配列・集合
+ */
+function visitedArrays(nodes: readonly IrNode[]): string[] {
+  const marked = new Set<string>();
+  const checked = new Set<string>();
+  const cond = (c: SExpr) =>
+    walk(c, (x) => {
+      if (x.kind === "lambda") return false;
+      if (x.kind === "index") {
+        const b = indexBase(x);
+        if (b) checked.add(b);
+      }
+      if ((x.kind === "bin" || x.kind === "cmp") && (x.op === "in" || x.op === "notin") && x.r.kind === "sym") checked.add(x.r.name);
+      if (x.kind === "member" && ["count", "contains", "find", "has", "include?", "Contains", "containsKey"].includes(x.name) && x.of.kind === "sym") checked.add(x.of.name);
+    });
+  const visit = (ns: readonly IrNode[]) => {
+    for (const n of ns) {
+      const m = markedBy(n);
+      if (m) marked.add(m);
+      if (n.kind === "loop") {
+        if (n.bound.form === "while" && n.bound.cond) cond(n.bound.cond);
+        visit(n.body);
+      } else if (n.kind === "branch") {
+        for (const c of n.conds) if (c) cond(c);
+        n.branches.forEach(visit);
+      }
+    }
+  };
+  visit(nodes);
+  return [...marked].filter((x) => checked.has(x));
+}
+
+/** 印をつけたあとで外す(seen[v] = false / seen.remove(v))バックトラックの DFS か: 仮引数の頂点への印が2か所以上 */
+function unmarks(nodes: readonly IrNode[], names: string[], params: string[]): boolean {
+  const count = new Map<string, number>();
+  let removed = false;
+  const visit = (ns: readonly IrNode[]) => {
+    for (const n of ns) {
+      if (n.kind === "assign" && n.op === "=" && n.target.kind === "index") {
+        const b = indexBase(n.target);
+        let own = false;
+        walk(n.target, (x) => void (x.kind === "sym" && params.includes(x.name) && (own = true)));
+        if (b && names.includes(b) && own) count.set(b, (count.get(b) ?? 0) + 1);
+      }
+      if (n.kind === "expr" && n.e.kind === "member" && ["remove", "discard", "erase", "delete", "Remove"].includes(n.e.name) && n.e.of.kind === "sym" && names.includes(n.e.of.name)) removed = true;
+      if (n.kind === "loop") visit(n.body);
+      else if (n.kind === "branch") n.branches.forEach(visit);
+    }
+  };
+  visit(nodes);
+  return removed || [...count.values()].some((c) => c >= 2);
+}
+
+const RESET_METHODS = new Set(["assign", "clear", "fill", "resize", "Clear", "fill!", "removeAll"]);
+const RESET_FUNCS = new Set(["fill", "memset", "fill_n", "fill!"]);
+
+/**
+ * nodes の中で訪問済みの配列を作り直すか(seen = [False] * n / vector<int> dist(n, -1) / fill(…) / dist.assign(n, -1) /
+ * 配列を回して印を消す for i in range(n): seen[i] = False)。line の文(探索そのもの)は見ない。
+ * loopWrites なら、探索を含まないループの中での印つけも作り直しとみなす。呼び出すユーザー定義の関数の中も見る
+ */
+function resetsVisited(nodes: readonly IrNode[], names: readonly string[], line: number, loopWrites: boolean, funcs: Map<string, FuncNode>, seenFuncs: Set<string> = new Set()): boolean {
+  const inExpr = (e: SExpr | null): boolean => {
+    let f = false;
+    walk(e, (x) => {
+      if (f || x.kind === "lambda") return false;
+      if (x.kind === "member" && x.args !== null && RESET_METHODS.has(x.name)) {
+        const b = indexBase(x.of);
+        if (b && names.includes(b)) f = true;
+      }
+      if (x.kind === "call" && RESET_FUNCS.has(x.name) && x.args.some((a) => [...symbolsIn(a)].some((s) => names.includes(s)))) f = true;
+      if (x.kind === "call" && funcs.has(x.name) && !seenFuncs.has(x.name)) {
+        seenFuncs.add(x.name);
+        if (resetsVisited(funcs.get(x.name)!.body, names, -1, true, funcs, seenFuncs)) f = true;
+      }
+    });
+    return f;
+  };
+  for (const n of nodes) {
+    if (n.kind === "func") continue;
+    if (n.loc.line === line) continue;
+    if (n.kind === "decl" && names.includes(n.name)) return true;
+    if (n.kind === "assign" && n.target.kind === "sym" && names.includes(n.target.name)) return true;
+    if (n.kind === "loop") {
+      const b = n.bound;
+      const head = b.form === "for-c" ? [b.init, b.cond, b.update] : b.form === "for-range" ? [b.from, b.to] : b.form === "for-in" ? [b.coll] : b.form === "count" ? [b.count] : [b.cond];
+      if (head.some(inExpr)) return true;
+      const holds = n.loc.line <= line && line <= n.loc.endLine;
+      if (!holds && loopWrites && writesMark(n.body, names)) return true;
+      if (resetsVisited(n.body, names, line, loopWrites, funcs, seenFuncs)) return true;
+      continue;
+    }
+    if (n.kind === "branch") {
+      if (n.conds.some(inExpr) || n.branches.some((b) => resetsVisited(b, names, line, loopWrites, funcs, seenFuncs))) return true;
+      continue;
+    }
+    if (stmtExprs(n).some(inExpr)) return true;
+  }
+  return false;
+}
+
+/** nodes(入れ子を含む)で names に印をつけるか */
+function writesMark(nodes: readonly IrNode[], names: readonly string[]): boolean {
+  for (const n of nodes) {
+    const m = markedBy(n);
+    if (m && names.includes(m)) return true;
+    if (n.kind === "loop" && writesMark(n.body, names)) return true;
+    if (n.kind === "branch" && n.branches.some((b) => writesMark(b, names))) return true;
   }
   return false;
 }

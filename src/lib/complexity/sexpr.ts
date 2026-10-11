@@ -916,7 +916,9 @@ export function paramNames(toks: readonly Tok[]): string[] {
     if (eq >= 0) seg = seg.slice(0, eq);
     const colon = seg.findIndex((x) => x.k === "op" && x.v === ":");
     if (colon > 0) seg = seg.slice(0, colon);
-    const ids = seg.filter((x) => x.k === "ident" && !["const", "mut", "ref", "var", "let", "final", "auto", "in", "out", "this", "self"].includes(x.v));
+    // self は Python / Rust の受け手なら落とすが、C++ の再帰ラムダ auto&& self / this auto self では名前
+    const typed = seg.some((x) => x.k === "ident" && x.v === "auto");
+    const ids = seg.filter((x) => x.k === "ident" && !["const", "mut", "ref", "var", "let", "final", "auto", "in", "out", "this", ...(typed ? [] : ["self"])].includes(x.v));
     // C 系の「型 名前」は最後の識別子、Go の「名前 型」は最初の識別子
     if (ids.length === 0) continue;
     out.push(seg[0]?.sigil ? ids[0].v : ids[ids.length - 1].v);
