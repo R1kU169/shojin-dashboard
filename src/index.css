@@ -2438,6 +2438,44 @@ button.member-card {
 .bento > :only-child {
   grid-column: 1 / -1;
 }
+/* レーティング推移が無い人(未参加・部員以外)は次の一問だけで全幅になるので、
+   横に引き伸ばさず、左に問題と候補・右に見込みとボタンの2列にする */
+@media (min-width: 881px) {
+  .bento > .spotlight:only-child {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 340px);
+    grid-template-areas:
+      "eyebrow prob"
+      "title prob"
+      "meta prob"
+      "more actions";
+    column-gap: 48px;
+  }
+  .bento > .spotlight:only-child .spot-eyebrow {
+    grid-area: eyebrow;
+  }
+  .bento > .spotlight:only-child .spot-title {
+    grid-area: title;
+  }
+  .bento > .spotlight:only-child .spot-meta {
+    grid-area: meta;
+  }
+  .bento > .spotlight:only-child .spot-more {
+    grid-area: more;
+  }
+  .bento > .spotlight:only-child .spot-prob {
+    grid-area: prob;
+    align-self: end;
+    padding-top: 0;
+  }
+  .bento > .spotlight:only-child .spot-actions {
+    grid-area: actions;
+    align-self: end;
+  }
+  .bento > .spotlight:only-child .spot-empty {
+    grid-column: 1 / -1;
+  }
+}
 @media (max-width: 880px) {
   .bento {
     grid-template-columns: minmax(0, 1fr);
