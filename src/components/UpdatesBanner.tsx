@@ -33,19 +33,27 @@ export function UpdatesBanner() {
       </span>
       <div className="ub-body">
         <div className="ub-head">アップデート</div>
-        {shown.map((u) => (
-          <div className="ub-item" key={u.id}>
-            <span className="ub-date">{u.date}</span>{" "}
-            <span className="ub-title">{u.title}</span>
-            {u.items && (
+        {/* 見出しだけを並べ、箇条書きの詳細は開いたときだけ出す(トップの大半を更新履歴が占めないように) */}
+        {shown.map((u) =>
+          u.items ? (
+            <details className="ub-item" key={u.id}>
+              <summary>
+                <span className="ub-date">{u.date}</span>{" "}
+                <span className="ub-title">{u.title}</span>
+              </summary>
               <ul className="ub-list">
                 {u.items.map((it) => (
                   <li key={it}>{it}</li>
                 ))}
               </ul>
-            )}
-          </div>
-        ))}
+            </details>
+          ) : (
+            <div className="ub-item" key={u.id}>
+              <span className="ub-date">{u.date}</span>{" "}
+              <span className="ub-title">{u.title}</span>
+            </div>
+          ),
+        )}
         {unread.length > shown.length && (
           <div className="ub-more muted">
             ほか {unread.length - shown.length} 件の更新

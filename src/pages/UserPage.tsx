@@ -8,10 +8,10 @@ import { Heatmap } from "../components/Heatmap";
 import { LangBreakdown } from "../components/LangBreakdown";
 import { PaceChart } from "../components/PaceChart";
 import { RatingChart } from "../components/RatingChart";
+import { RatingCircle } from "../components/RatingCircle";
 import { RecentList } from "../components/RecentList";
 import { RecommendList } from "../components/RecommendList";
 import { ReviewList } from "../components/ReviewList";
-import { StatCard } from "../components/StatCard";
 import { useUserData } from "../hooks/useUserData";
 import { isValidAtcoderId } from "../lib/api";
 import { getRating, getRatingHistory } from "../lib/cache";
@@ -42,6 +42,7 @@ function UserDashboard({ userId }: { userId: string }) {
   // 公式レーティング(プロフィールのユーザー名の色)。アバター・色味・レート表示に使う。
   const [rating, setRating] = useState<number | null>(null);
   const [history, setHistory] = useState<RatePoint[]>([]);
+  const [listTab, setListTab] = useState<ListTab>("rec");
 
   useEffect(() => {
     if (isValidAtcoderId(userId)) setLastUser(userId);
@@ -243,7 +244,10 @@ function UserDashboard({ userId }: { userId: string }) {
             {userId.charAt(0).toUpperCase()}
           </div>
           <div className="user-title">
-            <h1>{userId}</h1>
+            {/* AtCoder と同じく、名前をレートの色で書く */}
+            <h1 style={tierColor && rating ? { color: tierColor } : undefined}>
+              {userId}
+            </h1>
             <div className="user-title-actions">
               <a
                 className="profile-link"
@@ -309,13 +313,13 @@ function UserDashboard({ userId }: { userId: string }) {
             </div>
           </div>
           {rating != null && tierColor && (
-            <span className="theta-chip">
-              <span className="tier-dot" style={{ background: tierColor }} />
-              レート
-              <strong>
+            <div className="hero-rating">
+              <span className="hero-rating-label">レート</span>
+              <span className="hero-rating-value" style={{ color: tierColor }}>
+                <RatingCircle rating={rating} size={16} />
                 {rating > 0 ? <AnimatedNumber n={rating} /> : "未レート"}
-              </strong>
-            </span>
+              </span>
+            </div>
           )}
         </div>
         {rating != null && rating > 0 && tier !== null && tier < 7 && nextColor && (
@@ -340,42 +344,59 @@ function UserDashboard({ userId }: { userId: string }) {
             </div>
           </div>
         )}
+        {/* 主な数字は LeetCode・Codeforces のように見出しのカードの中に1列で並べる */}
+        <dl className="hero-stats">
+          <div>
+            <dt>累計AC</dt>
+            <dd>
+              <AnimatedNumber n={stats.totalAc} />
+              <span className="stat-unit">問</span>
+            </dd>
+          </div>
+          <div>
+            <dt>今週の新規AC</dt>
+            <dd>
+              <AnimatedNumber n={stats.weeklyAc} />
+              <span className="stat-unit">問</span>
+              {todayAc > 0 && <span className="today-chip">今日 +{todayAc}</span>}
+            </dd>
+          </div>
+          <div>
+            <dt>現在ストリーク</dt>
+            <dd>
+              <AnimatedNumber n={stats.currentStreak} />
+              <span className="stat-unit">日</span>
+              <span className="hero-stat-sub">
+                {stats.currentStreak > 0 ? "🔥 継続中" : "今日ACして再点火"}
+              </span>
+            </dd>
+          </div>
+          <div>
+            <dt>最長ストリーク</dt>
+            <dd>
+              <AnimatedNumber n={stats.longestStreak} />
+              <span className="stat-unit">日</span>
+            </dd>
+          </div>
+        </dl>
       </section>
-
-      <div className="stat-grid">
-        <StatCard label="累計AC" value={stats.totalAc} unit="問" />
-        <StatCard
-          label="今週の新規AC"
-          value={stats.weeklyAc}
-          unit="問"
-          sub="直近7日"
-        />
-        <StatCard
-          label="現在ストリーク"
-          value={stats.currentStreak}
-          unit="日"
-          sub={stats.currentStreak > 0 ? "🔥 継続中" : "今日ACして再点火"}
-        />
-        <StatCard label="最長ストリーク" value={stats.longestStreak} unit="日" />
-      </div>
 
       {history.length >= 2 && (
         <section className="card">
           <div className="card-head">
             <h2 className="card-title">レーティング推移</h2>
-            <span className="card-sub">レート付きコンテストの結果</span>
+            <span className="card-sub">
+              レート付きコンテスト {history.length} 回・背景はレートの色の帯
+            </span>
           </div>
-          <RatingChart history={history} color={tierColor ?? undefined} />
+          <RatingChart history={history} />
         </section>
       )}
 
       <section className="card">
         <div className="card-head">
           <h2 className="card-title">精進ヒートマップ</h2>
-          {todayAc > 0 && (
-            <span className="today-chip">✨ 今日 {todayAc} AC</span>
-          )}
-          <span className="card-sub">直近26週・その日に初めてACした問題数</span>
+          <span className="card-sub">直近1年・その日に初めてACした問題数</span>
         </div>
         <Heatmap dailyNewAc={stats.dailyNewAc} />
       </section>
@@ -390,14 +411,23 @@ function UserDashboard({ userId }: { userId: string }) {
         </section>
         <section className="card">
           <div className="card-head">
+            <h2 className="card-title">使用言語</h2>
+            <span className="card-sub">
+              提出 {(data.subs?.length ?? 0).toLocaleString()} 件の内訳
+            </span>
+          </div>
+          <LangBreakdown stats={langStats} />
+        </section>
+      </div>
+
+      <div className="two-col">
+        <section className="card">
+          <div className="card-head">
             <h2 className="card-title">累計ACの推移</h2>
             <span className="card-sub">週次</span>
           </div>
           <PaceChart cumulative={stats.cumulative} />
         </section>
-      </div>
-
-      <div className="two-col">
         <section className="card">
           <div className="card-head">
             <h2 className="card-title">成長グラフ</h2>
@@ -409,51 +439,76 @@ function UserDashboard({ userId }: { userId: string }) {
             <p className="muted">難易度推定のあるAC問題がまだありません。</p>
           )}
         </section>
-        <section className="card">
-          <div className="card-head">
-            <h2 className="card-title">使用言語</h2>
-            <span className="card-sub">提出の内訳</span>
-          </div>
-          <LangBreakdown stats={langStats} />
-        </section>
       </div>
 
+      {/* 問題の表3つは AtCoder Problems・LeetCode のようにタブで1枚にまとめ、ページを縦に伸ばさない */}
       <section className="card">
-        <div className="card-head">
-          <h2 className="card-title">次に解く問題</h2>
-          <span className="card-sub">
-            あなたの実力を推定し、AC確率40〜75%の未ACを60%に近い順に表示
-          </span>
+        <div className="tabs" role="tablist" aria-label="問題リスト">
+          {LIST_TABS.map((t) => (
+            <button
+              key={t.key}
+              type="button"
+              role="tab"
+              id={`tab-${t.key}`}
+              aria-selected={listTab === t.key}
+              aria-controls={`panel-${t.key}`}
+              className={listTab === t.key ? "tab on" : "tab"}
+              onClick={() => setListTab(t.key)}
+            >
+              {t.label}
+              <span className="tab-count">
+                {t.key === "rec"
+                  ? recs.length
+                  : t.key === "review"
+                    ? reviewList.length
+                    : recentSolved.length}
+              </span>
+            </button>
+          ))}
         </div>
-        {theta !== null ? (
-          <RecommendList recs={recs} />
-        ) : stats.totalAc > 0 ? (
-          <p className="muted">難易度の推定がある問題のACがまだないため推定できません。</p>
-        ) : (
-          <p className="muted">AC実績がまだないため推定できません。</p>
-        )}
-      </section>
-
-      <section className="card">
-        <div className="card-head">
-          <h2 className="card-title">復習リスト</h2>
-          <span className="card-sub">
-            挑戦したが未ACの問題・最終挑戦の新しい順(最大20問)
-          </span>
+        <div
+          role="tabpanel"
+          id={`panel-${listTab}`}
+          aria-labelledby={`tab-${listTab}`}
+        >
+          <p className="tab-note">{LIST_TABS.find((t) => t.key === listTab)?.note}</p>
+          {listTab === "rec" ? (
+            theta !== null ? (
+              <RecommendList recs={recs} />
+            ) : stats.totalAc > 0 ? (
+              <p className="muted">難易度の推定がある問題のACがまだないため推定できません。</p>
+            ) : (
+              <p className="muted">AC実績がまだないため推定できません。</p>
+            )
+          ) : listTab === "review" ? (
+            <ReviewList items={reviewList} />
+          ) : (
+            <RecentList items={recentSolved} />
+          )}
         </div>
-        <ReviewList items={reviewList} />
-      </section>
-
-      <section className="card">
-        <div className="card-head">
-          <h2 className="card-title">最近解いた問題</h2>
-          <span className="card-sub">初めてACした日の新しい順・最大20問</span>
-        </div>
-        <RecentList items={recentSolved} />
       </section>
     </div>
   );
 }
+
+type ListTab = "rec" | "review" | "recent";
+const LIST_TABS: { key: ListTab; label: string; note: string }[] = [
+  {
+    key: "rec",
+    label: "次に解く問題",
+    note: "あなたの実力を推定し、AC確率40〜75%の未ACを60%に近い順に表示",
+  },
+  {
+    key: "review",
+    label: "復習リスト",
+    note: "挑戦したが未ACの問題・最終挑戦の新しい順(最大20問)",
+  },
+  {
+    key: "recent",
+    label: "最近解いた問題",
+    note: "初めてACした日の新しい順(最大20問)",
+  },
+];
 
 /**
  * 提出の言語名を言語ごとにまとめる。

@@ -26,7 +26,7 @@
   --ease-out: cubic-bezier(0.22, 0.68, 0.35, 1);
   --font-sans:
     "Space Grotesk",
-    "Zen Kaku Gothic New",
+    "Noto Sans JP",
     system-ui,
     -apple-system,
     "Segoe UI",
@@ -38,7 +38,7 @@
     ui-monospace,
     "Cascadia Code",
     Consolas,
-    "Zen Kaku Gothic New",
+    "Noto Sans JP",
     monospace;
   --shadow-card:
     0 1px 1px rgba(11, 11, 11, 0.03),
@@ -103,7 +103,26 @@ body {
   font: 15px/1.7 var(--font-sans);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+  /* かな・約物を詰める(全角のままだと「マ イ ペ ー ジ」のように間延びして見える) */
+  font-feature-settings: "palt";
   transition: color 0.25s ease;
+}
+/* 和文は文節の切れ目で折り返す(「ひ / と目で」のような泣き別れを防ぐ。Chromium のみ、他は従来どおり) */
+p,
+h1,
+h2,
+li,
+.card-sub {
+  word-break: auto-phrase;
+}
+/* コード・入出力は等幅のまま(エディターは入力欄とハイライトの層で文字の幅がずれると崩れる) */
+pre,
+code,
+textarea,
+.editor-wrap,
+.editor-wrap *,
+.editor-measure {
+  font-feature-settings: normal;
 }
 
 /* 固定のヘッダーの下に、フォーカスやスクロールで移った先が隠れないようにする(ヘッダーの高さ + 余白)。
@@ -828,7 +847,35 @@ a:hover {
   margin-bottom: 6px;
 }
 .ub-item + .ub-item {
-  margin-top: 10px;
+  margin-top: 6px;
+}
+/* 詳細を畳んだ見出し。三角は自前で描き、開くと下を向く */
+.ub-item summary {
+  list-style: none;
+  cursor: pointer;
+}
+.ub-item summary::-webkit-details-marker {
+  display: none;
+}
+.ub-item summary::before {
+  content: "";
+  display: inline-block;
+  width: 0;
+  height: 0;
+  margin: 0 8px 1px 1px;
+  border-left: 5px solid var(--muted);
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  transition: transform 0.15s;
+}
+.ub-item[open] summary::before {
+  transform: rotate(90deg);
+}
+.ub-item summary:hover .ub-title {
+  color: var(--accent);
+}
+.ub-item[open] .ub-list {
+  margin: 6px 0 4px;
 }
 .ub-date {
   font-family: var(--font-mono);
@@ -2278,12 +2325,39 @@ button.member-card {
 
 /* ---------- テーブル ---------- */
 
+/* ページの見出し: 左にタイトルと説明、右に切り替え(狭い幅では下に回る) */
+.page-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+  margin-bottom: 4px;
+}
+.page-head p {
+  margin: 4px 0 0;
+  font-size: 13px;
+}
+.page-head .rank-toolbar {
+  margin: 0;
+}
 .rank-toolbar {
   display: flex;
   align-items: center;
   gap: 10px;
   margin: 2px 0 14px;
   flex-wrap: wrap;
+}
+/* ランキングの名前(レートの色で書く。色が付く前の未取得・未レートは本文の色) */
+.member-link {
+  font-weight: 700;
+  color: var(--ink);
+}
+.rating-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-variant-numeric: tabular-nums;
 }
 .rank-toolbar-label {
   font-size: 13px;
@@ -2532,7 +2606,7 @@ button.member-card {
 
 /* ---------- チャート ---------- */
 
-/* 軸ラベル・値ラベルの数字はモノスペースで揃える(和文はZen Kakuにフォールバック) */
+/* 軸ラベル・値ラベルの数字はモノスペースで揃える(和文はNoto Sans JPにフォールバック) */
 .recharts-wrapper text {
   font-family: var(--font-mono);
 }
@@ -2842,6 +2916,288 @@ button.member-card {
   border-radius: 999px;
   transform-origin: left;
   animation: grow-x 0.9s 0.25s var(--ease-out) backwards;
+}
+
+/* 見出しの右のレート。AtCoder と同じく数字をレートの色で書き、レート円を添える */
+.hero-rating {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  margin-left: auto;
+}
+.hero-rating-label {
+  font-size: 12px;
+  color: var(--muted);
+}
+.hero-rating-value {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+.hero-rating .rating-circle {
+  border-width: 2px;
+}
+
+/* 見出しのカードの下段に並べる主な数字(区切り線で4つに分ける) */
+.hero-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 18px 0 0;
+  padding-top: 16px;
+  border-top: 1px solid var(--grid);
+}
+.hero-stats > div {
+  padding: 0 18px;
+  border-left: 1px solid var(--grid);
+  min-width: 0;
+}
+.hero-stats > div:first-child {
+  padding-left: 0;
+  border-left: none;
+}
+.hero-stats dt {
+  font-size: 12px;
+  color: var(--muted);
+}
+.hero-stats dd {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 2px 4px;
+  margin: 2px 0 0;
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.hero-stats .today-chip {
+  align-self: center;
+  margin-left: 4px;
+  letter-spacing: 0;
+}
+.hero-stat-sub {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--muted);
+  letter-spacing: 0;
+  margin-left: 4px;
+}
+@media (max-width: 560px) {
+  .hero-rating {
+    align-items: flex-start;
+    margin-left: 0;
+  }
+  .hero-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    row-gap: 14px;
+  }
+  .hero-stats > div:nth-child(3) {
+    padding-left: 0;
+    border-left: none;
+  }
+  .hero-stats dd {
+    font-size: 24px;
+  }
+}
+
+/* レート円(AtCoder Problems と同じ、帯の中の位置だけ下から塗った輪) */
+.rating-circle {
+  display: inline-block;
+  flex: none;
+  border: 1.5px solid;
+  border-radius: 50%;
+  vertical-align: -1px;
+}
+
+/* ヒートマップの下の行: 左に過去1年の集計、右に凡例 */
+.heatmap-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin-top: 8px;
+}
+.heatmap-sum {
+  font-size: 12px;
+  color: var(--ink-2);
+}
+.heatmap-sum strong {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  color: var(--ink);
+  margin: 0 1px;
+}
+.heatmap-foot .heatmap-legend {
+  margin: 0 0 0 auto;
+}
+
+/* 使用言語: 左に環グラフ、右に1言語1行(名前・割合のバー・件数・%) */
+.lang-wrap {
+  display: grid;
+  grid-template-columns: 148px minmax(0, 1fr);
+  align-items: center;
+  gap: 24px;
+  min-height: 200px;
+}
+.lang-ring {
+  width: 148px;
+  height: 148px;
+}
+.lang-ring-n {
+  fill: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 22px;
+  font-weight: 700;
+}
+.lang-ring-label {
+  fill: var(--muted);
+  font-size: 11px;
+}
+@media (max-width: 420px) {
+  .lang-wrap {
+    grid-template-columns: 1fr;
+    justify-items: center;
+    gap: 16px;
+    min-height: 0;
+  }
+  .lang-wrap .lang-list {
+    width: 100%;
+  }
+}
+.lang-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 14px;
+}
+.lang-list li {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr) auto 36px;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+}
+.lang-name {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lang-name i {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+}
+.lang-track {
+  height: 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ink) 7%, transparent);
+  overflow: hidden;
+}
+.lang-fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  transform-origin: left;
+  animation: grow-x 0.8s var(--ease-out) backwards;
+}
+.lang-n {
+  font-size: 12px;
+  color: var(--ink-2);
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.lang-pct {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--muted);
+  text-align: right;
+}
+
+/* 問題リストのタブ(下線で今のタブを示す。件数はバッジ) */
+.tabs {
+  display: flex;
+  gap: 4px;
+  margin: -6px 0 14px;
+  border-bottom: 1px solid var(--grid);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.tabs::-webkit-scrollbar {
+  display: none;
+}
+.tab {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  flex: none;
+  padding: 10px 12px 11px;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--muted);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 0.15s;
+}
+.tab:hover {
+  color: var(--ink);
+}
+.tab.on {
+  color: var(--ink);
+}
+.tab.on::after {
+  content: "";
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 0;
+  height: 2px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, var(--brand-a), var(--brand-b));
+}
+/* タブの帯は横スクロールの箱なので、フォーカスの輪は内側に描く(外側だと切れる) */
+.tab:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -3px;
+  border-radius: 8px;
+}
+.tab-count {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 18px;
+  padding: 0 7px;
+  border-radius: 999px;
+  color: var(--muted);
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+}
+.tab.on .tab-count {
+  color: var(--brand-b);
+  background: color-mix(in srgb, var(--brand-b) 13%, transparent);
+}
+.tab-note {
+  margin: 0 0 4px;
+  font-size: 12px;
+  color: var(--muted);
 }
 
 .today-chip {

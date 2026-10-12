@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { StatCard } from "../components/StatCard";
+import { AnimatedNumber } from "../components/AnimatedNumber";
+import { RatingCircle } from "../components/RatingCircle";
 import { MEMBERS } from "../data/members";
 import { getRating, peekSubmissions, refreshSubmissions } from "../lib/cache";
 import { TIER_COLORS, TIER_LABELS, tierIndex } from "../lib/colors";
@@ -176,10 +177,12 @@ export function ClubPage() {
 
   return (
     <div className="page">
-      <h1>クラブ内ランキング</h1>
-      <p className="muted">名前をタップで個人ページへ。列見出しで並び替え。</p>
-
-      <div className="rank-toolbar">
+      <div className="page-head">
+        <div>
+          <h1>クラブ内ランキング</h1>
+          <p className="muted">名前をタップで個人ページへ。列見出しで並び替え。</p>
+        </div>
+        <div className="rank-toolbar">
         <span className="muted rank-toolbar-label">期間</span>
         <div className="seg">
           {PERIODS.map((p) => (
@@ -198,6 +201,7 @@ export function ClubPage() {
           ))}
         </div>
         <span className="muted rank-toolbar-label">{PERIODS.find((p) => p.key === period)?.note}</span>
+        </div>
       </div>
 
       <section className="card">
@@ -209,25 +213,37 @@ export function ClubPage() {
             {refreshingCount === 0 && staleCount > 0 && `・${staleCount} 人は最新の提出を取得できず、保存済みのデータで表示`}
           </span>
         </div>
-        <div className="stat-grid">
-          <StatCard
-            label={`${periodWord}の合計AC`}
-            value={periodSum}
-            unit="問"
-          />
-          <StatCard
-            label="アクティブ"
-            value={activeCount}
-            unit="人"
-            sub={`${periodWord}に1問以上AC`}
-          />
-          <StatCard
-            label="平均レート"
-            value={avgRating ?? "—"}
-            sub="レート保持者の平均"
-          />
-          <StatCard label="部員数" value={MEMBERS.length} unit="人" />
-        </div>
+        <dl className="hero-stats">
+          <div>
+            <dt>{periodWord}の合計AC</dt>
+            <dd>
+              <AnimatedNumber n={periodSum} />
+              <span className="stat-unit">問</span>
+            </dd>
+          </div>
+          <div>
+            <dt>アクティブ</dt>
+            <dd>
+              <AnimatedNumber n={activeCount} />
+              <span className="stat-unit">人</span>
+              <span className="hero-stat-sub">{periodWord}に1問以上AC</span>
+            </dd>
+          </div>
+          <div>
+            <dt>平均レート</dt>
+            <dd>
+              {avgRating != null ? <AnimatedNumber n={avgRating} /> : "—"}
+              <span className="hero-stat-sub">レート保持者の平均</span>
+            </dd>
+          </div>
+          <div>
+            <dt>部員数</dt>
+            <dd>
+              <AnimatedNumber n={MEMBERS.length} />
+              <span className="stat-unit">人</span>
+            </dd>
+          </div>
+        </dl>
         {distTotal > 0 && (
           <div className="tier-dist">
             <div className="tier-dist-bar">
@@ -310,10 +326,22 @@ export function ClubPage() {
                         ? "—"
                         : ranked
                           ? (RANK_BADGES[rank - 1] ?? rank)
-                          : rank}
+                          : sortDir === "desc"
+                            ? <span className="muted">—</span>
+                            : rank}
                     </td>
                     <td>
-                      <Link to={`/u/${r.member.id}`}>{r.member.name}</Link>
+                      <Link
+                        className="member-link"
+                        to={`/u/${r.member.id}`}
+                        style={
+                          r.rating != null && r.rating > 0
+                            ? { color: TIER_COLORS[resolved][tierIndex(r.rating)] }
+                            : undefined
+                        }
+                      >
+                        {r.member.name}
+                      </Link>
                       {isTop && (
                         <span className="best-chip">
                           👑 {period === "month" ? "今月" : "今週"}のMVP
@@ -356,14 +384,8 @@ export function ClubPage() {
                     </td>
                     <td className="num">
                       {r.rating != null && (
-                        <>
-                          <span
-                            className="tier-dot"
-                            style={{
-                              background:
-                                TIER_COLORS[resolved][tierIndex(r.rating)],
-                            }}
-                          />
+                        <span className="rating-cell">
+                          <RatingCircle rating={r.rating} />
                           {r.rating > 0 ? (
                             r.rating
                           ) : (
@@ -374,7 +396,7 @@ export function ClubPage() {
                               </span>
                             </>
                           )}
-                        </>
+                        </span>
                       )}
                     </td>
                   </tr>

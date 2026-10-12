@@ -4,8 +4,11 @@ import { HEAT_STEPS } from "../lib/colors";
 import { epochDayToDateStr, todayEpochDay } from "../lib/stats";
 import { useTheme } from "../theme";
 
-const CELL = 12;
-const PITCH = 14; // 12pxセル + 2pxサーフェスギャップ
+// セルの間隔(セル + 3px の地のすき間)。カードの幅に合わせて MIN_FIT〜MAX_PITCH で広げ、
+// それより狭い画面では SCROLL_PITCH の大きさで並べて横にスクロールする
+const MIN_FIT = 12;
+const MAX_PITCH = 20;
+const SCROLL_PITCH = 14;
 const LEFT = 30;
 const TOP = 18;
 const RIGHT = 14; // 右端の列の月ラベル(「10月」)がはみ出さない余白
@@ -44,7 +47,7 @@ interface CellDatum {
 
 export function Heatmap({
   dailyNewAc,
-  weeks = 26,
+  weeks = 53,
 }: {
   dailyNewAc: Map<number, number>;
   weeks?: number;
@@ -76,12 +79,26 @@ export function Heatmap({
       document.removeEventListener("pointerdown", onDown);
     };
   }, [tip]);
-  // 狭い画面で横にスクロールするときは、最新の週(右端)が見える位置から始める
+  // GitHub・solved.ac と同じく1年分をカードの幅いっぱいに並べる。幅は描く前に測り、変わったら測り直す
   const wrapRef = useRef<HTMLDivElement>(null);
+  const [avail, setAvail] = useState(0);
+  useLayoutEffect(() => {
+    const el = wrapRef.current;
+    if (!el) return;
+    const measure = () => setAvail(el.clientWidth);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const fit = Math.floor((avail - LEFT - RIGHT) / weeks);
+  const pitch = fit >= MIN_FIT ? Math.min(fit, MAX_PITCH) : SCROLL_PITCH;
+  const cell = pitch - 3;
+  // 狭い画面で横にスクロールするときは、最新の週(右端)が見える位置から始める
   useLayoutEffect(() => {
     const el = wrapRef.current;
     if (el) el.scrollLeft = el.scrollWidth;
-  }, [weeks]);
+  }, [weeks, pitch]);
 
   const today = todayEpochDay();
   const dow = (today + 4) % 7; // 1970-01-01は木曜 → 0=日曜
@@ -94,7 +111,7 @@ export function Heatmap({
     const colFirstDate = epochDayToDateStr(start + w * 7);
     const month = colFirstDate.slice(5, 7);
     if (month !== prevMonth) {
-      monthLabels.push({ x: LEFT + w * PITCH, label: `${Number(month)}月` });
+      monthLabels.push({ x: LEFT + w * pitch, label: `${Number(month)}月` });
       prevMonth = month;
     }
     for (let d = 0; d < 7; d++) {
@@ -104,12 +121,22 @@ export function Heatmap({
     }
   }
 
+  // 過去1年(今日を含む365日)の合計と、ACした日数
+  let yearAc = 0;
+  let activeDays = 0;
+  for (const [day, n] of dailyNewAc) {
+    if (day > today - 365 && day <= today && n > 0) {
+      yearAc += n;
+      activeDays++;
+    }
+  }
+
   return (
     <div>
       <div className="heatmap-wrap" ref={wrapRef}>
         <svg
-          width={LEFT + weeks * PITCH + RIGHT}
-          height={TOP + 7 * PITCH}
+          width={LEFT + weeks * pitch + RIGHT}
+          height={TOP + 7 * pitch}
           role="img"
           aria-label={`直近${weeks}週間の精進ヒートマップ`}
         >
@@ -122,7 +149,7 @@ export function Heatmap({
             <text
               key={d}
               x={LEFT - 6}
-              y={TOP + d * PITCH + CELL - 2}
+              y={TOP + d * pitch + cell - 2}
               textAnchor="end"
               className="heatmap-label"
             >
@@ -130,8 +157,8 @@ export function Heatmap({
             </text>
           ))}
           {cells.map((c) => {
-            const x = LEFT + c.w * PITCH;
-            const y = TOP + c.d * PITCH;
+            const x = LEFT + c.w * pitch;
+            const y = TOP + c.d * pitch;
             const date = epochDayToDateStr(c.day);
             const text = `${date} · ${c.count} AC`;
             return (
@@ -141,9 +168,9 @@ export function Heatmap({
                   style={{ "--w": c.w } as CSSProperties}
                   x={x}
                   y={y}
-                  width={CELL}
-                  height={CELL}
-                  rx={2}
+                  width={cell}
+                  height={cell}
+                  rx={3}
                   fill={steps[bucket(c.count)]}
                 />
                 {/* ヒット領域はギャップ込みでセルより一回り大きく */}
@@ -151,8 +178,8 @@ export function Heatmap({
                   className="heatmap-hit"
                   x={x - 1}
                   y={y - 1}
-                  width={PITCH}
-                  height={PITCH}
+                  width={pitch}
+                  height={pitch}
                   fill="transparent"
                   onPointerEnter={(e: ReactPointerEvent<SVGRectElement>) => {
                     if (e.pointerType === "mouse") showTip(e.currentTarget, text);
@@ -178,13 +205,19 @@ export function Heatmap({
           </div>
         )}
       </div>
-      {/* 凡例はスクロールの外に置く(右端までスクロールしても切れない) */}
-      <div className="heatmap-legend">
-        <span>少</span>
-        {steps.map((s) => (
-          <span key={s} className="legend-cell" style={{ background: s }} />
-        ))}
-        <span>多</span>
+      {/* 集計と凡例はスクロールの外に置く(右端までスクロールしても切れない) */}
+      <div className="heatmap-foot">
+        <span className="heatmap-sum">
+          過去1年で <strong>{yearAc.toLocaleString()}</strong> 問 AC・
+          <strong>{activeDays}</strong> 日 精進
+        </span>
+        <div className="heatmap-legend">
+          <span>少</span>
+          {steps.map((s) => (
+            <span key={s} className="legend-cell" style={{ background: s }} />
+          ))}
+          <span>多</span>
+        </div>
       </div>
     </div>
   );
