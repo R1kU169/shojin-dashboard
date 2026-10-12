@@ -175,6 +175,23 @@ export function ClubPage() {
   for (const r of loadedRows) if (r.rating != null) tierDist[tierIndex(r.rating)]++;
   const distTotal = tierDist.reduce((a, b) => a + b, 0);
 
+  // 表彰台: 降順で、値が1以上の上位3人(同点は同じ順位)
+  const podium =
+    sortDir === "desc"
+      ? ordered
+          .map((row, i) => ({ row, rank: rankOf(i), value: metric(row) }))
+          .filter((e) => e.row.status === "done" && e.value > 0 && e.rank <= 3)
+          .slice(0, 3)
+      : [];
+  const podiumLabel =
+    sortKey === "ac" ? acLabel : sortKey === "streak" ? "ストリーク" : "レート";
+  const podiumUnit = sortKey === "ac" ? "問" : sortKey === "streak" ? "日" : "";
+  const podiumTint = (rating: number | null | undefined) => {
+    if (rating == null || rating <= 0) return undefined;
+    const c = TIER_COLORS[resolved][tierIndex(rating)];
+    return { color: c, background: `color-mix(in srgb, ${c} 14%, var(--surface))` };
+  };
+
   return (
     <div className="page">
       <div className="page-head">
@@ -183,26 +200,68 @@ export function ClubPage() {
           <p className="muted">名前をタップで個人ページへ。列見出しで並び替え。</p>
         </div>
         <div className="rank-toolbar">
-        <span className="muted rank-toolbar-label">期間</span>
-        <div className="seg">
-          {PERIODS.map((p) => (
-            <button
-              key={p.key}
-              type="button"
-              className={period === p.key ? "on" : undefined}
-              onClick={() => {
-                setPeriod(p.key);
-                setSortKey("ac");
-                setSortDir("desc");
-              }}
-            >
-              {p.label}
-            </button>
-          ))}
-        </div>
-        <span className="muted rank-toolbar-label">{PERIODS.find((p) => p.key === period)?.note}</span>
+          <span className="muted rank-toolbar-label">期間</span>
+          <div className="seg">
+            {PERIODS.map((p) => (
+              <button
+                key={p.key}
+                type="button"
+                className={period === p.key ? "on" : undefined}
+                onClick={() => {
+                  setPeriod(p.key);
+                  setSortKey("ac");
+                  setSortDir("desc");
+                }}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+          <span className="muted rank-toolbar-label">{PERIODS.find((p) => p.key === period)?.note}</span>
         </div>
       </div>
+
+      {/* 上位3人の表彰台(1位を真ん中に高く、2位を左・3位を右に) */}
+      {podium.length > 0 && (
+        <section className="podium" aria-label={`${podiumLabel}の上位3人`}>
+          {[podium[1], podium[0], podium[2]].map((e, slot) =>
+            e ? (
+              <div key={e.row.member.id} className={`podium-item place-${e.rank}`}>
+                <span className="podium-medal" aria-hidden="true">
+                  {RANK_BADGES[e.rank - 1]}
+                </span>
+                <Link
+                  to={`/u/${e.row.member.id}`}
+                  className="podium-avatar"
+                  style={podiumTint(e.row.rating)}
+                  aria-hidden="true"
+                  tabIndex={-1}
+                >
+                  {e.row.member.id.charAt(0).toUpperCase()}
+                </Link>
+                <Link
+                  to={`/u/${e.row.member.id}`}
+                  className="podium-name"
+                  style={
+                    e.row.rating != null && e.row.rating > 0
+                      ? { color: TIER_COLORS[resolved][tierIndex(e.row.rating)] }
+                      : undefined
+                  }
+                >
+                  {e.row.member.name}
+                </Link>
+                <span className="podium-value">
+                  {e.value.toLocaleString()}
+                  <small>{podiumUnit}</small>
+                </span>
+                <span className="podium-step">{e.rank}</span>
+              </div>
+            ) : (
+              <div key={`empty-${slot}`} className="podium-item empty" aria-hidden="true" />
+            ),
+          )}
+        </section>
+      )}
 
       <section className="card">
         <div className="card-head">

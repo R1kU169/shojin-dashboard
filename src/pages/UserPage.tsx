@@ -9,6 +9,8 @@ import { LangBreakdown } from "../components/LangBreakdown";
 import { PaceChart } from "../components/PaceChart";
 import { RatingChart } from "../components/RatingChart";
 import { RatingCircle } from "../components/RatingCircle";
+import { Spotlight } from "../components/Spotlight";
+import { Tile } from "../components/Tile";
 import { RecentList } from "../components/RecentList";
 import { RecommendList } from "../components/RecommendList";
 import { ReviewList } from "../components/ReviewList";
@@ -222,28 +224,40 @@ function UserDashboard({ userId }: { userId: string }) {
   const nextColor =
     tier !== null && tier < 7 ? TIER_COLORS[resolved][tier + 1] : null;
   const todayAc = stats.dailyNewAc.get(todayEpochDay()) ?? 0;
+  // いまの色の帯の中での位置(%)。アバターの輪と「次の色まで」のバーに使う。3200 以上は満タン
+  const ringPct =
+    rating != null && rating > 0 && tier !== null
+      ? tier >= 7 && rating >= 3200
+        ? 100
+        : Math.round(((rating - tier * 400) / 400) * 100)
+      : 0;
 
   return (
     <div
       className="page"
       style={tierColor ? ({ "--tier": tierColor } as CSSProperties) : undefined}
     >
-      <section className="user-hero">
-        <div className="user-head">
+      {/* solved.ac のようなプロフィール: レートの色のバナー、その下にアバター・名前・レート */}
+      <section className="profile">
+        <div className="profile-banner" aria-hidden="true">
+          {rating != null && rating > 0 && (
+            <span className="banner-num">{rating}</span>
+          )}
+        </div>
+        <div className="profile-body">
+          {/* アバターの周りの輪 = いまの色の帯の中でどこまで来たか(次の色までの進み具合) */}
           <div
-            className="user-avatar"
-            style={
-              tierColor
-                ? {
-                    color: tierColor,
-                    background: `color-mix(in srgb, ${tierColor} 14%, transparent)`,
-                  }
+            className="profile-avatar"
+            style={{ "--p": ringPct } as CSSProperties}
+            title={
+              rating != null && rating > 0 && tier !== null && tier < 7
+                ? `${TIER_LABELS[tier + 1]}色まで ${ringPct}%`
                 : undefined
             }
           >
-            {userId.charAt(0).toUpperCase()}
+            <span>{userId.charAt(0).toUpperCase()}</span>
           </div>
-          <div className="user-title">
+          <div className="profile-id">
             {/* AtCoder と同じく、名前をレートの色で書く */}
             <h1 style={tierColor && rating ? { color: tierColor } : undefined}>
               {userId}
@@ -313,85 +327,89 @@ function UserDashboard({ userId }: { userId: string }) {
             </div>
           </div>
           {rating != null && tierColor && (
-            <div className="hero-rating">
+            <div className="profile-rating">
               <span className="hero-rating-label">レート</span>
               <span className="hero-rating-value" style={{ color: tierColor }}>
-                <RatingCircle rating={rating} size={16} />
+                <RatingCircle rating={rating} size={18} />
                 {rating > 0 ? <AnimatedNumber n={rating} /> : "未レート"}
               </span>
+              {rating > 0 && tier !== null && tier < 7 && nextColor && (
+                <div className="tier-progress">
+                  <div className="tier-progress-head">
+                    <span>
+                      {TIER_LABELS[tier + 1]}色まで あと
+                      <strong>{(tier + 1) * 400 - rating}</strong>
+                    </span>
+                  </div>
+                  <div className="meter">
+                    <div
+                      className="meter-fill"
+                      style={{
+                        width: `${ringPct}%`,
+                        background: `linear-gradient(90deg, ${tierColor}, ${nextColor})`,
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
-        {rating != null && rating > 0 && tier !== null && tier < 7 && nextColor && (
-          <div className="tier-progress">
-            <div className="tier-progress-head">
-              <span>
-                {TIER_LABELS[tier + 1]}色まで あと
-                <strong>{(tier + 1) * 400 - rating}</strong>
-              </span>
-              <span className="muted">
-                {rating} / {(tier + 1) * 400}
-              </span>
-            </div>
-            <div className="meter">
-              <div
-                className="meter-fill"
-                style={{
-                  width: `${((rating - tier * 400) / 400) * 100}%`,
-                  background: `linear-gradient(90deg, ${tierColor}, ${nextColor})`,
-                }}
-              />
-            </div>
-          </div>
-        )}
-        {/* 主な数字は LeetCode・Codeforces のように見出しのカードの中に1列で並べる */}
-        <dl className="hero-stats">
-          <div>
-            <dt>累計AC</dt>
-            <dd>
-              <AnimatedNumber n={stats.totalAc} />
-              <span className="stat-unit">問</span>
-            </dd>
-          </div>
-          <div>
-            <dt>今週の新規AC</dt>
-            <dd>
-              <AnimatedNumber n={stats.weeklyAc} />
-              <span className="stat-unit">問</span>
-              {todayAc > 0 && <span className="today-chip">今日 +{todayAc}</span>}
-            </dd>
-          </div>
-          <div>
-            <dt>現在ストリーク</dt>
-            <dd>
-              <AnimatedNumber n={stats.currentStreak} />
-              <span className="stat-unit">日</span>
-              <span className="hero-stat-sub">
-                {stats.currentStreak > 0 ? "🔥 継続中" : "今日ACして再点火"}
-              </span>
-            </dd>
-          </div>
-          <div>
-            <dt>最長ストリーク</dt>
-            <dd>
-              <AnimatedNumber n={stats.longestStreak} />
-              <span className="stat-unit">日</span>
-            </dd>
-          </div>
-        </dl>
       </section>
 
-      {history.length >= 2 && (
-        <section className="card">
-          <div className="card-head">
-            <h2 className="card-title">レーティング推移</h2>
-            <span className="card-sub">
-              レート付きコンテスト {history.length} 回・背景はレートの色の帯
-            </span>
-          </div>
-          <RatingChart history={history} />
-        </section>
-      )}
+      <div className="tiles">
+        <Tile icon="check" color="var(--accent)" label="累計AC" value={stats.totalAc} unit="問" />
+        <Tile
+          icon="calendar"
+          color="var(--accent-2)"
+          label="今週の新規AC"
+          value={stats.weeklyAc}
+          unit="問"
+          sub={todayAc > 0 ? `今日 +${todayAc} 問` : "直近7日"}
+        />
+        <Tile
+          icon="flame"
+          color="var(--brand-b)"
+          label="現在ストリーク"
+          value={stats.currentStreak}
+          unit="日"
+          sub={stats.currentStreak > 0 ? "継続中" : "今日ACして再点火"}
+          hot={stats.currentStreak > 0}
+        />
+        <Tile
+          icon="trophy"
+          color="var(--brand-a)"
+          label="最長ストリーク"
+          value={stats.longestStreak}
+          unit="日"
+        />
+      </div>
+
+      {/* レーティング推移(広い枠)と「次の一問」(狭い枠)を横に並べる */}
+      <div className="bento">
+        {history.length >= 2 && (
+          <section className="card">
+            <div className="card-head">
+              <h2 className="card-title">レーティング推移</h2>
+              <span className="card-sub">
+                コンテスト {history.length} 回・背景はレートの色の帯
+              </span>
+            </div>
+            <RatingChart history={history} />
+          </section>
+        )}
+        <Spotlight
+          best={theta !== null ? recs[0] : undefined}
+          more={theta !== null ? recs.slice(1, 3) : []}
+          reason={
+            theta !== null
+              ? "条件に合う未AC問題が見つかりませんでした。"
+              : stats.totalAc > 0
+                ? "難易度の推定がある問題のACがまだないため推定できません。"
+                : "AC実績がまだないため推定できません。"
+          }
+        />
+      </div>
 
       <section className="card">
         <div className="card-head">

@@ -38,33 +38,33 @@ export const CATEGORICAL: Record<Mode, string[]> = {
   dark: ["#3987e5", "#d95926", "#199e70", "#c98500", "#d55181", "#008300"],
 };
 
-/** チャート用の非データ色(dataviz reference palette のクロームトークン) */
+/** チャート用の非データ色(index.css の --ink / --muted / --grid / --surface と同じ値) */
 export const CHART_CHROME: Record<
   Mode,
   { ink: string; ink2: string; muted: string; grid: string; surface: string; accent: string }
 > = {
   light: {
-    ink: "#0b0b0b",
-    ink2: "#52514e",
-    muted: "#898781",
-    grid: "#e1e0d9",
-    surface: "#fcfcfb",
+    ink: "#0f1115",
+    ink2: "#4a4f59",
+    muted: "#646a78",
+    grid: "#e6e8ec",
+    surface: "#ffffff",
     accent: "#2a78d6",
   },
   dark: {
-    ink: "#ffffff",
-    ink2: "#c3c2b7",
-    muted: "#898781",
-    grid: "#2c2c2a",
-    surface: "#1a1a19",
+    ink: "#f5f6f8",
+    ink2: "#b8bcc6",
+    muted: "#8a8f9c",
+    grid: "#262932",
+    surface: "#15171c",
     accent: "#3987e5",
   },
 };
 
 /** ヒートマップ: 0 =サーフェス1段落ち、1〜 =検証済み単色ブルーランプ(暗面では明るい方が高値) */
 export const HEAT_STEPS: Record<Mode, string[]> = {
-  light: ["#ebeae4", "#9ec5f4", "#5598e7", "#256abf", "#104281"],
-  dark: ["#242423", "#184f95", "#2a78d6", "#5598e7", "#9ec5f4"],
+  light: ["#eceef2", "#9ec5f4", "#5598e7", "#256abf", "#104281"],
+  dark: ["#22252c", "#184f95", "#2a78d6", "#5598e7", "#9ec5f4"],
 };
 
 /**
