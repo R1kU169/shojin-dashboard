@@ -484,9 +484,26 @@ a:hover {
 /* ---------- ホーム ---------- */
 
 /* 非対称2カラム: 左=テキスト+入力 / 右=傾いたアートカード。
-   ライト・ダークどちらでも濃色のパネルにする。中の部品(入力欄・リンク・カード)は
-   色の変数をパネルの中だけ濃色用に置き換えて、そのまま濃色で描かせる */
+   ライトでは白い面に炎の色のにじみ(.orb)、ダークでは濃色のパネル */
 .hero {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  display: grid;
+  grid-template-columns: 1.1fr 0.9fr;
+  align-items: center;
+  gap: 36px;
+  text-align: left;
+  padding: 52px 48px 44px;
+  border-radius: 28px;
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-card);
+}
+/* ダークでは一段濃いパネルにし、中の部品(入力欄・リンク・カード)は
+   色の変数をパネルの中だけ置き換えて、そのまま濃色で描かせる */
+:root[data-theme="dark"] .hero {
   --page: var(--chrome);
   --surface: #1b1e25;
   --surface-2: #22252d;
@@ -504,20 +521,8 @@ a:hover {
   --heat-w4: #ef5350;
   --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow-lift: 0 24px 48px -20px rgba(0, 0, 0, 0.8);
-  position: relative;
-  isolation: isolate;
-  overflow: hidden;
-  display: grid;
-  grid-template-columns: 1.1fr 0.9fr;
-  align-items: center;
-  gap: 36px;
-  text-align: left;
-  padding: 52px 48px 44px;
-  border-radius: 28px;
   background: var(--chrome);
-  color: var(--ink);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  color-scheme: dark;
+  border-color: rgba(255, 255, 255, 0.06);
 }
 /* グリッドの項目は既定で中身(英字の見出しなど)より狭くならず、320px 幅ではヒーローからはみ出す */
 .hero-main,
@@ -541,6 +546,9 @@ a:hover {
   position: absolute;
   border-radius: 50%;
   filter: blur(56px);
+  opacity: 0.32;
+}
+:root[data-theme="dark"] .orb {
   opacity: 0.45;
 }
 .orb-a {
@@ -2163,10 +2171,30 @@ button.member-card {
   box-shadow: var(--shadow-card);
   overflow: hidden;
 }
+/* ライトはレートの色を薄く敷いた明るいバナー、ダークは濃色からレートの色へのグラデーション */
 .profile-banner {
   position: relative;
   height: 136px;
   overflow: hidden;
+  background:
+    radial-gradient(
+      520px 220px at 88% 130%,
+      color-mix(in srgb, var(--tier, var(--brand-b)) 40%, transparent),
+      transparent 70%
+    ),
+    repeating-linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--tier, var(--brand-b)) 9%, transparent) 0 2px,
+      transparent 2px 16px
+    ),
+    linear-gradient(
+      110deg,
+      color-mix(in srgb, var(--tier, var(--brand-b)) 8%, var(--surface)) 25%,
+      color-mix(in srgb, var(--tier, var(--brand-b)) 30%, var(--surface))
+    );
+  border-bottom: 1px solid var(--border);
+}
+:root[data-theme="dark"] .profile-banner {
   background:
     radial-gradient(
       520px 220px at 88% 130%,
@@ -2183,6 +2211,7 @@ button.member-card {
       var(--chrome) 25%,
       color-mix(in srgb, var(--tier, var(--brand-b)) 55%, var(--chrome))
     );
+  border-bottom: none;
 }
 /* バナー右下の大きな白抜きのレート(solved.ac の順位の数字のような飾り) */
 .banner-num {
@@ -2195,8 +2224,12 @@ button.member-card {
   line-height: 1;
   letter-spacing: -0.05em;
   color: transparent;
-  -webkit-text-stroke: 1.5px rgba(255, 255, 255, 0.3);
+  -webkit-text-stroke: 1.5px
+    color-mix(in srgb, var(--tier, var(--brand-b)) 55%, transparent);
   user-select: none;
+}
+:root[data-theme="dark"] .banner-num {
+  -webkit-text-stroke-color: rgba(255, 255, 255, 0.3);
 }
 .profile-body {
   display: grid;
@@ -2411,11 +2444,14 @@ button.member-card {
   }
 }
 
-/* 次の一問: 濃色のカード。中の色の変数を濃色用に置き換える(トップの .hero と同じやり方) */
+/* 次の一問: ライトは炎の色を薄く敷いた白いカード、ダークは濃色のカード。
+   色は --spot-* の変数にまとめ、ダークでまとめて置き換える */
 .spotlight {
-  --ink: #f5f6f8;
-  --ink-2: #c2c6cf;
-  --muted: #9097a5;
+  --spot-accent: #c4501f;
+  --spot-hover: #a63f12;
+  --spot-line: var(--grid);
+  --spot-pct-a: #e08a00;
+  --spot-pct-b: #d9480f;
   position: relative;
   isolation: isolate;
   overflow: hidden;
@@ -2423,6 +2459,31 @@ button.member-card {
   flex-direction: column;
   padding: 22px 24px;
   border-radius: var(--radius);
+  background:
+    radial-gradient(
+      320px 220px at 100% 0%,
+      color-mix(in srgb, var(--brand-b) 16%, transparent),
+      transparent 70%
+    ),
+    radial-gradient(
+      260px 200px at 0% 100%,
+      color-mix(in srgb, var(--brand-a) 12%, transparent),
+      transparent 70%
+    ),
+    var(--surface);
+  color: var(--ink);
+  border: 1px solid color-mix(in srgb, var(--brand-b) 28%, var(--border));
+  box-shadow: var(--shadow-card);
+}
+:root[data-theme="dark"] .spotlight {
+  --ink: #f5f6f8;
+  --ink-2: #c2c6cf;
+  --muted: #9097a5;
+  --spot-accent: #ffb07a;
+  --spot-hover: #ffd1ad;
+  --spot-line: rgba(255, 255, 255, 0.1);
+  --spot-pct-a: #ffc65c;
+  --spot-pct-b: #ff7a45;
   background:
     radial-gradient(
       320px 220px at 100% 0%,
@@ -2435,16 +2496,13 @@ button.member-card {
       transparent 70%
     ),
     var(--chrome);
-  color: var(--ink);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  box-shadow: var(--shadow-card);
-  color-scheme: dark;
+  border-color: rgba(255, 255, 255, 0.06);
 }
 .spot-eyebrow {
   font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.06em;
-  color: #ffb07a;
+  color: var(--spot-accent);
 }
 .spot-title {
   margin-top: 8px;
@@ -2452,11 +2510,11 @@ button.member-card {
   font-weight: 700;
   line-height: 1.3;
   letter-spacing: -0.02em;
-  color: #fff;
+  color: var(--ink);
   overflow-wrap: anywhere;
 }
 .spot-title:hover {
-  color: #ffd1ad;
+  color: var(--spot-hover);
   text-decoration: none;
 }
 .spot-meta {
@@ -2481,7 +2539,7 @@ button.member-card {
 .spot-more {
   margin-top: 16px;
   padding-top: 12px;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  border-top: 1px solid var(--spot-line);
 }
 .spot-more ul {
   list-style: none;
@@ -2510,7 +2568,7 @@ button.member-card {
   color: var(--ink-2);
 }
 .spot-more a:hover {
-  color: #fff;
+  color: var(--ink);
 }
 .spot-more .tier-dot {
   margin-right: 0;
@@ -2534,7 +2592,7 @@ button.member-card {
   font-weight: 700;
   line-height: 1;
   letter-spacing: -0.05em;
-  background: linear-gradient(120deg, #ffc65c, #ff7a45);
+  background: linear-gradient(120deg, var(--spot-pct-a), var(--spot-pct-b));
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -2559,11 +2617,11 @@ button.member-card {
   min-width: max-content;
   padding: 9px 14px;
   border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  border: 1px solid var(--baseline);
   font-size: 13px;
   font-weight: 700;
   text-align: center;
-  color: #fff;
+  color: var(--ink);
   transition:
     background-color 0.15s,
     border-color 0.15s,
@@ -2571,12 +2629,19 @@ button.member-card {
 }
 .spot-btn:hover {
   text-decoration: none;
+  border-color: var(--ink-2);
+  background: color-mix(in srgb, var(--ink) 5%, transparent);
+}
+:root[data-theme="dark"] .spot-btn {
+  border-color: rgba(255, 255, 255, 0.18);
+}
+:root[data-theme="dark"] .spot-btn:hover {
   border-color: rgba(255, 255, 255, 0.4);
-  background: rgba(255, 255, 255, 0.06);
 }
 /* 白い文字に対して 4.5:1 以上になる濃さの炎の色(トップの「見る →」と同じ) */
 .spot-btn.primary {
   border-color: transparent;
+  color: #fff;
   background: linear-gradient(120deg, #c4501f, #c0392b);
 }
 .spot-btn.primary:hover {

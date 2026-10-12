@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { TIER_COLORS, TIER_LABELS, tierIndex } from "../lib/colors";
 import type { Recommendation } from "../lib/irt";
+import { useTheme } from "../theme";
 
 /**
  * 「次の一問」。おすすめの1位(AC確率が60%に一番近い未AC)を大きく出し、
@@ -17,6 +18,7 @@ export function Spotlight({
   /** おすすめが出せないときに出す理由 */
   reason: string;
 }) {
+  const { resolved } = useTheme();
   if (!best) {
     return (
       <section className="spotlight">
@@ -35,8 +37,7 @@ export function Spotlight({
         {p.title}
       </a>
       <div className="spot-meta">
-        {/* 濃色の地の上なので、ライトのときも帯の色はダーク用の明るい方を使う */}
-        <span className="tier-dot" style={{ background: TIER_COLORS.dark[tier] }} />
+        <span className="tier-dot" style={{ background: TIER_COLORS[resolved][tier] }} />
         {TIER_LABELS[tier]}・難易度 {best.clippedDifficulty}
         <span className="spot-contest">{p.contest_id}</span>
       </div>
@@ -48,7 +49,7 @@ export function Spotlight({
             <li key={r.problem.id}>
               <span
                 className="tier-dot"
-                style={{ background: TIER_COLORS.dark[tierIndex(r.clippedDifficulty)] }}
+                style={{ background: TIER_COLORS[resolved][tierIndex(r.clippedDifficulty)] }}
               />
               <a href={r.url} target="_blank" rel="noreferrer">
                 {r.problem.title}
