@@ -114,11 +114,11 @@ textarea,
 }
 
 /* 固定のヘッダーの下に、フォーカスやスクロールで移った先が隠れないようにする(ヘッダーの高さ + 余白)。
-   スマホ幅ではタブが2段目に下りてヘッダーが高くなる */
+   狭い幅ではタブが2段目に下りてヘッダーが高くなる */
 html {
   scroll-padding-top: 72px;
 }
-@media (max-width: 760px) {
+@media (max-width: 880px) {
   html {
     scroll-padding-top: 108px;
   }
@@ -286,9 +286,10 @@ a:hover {
    1段目=ブランド+テーマ切替 / 2段目=ナビをタブストリップとして横並び。
    ラベルは .nav-long を畳んで短縮し、それでも足りない極端な幅では横スクロールで逃がす */
 /* 広い画面向けのリンク(AtCoder Problems)は、1行のヘッダーに余裕で収まる幅だけに出す。
-   761〜769px では1行のヘッダーがはみ出すので、フォントの幅の揺れも見込んで 820px 以下では畳む。
+   タブが6つ(コンテストを含む)になり、このリンクまで1行に並べると約 1000px 要るので、
+   フォントの幅の揺れも見込んで 1060px 以下では畳む。
    2段組みのタブストリップでは DS倶楽部HP が押し出されないようにする狙いもある */
-@media (max-width: 820px) {
+@media (max-width: 1060px) {
   .app-header nav a.nav-wide {
     display: none;
   }
@@ -296,7 +297,8 @@ a:hover {
     margin-left: auto;
   }
 }
-@media (max-width: 760px) {
+/* AtCoder Problems を畳んでも1行のヘッダーには約 830px 要るので、880px 以下では2段組みにする */
+@media (max-width: 880px) {
   .app-header {
     flex-wrap: wrap;
     height: auto;
@@ -314,7 +316,8 @@ a:hover {
   .app-header nav {
     order: 3;
     flex: none;
-    /* 4項目なら360pxでも収まる詰め方。5項目(計算量)は約410px以上で収まり、それ未満は横スクロール */
+    /* タブは6項目(コンテストを含む)。収まらない幅ではタブの帯だけが横スクロールする
+       (続きがある側の端をぼかし、ページを移ったら選んだタブが見える位置まで寄せる) */
     gap: 14px;
     align-items: baseline;
     /* 横スクロール用のクリップ境界がリンクに接するとフォーカスリング(outline 2px +
@@ -362,8 +365,8 @@ a:hover {
     display: none;
   }
 }
-/* スマホ幅では5つのタブ(DS倶楽部 ↗ を含む)を詰めて、横スクロールせずに1行に収める
-   (360px まで収まる。それより狭い端末では従来どおりタブの帯だけが横スクロールする) */
+/* スマホ幅ではタブ(DS倶楽部 ↗ を含む)を詰めて、横スクロールの量を減らす
+   (コンテストのタブを足して6つになり、360px 前後の幅では帯が横スクロールする) */
 @media (max-width: 420px) {
   .app-header nav {
     gap: 11px;
@@ -3235,6 +3238,211 @@ button.member-card {
   .rank-table .best-chip {
     display: table;
     margin: 3px 0 0;
+  }
+}
+
+/* ---------- コンテスト ---------- */
+
+/* 見出し: 左にコンテスト名・日時・リンク、右にコンテストの選択 */
+.cr-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px 20px;
+  flex-wrap: wrap;
+}
+.cr-title {
+  min-width: 0;
+}
+.cr-title p {
+  margin: 2px 0 0;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.cr-title .user-title-actions {
+  margin-top: 6px;
+}
+.cr-pick select {
+  max-width: 100%;
+}
+/* 部内1位(2枚目)は名前が入るので、長い ID でも枠からはみ出さない大きさにする */
+.cr-stats .stat-card:nth-child(2) .stat-value {
+  font-size: clamp(15px, 4.2vw, 20px);
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+.cr-wait {
+  margin: -6px 0 12px;
+  font-size: 12px;
+  color: var(--ink-2);
+}
+.cr-empty,
+.cr-hint {
+  margin: 0;
+  font-size: 13px;
+}
+/* 問題の列が多いので、横にスクロールしても部員の列は左に残す */
+.cr-table .cr-member {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--surface);
+  white-space: nowrap;
+}
+.cr-table tr.first-place .cr-member {
+  background: color-mix(in srgb, #eda100 10%, var(--surface));
+}
+.cr-rank {
+  display: inline-block;
+  min-width: 1.6em;
+  margin-right: 4px;
+  font-variant-numeric: tabular-nums;
+}
+.cr-table th.cr-prob {
+  text-align: center;
+  white-space: nowrap;
+}
+.cr-table th.cr-prob .th-sort {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--accent);
+  padding: 2px 6px;
+}
+.cr-solved {
+  display: block;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+.cr-score strong {
+  font-variant-numeric: tabular-nums;
+}
+.cr-time {
+  display: block;
+  font-size: 11px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.cr-pen,
+.cr-ng {
+  color: #c93534;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.cr-ng {
+  font-size: 13px;
+}
+.cr-cell {
+  text-align: center;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.cr-cell a {
+  display: block;
+  min-width: 3.2em;
+  padding: 2px 4px;
+  border-radius: 6px;
+  color: var(--ink);
+}
+.cr-cell a:hover {
+  text-decoration: none;
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+.cr-cell-ac {
+  background: color-mix(in srgb, #1baf7a 10%, transparent);
+}
+.cr-main,
+.cr-sub {
+  display: block;
+  line-height: 1.3;
+}
+.cr-sub {
+  font-size: 11px;
+}
+.cr-ac {
+  color: #1a7f37;
+  font-weight: 700;
+}
+.cr-part {
+  color: #a15c00;
+  font-weight: 700;
+}
+.cr-late {
+  font-size: 11px;
+  color: var(--muted);
+}
+:root[data-theme="dark"] .cr-ac {
+  color: #4ad395;
+}
+:root[data-theme="dark"] .cr-part {
+  color: #e0a34a;
+}
+:root[data-theme="dark"] .cr-pen,
+:root[data-theme="dark"] .cr-ng {
+  color: #ff7a79;
+}
+.cr-rate {
+  white-space: nowrap;
+}
+.cr-up {
+  color: #1a7f37;
+}
+.cr-down {
+  color: #c93534;
+}
+:root[data-theme="dark"] .cr-up {
+  color: #4ad395;
+}
+:root[data-theme="dark"] .cr-down {
+  color: #ff7a79;
+}
+.cr-absent {
+  margin-top: 12px;
+  font-size: 13px;
+}
+.cr-absent summary {
+  cursor: pointer;
+  color: var(--muted);
+}
+.cr-absent p {
+  margin: 8px 0 0;
+  line-height: 1.8;
+}
+/* 問題を選ぶボタン。問題が多いとスマホ幅に収まらないので、ボタンの帯だけを横にスクロールさせる */
+.cr-seg {
+  max-width: 100%;
+  overflow-x: auto;
+  margin-bottom: 14px;
+}
+.cr-seg button {
+  flex: none;
+  padding-inline: 12px;
+}
+.cr-subs tr.cr-scored {
+  background: color-mix(in srgb, #1baf7a 8%, transparent);
+}
+.cr-subs .cr-lang {
+  white-space: normal;
+  text-align: left;
+}
+.cr-sub-title {
+  margin: 20px 0 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink-2);
+}
+.cr-note {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.7;
+}
+@media (max-width: 560px) {
+  /* 部員の列は名前を折り返さずに残すので、余白だけ少し足して数字の列と離す */
+  .rank-table.cr-table td.cr-member {
+    padding-right: 8px;
+  }
+  .cr-subs .cr-lang {
+    text-align: left;
   }
 }
 

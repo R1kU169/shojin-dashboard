@@ -5,15 +5,21 @@ import {
   fetchProblemModels,
   fetchSubmissionsSince,
 } from "./api";
+import { mergeUpcoming } from "./contest";
 import { fetchAtcoderRating, fetchRatingHistory } from "./rating";
 import {
+  snapshotContestResults,
+  snapshotContests,
   snapshotModels,
   snapshotProblems,
   snapshotRatingHistories,
   snapshotRatings,
   snapshotSubs,
+  snapshotUpcoming,
 } from "./snapshot";
 import type {
+  ClubContest,
+  OfficialResults,
   Submission,
   Problem,
   ProblemModels,
@@ -24,6 +30,9 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 // スナップショットは6時間ごとに作り直すので、レートは1時間で読み直す(土曜の ABC の結果を翌日まで待たせない)
 const RATING_TTL_MS = 60 * 60 * 1000;
 const SUBS_FRESH_MS = 10 * 60 * 1000; // 10分以内の再訪はAPIを叩かない
+// コンテストの一覧と公式成績。土日の夜はコンテストの直後に15分おきに作り直すので、短い間隔で読み直す
+// (小さいファイルで、スナップショットは no-cache で読むので変わっていなければ中身は送られてこない)
+const CONTEST_TTL_MS = 10 * 60 * 1000;
 // 差分は手元の最後の提出の1日前から取り直す。kenkoooo に遅れて載った提出や、判定が後から変わった提出を拾うための保険
 const OVERLAP_SEC = 24 * 60 * 60;
 
@@ -184,6 +193,39 @@ export const getRatingHistory = (user: string): Promise<RatePoint[]> =>
       return fetchRatingHistory(user);
     },
     RATING_TTL_MS,
+  );
+
+// コンテストタブ: 部員が参加したコンテストの一覧(snapshot contests.json)。読めなければ例外(古いキャッシュがあればそれ)
+const contests = () =>
+  cachedResource<ClubContest[]>(
+    "res:contests",
+    async () => {
+      const r = await snapshotContests();
+      if (!r) throw new Error("contests.json を読めませんでした");
+      return r;
+    },
+    CONTEST_TTL_MS,
+  );
+
+/**
+ * コンテストタブで選べるコンテスト(開始の新しい順)。スナップショットの後に始まったコンテストは
+ * 予定の一覧(upcoming.json)から足す。読めなければ例外。
+ */
+export async function getContestList(): Promise<ClubContest[]> {
+  const [list, upcoming] = await Promise.all([contests(), snapshotUpcoming()]);
+  return mergeUpcoming(list, upcoming ?? [], Math.floor(Date.now() / 1000));
+}
+
+/** 部員の公式成績(snapshot contest-results.json)。読めなければ例外。 */
+export const getOfficialResults = () =>
+  cachedResource<OfficialResults>(
+    "res:contest-results",
+    async () => {
+      const r = await snapshotContestResults();
+      if (!r) throw new Error("contest-results.json を読めませんでした");
+      return r;
+    },
+    CONTEST_TTL_MS,
   );
 
 /** 手元にある提出履歴(IndexedDB のキャッシュか、同一オリジンのスナップショット) */

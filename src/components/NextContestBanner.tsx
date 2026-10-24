@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import { getContestList } from "../lib/cache";
+import { contestEnd, mayHaveMembers, pickDefaultContest, shortContestName } from "../lib/contest";
 import { snapshotUpcoming } from "../lib/snapshot";
-import type { UpcomingContest } from "../lib/types";
+import type { ClubContest, UpcomingContest } from "../lib/types";
 
 const CONTESTS_URL = "https://atcoder.jp/contests/";
 // 表示順(予定がある種別だけ出す)
@@ -17,19 +20,16 @@ function fmt(start: number): string {
   }).format(new Date(start * 1000));
 }
 
-// abc468 → "ABC 468"(狭いサイドに収まる短い名前)
-function shortName(id: string): string {
-  return `${id.slice(0, 3).toUpperCase()} ${id.slice(3)}`;
-}
-
 /**
  * 「次のABC/ARC/AGC」カード(ホーム右側に配置)。番号は日付から計算できないため、
  * スナップショット(upcoming.json)の予定一覧から現在時刻基準で種別ごとの次回を選ぶ。
  * 開催が終われば自動で次回に切り替わる。取得できない場合(dev等)は一覧リンクにする。
+ * 終わって7日以内のコンテストに部員が参加していれば、コンテストタブの結果へのリンクも出す。
  */
 export function NextContestBanner() {
   const [list, setList] = useState<UpcomingContest[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const [recent, setRecent] = useState<ClubContest | null>(null);
 
   useEffect(() => {
     let cancel = false;
@@ -42,6 +42,14 @@ export function NextContestBanner() {
       .catch(() => {
         if (!cancel) setLoaded(true);
       });
+    getContestList()
+      .then((l) => {
+        const now = Date.now() / 1000;
+        const c = pickDefaultContest(l, now);
+        // 参加した部員がいない(終了直後でまだ数えていないものを除く)なら出さない
+        if (!cancel && c && mayHaveMembers(c, now) && now - contestEnd(c) < 7 * 24 * 3600) setRecent(c);
+      })
+      .catch(() => {});
     return () => {
       cancel = true;
     };
@@ -51,7 +59,7 @@ export function NextContestBanner() {
   const next = CATS.map(
     (cat) =>
       list
-        .filter((c) => c.id.startsWith(cat) && c.start + 2 * 3600 >= now)
+        .filter((c) => c.id.startsWith(cat) && c.start + (c.duration ?? 2 * 3600) >= now)
         .sort((a, b) => a.start - b.start)[0],
   ).filter(Boolean) as UpcomingContest[];
 
@@ -71,7 +79,7 @@ export function NextContestBanner() {
             title={c.title}
           >
             <span className="ct-label">次の{c.id.slice(0, 3).toUpperCase()}</span>
-            <span className="ct-name">{shortName(c.id)}</span>
+            <span className="ct-name">{shortContestName(c.id)}</span>
             <span className="ct-when">🗓 {fmt(c.start)}</span>
           </a>
         ))
@@ -86,6 +94,13 @@ export function NextContestBanner() {
           <span className="ct-name">ABC 毎週土 21:00</span>
           <span className="ct-when">コンテスト一覧 →</span>
         </a>
+      )}
+      {recent && (
+        <Link className="ct-card" to={`/contest/${recent.id}`} title={recent.title}>
+          <span className="ct-label">部員の結果</span>
+          <span className="ct-name">{shortContestName(recent.id)}</span>
+          <span className="ct-when">順位・解けた問題・提出を見る →</span>
+        </Link>
       )}
     </div>
   );

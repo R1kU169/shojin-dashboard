@@ -1,5 +1,7 @@
 import { MEMBERS } from "../data/members";
 import type {
+  ClubContest,
+  OfficialResults,
   Problem,
   ProblemModels,
   RatePoint,
@@ -50,6 +52,13 @@ export const snapshotRatingHistories = () =>
 /** 予定されているABC/ARC/AGC(開始昇順)。ホームの「次のコンテスト」リンクに使う。 */
 export const snapshotUpcoming = () =>
   snapJson<UpcomingContest[]>("upcoming.json");
+
+/** 部員が参加したコンテストの一覧(開始の新しい順)。コンテストタブに使う。 */
+export const snapshotContests = () => snapJson<ClubContest[]>("contests.json");
+
+/** 部員の公式成績: { コンテストID: { id(小文字): 成績 } }。コンテストタブに使う。 */
+export const snapshotContestResults = () =>
+  snapJson<OfficialResults>("contest-results.json");
 
 export interface SubsSnapshot {
   at: number;

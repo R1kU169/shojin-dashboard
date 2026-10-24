@@ -7,8 +7,10 @@ import { MyPage } from "./pages/MyPage";
 import { ThemeProvider, useTheme } from "./theme";
 
 // 重いページは別のチャンクにして、最初に開くページ(トップ・ランキング)の読み込みを軽くする。
-// 計算量タブは解析器(約6,000行)、エディターはハイライト・ケース生成、個人ページはグラフ(Recharts)を持つ
+// 計算量タブは解析器(約6,000行)、エディターはハイライト・ケース生成、個人ページはグラフ(Recharts)を持つ。
+// コンテストタブはコンテストの後にだけ開くページなので、これも開いたときに読む
 const ComplexityPage = lazy(() => import("./pages/ComplexityPage").then((m) => ({ default: m.ComplexityPage })));
+const ContestPage = lazy(() => import("./pages/ContestPage").then((m) => ({ default: m.ContestPage })));
 const EditorPage = lazy(() => import("./pages/EditorPage").then((m) => ({ default: m.EditorPage })));
 const loadUserPage = () => import("./pages/UserPage");
 const UserPage = lazy(() => loadUserPage().then((m) => ({ default: m.UserPage })));
@@ -105,9 +107,10 @@ export default function App() {
           <NavLink to="/club">
             <span className="nav-long">クラブ内</span>ランキング
           </NavLink>
+          <NavLink to="/contest">コンテスト</NavLink>
           <NavLink to="/editor">エディター</NavLink>
           <NavLink to="/complexity">計算量</NavLink>
-          {/* 幅 820px を超える画面だけに出す(.nav-wide)。スマホではタブが横スクロールになり DS倶楽部HP が
+          {/* 幅 1060px を超える画面だけに出す(.nav-wide)。スマホではタブが横スクロールになり DS倶楽部HP が
               押し出されるので、ユーザーのページとトップページのリンクから開いてもらう */}
           <a
             className="nav-ext nav-wide"
@@ -142,6 +145,14 @@ export default function App() {
               }
             />
             <Route path="/club" element={<ClubPage />} />
+            <Route
+              path="/contest/:contestId?"
+              element={
+                <Suspense fallback={loading}>
+                  <ContestPage />
+                </Suspense>
+              }
+            />
             <Route
               path="/editor"
               element={

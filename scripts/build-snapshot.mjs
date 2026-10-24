@@ -12,6 +12,7 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { MEMBERS } from "../src/data/members.ts";
+import { buildContestIndex, contestIdOf, parseContestTable } from "../src/lib/contest.ts";
 
 const BASE = "https://kenkoooo.com/atcoder";
 const PAGE_SIZE = 500;
@@ -82,7 +83,23 @@ async function main() {
     `[snapshot] problems=${problems.length} models=${Object.keys(models).length}`,
   );
 
+  // コンテストタブ用: コンテストの開始・長さと問題セット。取れなければ前回の contests.json で代用する
+  let kContests = null;
+  let kContestProblems = null;
+  try {
+    kContests = await getJson(`${BASE}/resources/contests.json`);
+    await sleep(PAGE_INTERVAL_MS);
+    kContestProblems = await getJson(`${BASE}/resources/contest-problem.json`);
+    await sleep(PAGE_INTERVAL_MS);
+  } catch (e) {
+    kContests = null;
+    kContestProblems = null;
+    console.warn(`[snapshot] contests.json / contest-problem.json の取得失敗、前回分で代用 (${e})`);
+  }
+
   const index = { builtAt: Date.now(), members: [] };
+  // 部員の提出(コンテストタブの参加人数を数えるのに使う)
+  const lists = {};
   const targets = MEMBERS.slice(0, LIMIT);
   for (const m of targets) {
     const key = m.id.toLowerCase();
@@ -111,6 +128,7 @@ async function main() {
         continue;
       }
     }
+    lists[key] = list;
     const watermark = list.length > 0 ? list[list.length - 1].epoch_second : 0;
     await writeFile(
       path.join(OUT, `subs/${key}.json`),
@@ -123,10 +141,13 @@ async function main() {
   // 公式レーティング(プロフィールのユーザー名の色)を取得し ratings.json に書き出す。
   // ホームのアバター色をこの色に合わせる(useMemberTiers.ts / rating.ts 参照)。
   // 未レートは 0(=灰)。一時的な失敗は前回分を維持する。
+  // 同じ参加履歴から、コンテストタブの公式成績(順位・パフォ・レート変化。Unrated の参加も含む)も作る。
   const prevRatings = (await readJson("ratings.json")) ?? {};
   const prevHist = (await readJson("rating-history.json")) ?? {};
+  const prevResults = (await readJson("contest-results.json")) ?? {};
   const ratings = {};
   const histories = {};
+  const results = {};
   console.log("[snapshot] 公式レーティングを取得中…");
   for (const m of targets) {
     const key = m.id.toLowerCase();
@@ -137,6 +158,13 @@ async function main() {
       let r = 0;
       const pts = [];
       for (const h of hist) {
+        (results[contestIdOf(h.ContestScreenName)] ??= {})[key] = {
+          place: h.Place,
+          perf: h.Performance,
+          oldRating: h.OldRating,
+          newRating: h.NewRating,
+          rated: h.IsRated,
+        };
         if (!h.IsRated) continue;
         r = h.NewRating;
         pts.push({ t: Math.floor(new Date(h.EndTime).getTime() / 1000), r: h.NewRating });
@@ -144,6 +172,9 @@ async function main() {
       ratings[key] = r;
       histories[key] = pts;
     } catch (e) {
+      for (const [cid, byMember] of Object.entries(prevResults)) {
+        if (byMember[key]) (results[cid] ??= {})[key] = byMember[key];
+      }
       if (prevRatings[key] != null) {
         ratings[key] = prevRatings[key];
         if (prevHist[key]) histories[key] = prevHist[key];
@@ -163,34 +194,54 @@ async function main() {
 
   // 予定されているABC/ARC/AGCを atcoder.jp/contests/ の Upcoming テーブルから取得。
   // ホームの「次のABC/ARC/AGC」リンクに使う(番号は日付から計算できないので実データを見る)。
+  // 同じページの開催中・最近の表は、kenkoooo にまだ無い直近のコンテストの開始・長さを補うのに使う。
+  let tables = [];
   try {
     const res = await fetch("https://atcoder.jp/contests/", {
       headers: { "User-Agent": UA },
     });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const html = await res.text();
-    const i = html.indexOf("contest-table-upcoming");
-    let seg = i >= 0 ? html.slice(i) : "";
-    const end = seg.indexOf("</table>");
-    if (end >= 0) seg = seg.slice(0, end);
-    const upcoming = [];
-    for (const row of seg.split("<tr>").slice(1)) {
-      const tm = row.match(
-        /fixtime-full[\x27">]+(\d{4}-\d{2}-\d{2} [\d:+]+)</,
-      );
-      const lm = row.match(/\/contests\/((?:abc|arc|agc)\d+)"[^>]*>([^<]+)</);
-      if (!tm || !lm) continue;
-      const iso = tm[1].replace(" ", "T").replace(/([+-]\d{2})(\d{2})$/, "$1:$2");
-      upcoming.push({
-        id: lm[1],
-        title: lm[2],
-        start: Math.floor(new Date(iso).getTime() / 1000),
-      });
-    }
-    upcoming.sort((a, b) => a.start - b.start);
+    const upcoming = parseContestTable(html, "upcoming").sort((a, b) => a.start - b.start);
+    tables = parseContestTable(html);
     await writeFile(path.join(OUT, "upcoming.json"), JSON.stringify(upcoming));
     console.log(`[snapshot] upcoming ABC/ARC/AGC: ${upcoming.length}件`);
   } catch (e) {
     console.warn(`[snapshot] 予定コンテストの取得失敗、スキップ (${e})`);
+  }
+
+  // コンテストタブ: 部員が参加したコンテストの一覧(contests.json)と、その公式成績(contest-results.json)
+  if (!kContests) {
+    const prev = await readJson("contests.json");
+    if (prev) {
+      kContests = prev.map((c) => ({
+        id: c.id,
+        start_epoch_second: c.start,
+        duration_second: c.duration,
+        title: c.title,
+        rate_change: c.rate,
+      }));
+      kContestProblems = prev.flatMap((c) =>
+        c.problems.map((p) => ({ contest_id: c.id, problem_id: p.id, problem_index: p.index })),
+      );
+    }
+  }
+  if (kContests) {
+    const contests = buildContestIndex({
+      contests: kContests,
+      contestProblems: kContestProblems,
+      tables,
+      lists,
+      results,
+      now: Math.floor(Date.now() / 1000),
+    });
+    const ids = new Set(contests.map((c) => c.id));
+    const kept = Object.fromEntries(Object.entries(results).filter(([cid]) => ids.has(cid)));
+    await writeFile(path.join(OUT, "contests.json"), JSON.stringify(contests));
+    await writeFile(path.join(OUT, "contest-results.json"), JSON.stringify(kept));
+    console.log(`[snapshot] contests: ${contests.length}件 / 公式成績: ${Object.keys(kept).length}件`);
+  } else {
+    console.warn("[snapshot] コンテストの一覧を作れないため contests.json を更新しない");
   }
 
   await writeFile(path.join(OUT, "index.json"), JSON.stringify(index));
