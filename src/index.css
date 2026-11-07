@@ -3377,6 +3377,60 @@ button.member-card {
   line-height: 1.6;
   margin: 0;
 }
+/* 目安の一言(目安の行の下) */
+.re-guide-sub {
+  color: var(--ink-2);
+}
+/* 入れたパフォの目安: 最近の ABC の A〜G を解ける確率の小さな棒 */
+.re-guide {
+  margin: 4px 0 12px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+}
+.re-guide-say {
+  margin: 0 0 10px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.re-letters {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+}
+.re-letter {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  font-variant-numeric: tabular-nums;
+}
+.re-letter-bar {
+  position: relative;
+  width: 100%;
+  max-width: 28px;
+  height: 44px;
+  border-radius: 6px;
+  background: var(--grid);
+  overflow: hidden;
+}
+.re-letter-fill {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--accent);
+  border-radius: 6px 6px 0 0;
+}
+.re-letter-name {
+  font-size: 12px;
+  font-weight: 700;
+}
+.re-letter-pct {
+  font-size: 11px;
+  color: var(--muted);
+}
 .re-times {
   list-style: none;
   margin: 10px 0 0;

@@ -418,7 +418,7 @@ function UserDashboard({ userId }: { userId: string }) {
       </div>
 
       {/* レート予測(部員だけ。推移が読めた人) */}
-      {historyOk && <RatingEstimator key={userId} history={history} />}
+      {historyOk && <RatingEstimator key={userId} history={history} models={data.models} />}
 
       <section className="card">
         <div className="card-head">

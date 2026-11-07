@@ -15,7 +15,9 @@ import {
   tierFloor,
   tierOf,
 } from "../lib/ratingEstimate";
-import type { RatePoint } from "../lib/types";
+import { describeChances, recentAbcTable, solveChances } from "../lib/perfGuide";
+import type { AbcTable } from "../lib/perfGuide";
+import type { ProblemModels, RatePoint } from "../lib/types";
 import { useTheme } from "../theme";
 
 const fmt = (n: number) => n.toLocaleString("en-US");
@@ -27,8 +29,10 @@ const SLIDER_MAX = 4000;
  * 個人ページの「レート予測」。次のコンテストのパフォで、レートがどう動くか(src/lib/ratingEstimate.ts)。
  * history は Rated の回だけ(古い順)。各点のパフォ(p)がそろっていなければ「データ更新待ち」と出す
  */
-export function RatingEstimator({ history }: { history: RatePoint[] }) {
+export function RatingEstimator({ history, models }: { history: RatePoint[]; models?: ProblemModels }) {
   const { resolved } = useTheme();
+  // パフォの目安(最近の ABC の各問題を解ける確率)。難易度のデータが読めるまでは出さない
+  const table = useMemo(() => (models ? recentAbcTable(models) : null), [models]);
   const ready = history.every((h) => typeof h.p === "number");
   const perfs = useMemo(() => (ready ? history.map((h) => h.p as number) : []), [history, ready]);
   const now = perfs.length > 0 ? displayRating(perfs) : 0;
@@ -37,6 +41,10 @@ export function RatingEstimator({ history }: { history: RatePoint[] }) {
 
   const [perfText, setPerfText] = useState(() => String(rise ?? Math.max(now, 400)));
   const [targetText, setTargetText] = useState(() => String(up ?? now + 100));
+
+  /** 目安の一言(最近の ABC で C までほぼ解けて、D が半々くらい) */
+  const guide = (perf: number | null) =>
+    table && perf !== null ? <span className="re-sub re-guide-sub">最近の ABC で {describeChances(solveChances(table, perf))}</span> : null;
 
   const tierName = (rating: number) => {
     const t = tierOf(rating);
@@ -94,6 +102,7 @@ export function RatingEstimator({ history }: { history: RatePoint[] }) {
                   </span>
                   <span className="re-value">
                     {upPerf === null ? "次の1回では届きません" : `パフォ ${fmt(upPerf)} 以上`}
+                    {guide(upPerf)}
                     {upPerf !== null && abc && upPerf > ABC_PERF_CAP && (
                       <span className="re-sub">ABC のパフォは {fmt(ABC_PERF_CAP)} までなので、ABC では届きません</span>
                     )}
@@ -105,6 +114,7 @@ export function RatingEstimator({ history }: { history: RatePoint[] }) {
                   <span className="re-label">→ レートが上がる</span>
                   <span className="re-value">
                     パフォ {fmt(rise)} 以上
+                    {guide(rise)}
                     <span className="re-sub">これより低いと、レートは下がるか変わりません</span>
                   </span>
                 </li>
@@ -116,6 +126,7 @@ export function RatingEstimator({ history }: { history: RatePoint[] }) {
                   </span>
                   <span className="re-value">
                     {downPerf === null ? "次の1回では下がりません" : `パフォ ${fmt(downPerf)} 以下`}
+                    {guide(downPerf)}
                   </span>
                 </li>
               )}
@@ -189,6 +200,7 @@ export function RatingEstimator({ history }: { history: RatePoint[] }) {
                   </span>
                 )}
               </p>
+              {table && <PerfGuide table={table} perf={Math.round(perf)} />}
               {up !== null && (
                 <p className="re-keep">
                   {keepGoing === null ? (
@@ -213,7 +225,35 @@ export function RatingEstimator({ history }: { history: RatePoint[] }) {
         Rated の回のパフォーマンスだけで計算します(部員の全履歴で、実際のレートと一致することを確かめています)。
         ABC は 2000 以上だと Unrated で、パフォは {fmt(ABC_PERF_CAP)} までです。
         新しいコンテストの結果は、レートの更新のあとのデータ更新(6時間ごと、土日の夜は 22:45〜0:00 にも)で入ります。
+        {table &&
+          ` 「最近の ABC で…」は、AtCoder Problems の難易度から、そのくらいの実力の人が ABC${table.from}〜${table.to} の各問題を解ける確率を平均した目安です(実際のパフォは解いた早さやペナルティでも変わります)。`}
       </p>
     </section>
+  );
+}
+
+/** 入れたパフォの目安: 最近の ABC の A〜G をそれぞれ解ける確率 */
+function PerfGuide({ table, perf }: { table: AbcTable; perf: number }) {
+  const chances = solveChances(table, perf);
+  return (
+    <div className="re-guide">
+      <p className="re-guide-say">
+        最近の ABC なら <strong>{describeChances(chances)}</strong>
+      </p>
+      <div className="re-letters" role="list" aria-label={`最近の ABC(${table.from}〜${table.to})の各問題を解ける確率`}>
+        {chances.map((c) => {
+          const pct = Math.round(c.p * 100);
+          return (
+            <div key={c.letter} className="re-letter" role="listitem" aria-label={`${c.letter} 問題 ${pct}%`}>
+              <span className="re-letter-bar">
+                <span className="re-letter-fill" style={{ height: `${Math.max(pct, 2)}%`, opacity: 0.35 + 0.65 * c.p }} />
+              </span>
+              <span className="re-letter-name">{c.letter}</span>
+              <span className="re-letter-pct">{pct}%</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }
