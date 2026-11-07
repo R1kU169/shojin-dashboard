@@ -7,3 +7,5 @@ export type { GeneratedCase } from "./generate.ts";
 export { exprToString, formatBig } from "./expr.ts";
 export { splitStatement } from "./statement.ts";
 export type { StatementParts } from "./statement.ts";
+export { statementBounds } from "./bounds.ts";
+export type { NamedBound } from "./bounds.ts";

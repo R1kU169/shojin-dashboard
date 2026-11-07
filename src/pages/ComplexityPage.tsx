@@ -13,7 +13,10 @@ import { CodeEditor } from "../components/CodeEditor";
 import type { CodeEditorHandle } from "../components/CodeEditor";
 import { StatCard } from "../components/StatCard";
 import { EDITOR_LANGS } from "../lib/wandbox";
-import { katexHtmlToText } from "../lib/katexPaste";
+import { formatBig, splitStatement, statementBounds } from "../lib/casegen";
+import type { NamedBound } from "../lib/casegen";
+import { loadCases, loadProblem } from "../lib/editorStore";
+import { katexHtmlToText, statementHtmlToText } from "../lib/katexPaste";
 import { readStore, writeStore } from "../lib/storage";
 import { analyzeCode, BASIC_LANGS, differentLanguage, evaluate, formatOps, guessLanguage, isSupported, LANG_NOTES, parseBoundValue, SPEED } from "../lib/complexity";
 import type { Analysis, BreakdownItem, Confidence, TimeVerdict } from "../lib/complexity";
@@ -86,6 +89,23 @@ const KIND_LABEL: Record<BreakdownItem["kind"], string> = {
   func: "関数",
 };
 
+/** よくある上限(範囲の入力欄の候補) */
+const COMMON_BOUNDS = ["2×10^5", "10^5", "3×10^5", "5×10^5", "10^6", "2×10^6", "10^9", "10^18", "5000", "3000", "2000", "1000", "100"];
+
+/** 範囲の入力欄に入れる文字列(1〜2×10^5。欄が狭いので短く)。parseBoundValue で読み戻せる形 */
+function boundText(b: NamedBound): string {
+  return b.lo !== null ? `${formatBig(b.lo)}〜${formatBig(b.hi)}` : formatBig(b.hi);
+}
+
+/** エディターで連携している問題と、読み込んである「入力」「制約」(無ければ null) */
+function linkedStatement(): { title: string; format: string; constraints: string } | null {
+  const p = loadProblem();
+  if (!p) return null;
+  const c = loadCases(p);
+  if (!c.constraints.trim() && !c.format.trim()) return null;
+  return { title: p.title ?? p.task, format: c.format, constraints: c.constraints };
+}
+
 /** 範囲の値の表示(1000万未満は桁区切り、それより大きければ 10^7 の形) */
 function showValue(n: number): string {
   if (!Number.isInteger(n)) return String(n);
@@ -108,6 +128,12 @@ export function ComplexityPage() {
   const [rawBounds, setRawBounds] = useState<Record<string, string>>(loadRanges);
   // 前回の保存から復元しただけで、このページでまだ触っていない範囲(「前回の値」と出す)
   const [restored, setRestored] = useState<Set<string>>(() => new Set(Object.keys(loadRanges())));
+  // 問題の制約から入れた範囲(変数名 → どこから入れたか)。手で書き換えたら消す
+  const [fromStatement, setFromStatement] = useState<Map<string, string>>(() => new Map());
+  // エディターで連携している問題の制約(エディターから読み込むたびに読み直す)
+  const [linked, setLinked] = useState(linkedStatement);
+  const [statementText, setStatementText] = useState("");
+  const [fillNote, setFillNote] = useState("");
   const [rawTl, setRawTl] = useState(() => load(TL_KEY) ?? "2");
   const [indentWidth] = useState(loadIndentWidth);
   const editorRef = useRef<CodeEditorHandle>(null);
@@ -132,12 +158,12 @@ export function ComplexityPage() {
   }, [rawTl]);
 
   /** 解析の唯一の入口(ボタン・Ctrl+Enter・エディターからの読み込み) */
-  const analyzeNow = (src = code, key = langKey) => {
+  const analyzeNow = (src = code, key = langKey): Analysis | null => {
     if (src.trim() === "") {
       setError("コードを貼り付けてください");
       setResult(null);
       editorRef.current?.focus();
-      return;
+      return null;
     }
     let r: Analysis;
     try {
@@ -145,12 +171,13 @@ export function ComplexityPage() {
     } catch (e) {
       setError(`解析に失敗しました: ${(e as Error).message}`);
       setResult(null);
-      return;
+      return null;
     }
     // 解析できなかった理由は解析メモの警告に出るので、ここでは二重に出さない
     setError(r.status === "error" && r.warnings.length === 0 ? "解析に失敗しました" : "");
     setResult(r);
     setAnalyzed({ code: src, lang: key });
+    return r;
   };
 
   // Ctrl/Cmd+Enter はページのどこからでも効かせる(EditorPage と同じ作法)
@@ -213,7 +240,14 @@ export function ComplexityPage() {
     setLangKey(key);
     setCode(edCode);
     save(LANG_KEY, key);
-    analyzeNow(edCode, key);
+    const r = analyzeNow(edCode, key);
+    // エディターで連携している問題の制約を読み込んであれば、空いている範囲(と前回の値)をそれで埋める
+    const st = linkedStatement();
+    setLinked(st);
+    if (r && r.status === "ok" && st) {
+      const res = fillFromStatement(st.format, st.constraints, `${st.title} の制約`, false, r.variables);
+      if (res.filled.length > 0) setFillNote(fillMessage(res));
+    }
   };
 
   // エディターの「計算量を調べる →」から来たら読み込む(StrictMode の2回実行でも1回だけ)
@@ -257,6 +291,65 @@ export function ComplexityPage() {
       next.delete(name);
       return next;
     });
+    setFromStatement((prev) => {
+      if (!prev.has(name)) return prev;
+      const next = new Map(prev);
+      next.delete(name);
+      return next;
+    });
+  };
+
+  /**
+   * 問題の「入力」「制約」から分かる範囲を、解析した変数に入れる(N は N、|a| は配列 A の長さ。大文字小文字は区別しない)。
+   * overwrite でなければ、空欄・前回の値・前に制約から入れた値だけを書き換え、手で入れた値は残す
+   */
+  const fillFromStatement = (format: string, constraints: string, source: string, overwrite: boolean, vars = result?.variables ?? []) => {
+    const found = statementBounds(format, constraints);
+    const byName = new Map(found.map((b) => [b.name.toLowerCase(), b]));
+    const next: Record<string, string> = {};
+    const filled: string[] = [];
+    const missing: string[] = [];
+    for (const v of vars) {
+      const b = byName.get(v.name.toLowerCase());
+      if (!b) {
+        missing.push(v.name);
+        continue;
+      }
+      const raw = rawBounds[v.name] ?? "";
+      if (!overwrite && raw.trim() !== "" && !restored.has(v.name) && !fromStatement.has(v.name)) continue;
+      next[v.name] = boundText(b);
+      filled.push(v.name);
+    }
+    if (filled.length > 0) {
+      setRawBounds((prev) => ({ ...prev, ...next }));
+      setRestored((prev) => new Set([...prev].filter((n) => !filled.includes(n))));
+      setFromStatement((prev) => new Map([...prev, ...filled.map((n): [string, string] => [n, source])]));
+    }
+    return { filled, missing, found: found.map((b) => b.name) };
+  };
+
+  const fillMessage = (r: { filled: string[]; missing: string[]; found: string[] }): string => {
+    if (r.found.length === 0) return "制約から変数の範囲を読み取れませんでした。問題ページの「制約」の部分(またはページ全体)をコピーして貼り付けてください。";
+    if (r.filled.length === 0) {
+      return `制約の変数(${r.found.slice(0, 8).join("・")})と、コードの変数(${r.missing.join("・")})の名前が一致しませんでした。手で入れてください。`;
+    }
+    return `${r.filled.join("・")} を制約から入れました。${r.missing.length > 0 ? `${r.missing.join("・")} は制約から分からないので、手で入れてください。` : ""}`;
+  };
+
+  // 問題ページの「制約」(またはページ全体)を貼ったら、まとめて入れる。数式は KaTeX の HTML から TeX に戻す
+  const readStatement = (text: string) => {
+    const parts = splitStatement(text);
+    // 見出しが無ければ、貼ったものを丸ごと制約として読む
+    const constraints = parts.constraints ?? (parts.format === null ? text : "");
+    setFillNote(fillMessage(fillFromStatement(parts.format ?? "", constraints, "貼り付けた制約", true)));
+    setStatementText("");
+  };
+  const pasteStatement = (e: ClipboardEvent<HTMLTextAreaElement>) => {
+    const html = e.clipboardData.getData("text/html");
+    const plain = e.clipboardData.getData("text/plain");
+    if (!html && !plain) return;
+    e.preventDefault();
+    readStatement(html ? statementHtmlToText(html) : plain);
   };
   // 問題ページの制約をコピーして貼ると、KaTeX の表示では累乗が「10 改行 5」に割れ、入力欄は改行を捨てるので
   // 「105」になってしまう。HTML に元の TeX があればそれを、無ければ改行を空白にして入れる
@@ -279,6 +372,8 @@ export function ComplexityPage() {
       for (const v of result.variables) delete next[v.name];
       return next;
     });
+    setFromStatement(new Map());
+    setFillNote("");
   };
 
   const stale = analyzed !== null && (analyzed.code !== code || analyzed.lang !== langKey);
@@ -429,6 +524,7 @@ export function ComplexityPage() {
                             <input
                               className="cx-bound"
                               inputMode="text"
+                              list="cx-common-bounds"
                               placeholder="例: 2e5"
                               value={raw}
                               onChange={(e) => setBound(v.name, e.target.value)}
@@ -449,7 +545,11 @@ export function ComplexityPage() {
                             ) : (
                               <>
                                 {b.lo !== null ? `${showValue(b.lo)} 〜 ${showValue(b.hi)}` : `≤ ${showValue(b.hi)}`}
-                                {restored.has(v.name) && <span className="muted cx-restored">前回の値</span>}
+                                {fromStatement.has(v.name) ? (
+                                  <span className="muted cx-restored">{fromStatement.get(v.name)}</span>
+                                ) : (
+                                  restored.has(v.name) && <span className="muted cx-restored">前回の値</span>
+                                )}
                               </>
                             )}
                           </td>
@@ -459,7 +559,45 @@ export function ComplexityPage() {
                   </tbody>
                 </table>
               </div>
-              <p className="muted cx-hint">上限だけ(2e5)でも、制約の書き方(1 ≤ N ≤ 2×10^5)でも入れられます</p>
+              <datalist id="cx-common-bounds">
+                {COMMON_BOUNDS.map((b) => (
+                  <option key={b} value={b} />
+                ))}
+              </datalist>
+              <p className="muted cx-hint">上限だけ(2e5)でも、制約の書き方(1 ≤ N ≤ 2×10^5)でも入れられます。欄を選ぶとよくある上限を選べます</p>
+              {/* 問題の制約からまとめて入れる */}
+              <div className="cx-fill">
+                {linked && (
+                  <button
+                    type="button"
+                    className="mypage-toggle cx-fill-linked"
+                    onClick={() => setFillNote(fillMessage(fillFromStatement(linked.format, linked.constraints, `${linked.title} の制約`, true)))}
+                    title="エディターで連携している問題の、読み込んである制約から入れます"
+                  >
+                    {linked.title} の制約から入れる
+                  </button>
+                )}
+                <textarea
+                  className="cx-fill-paste"
+                  rows={2}
+                  value={statementText}
+                  onChange={(e) => setStatementText(e.target.value)}
+                  onPaste={pasteStatement}
+                  spellCheck={false}
+                  placeholder="問題ページの「制約」(またはページ全体)をここに貼り付けると、まとめて入れます"
+                  aria-label="問題の制約を貼り付ける欄"
+                />
+                {statementText.trim() !== "" && (
+                  <button type="button" className="mypage-toggle" onClick={() => readStatement(statementText)}>
+                    入れる
+                  </button>
+                )}
+                {fillNote && (
+                  <p className="muted cx-fill-note" role="status">
+                    {fillNote}
+                  </p>
+                )}
+              </div>
             </>
           )}
           {ok && (

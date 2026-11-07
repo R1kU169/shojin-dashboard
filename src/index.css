@@ -2241,6 +2241,45 @@ button.member-card {
   margin: 8px 0 0;
   font-size: 12px;
 }
+/* 問題の制約からまとめて入れる(連携中の問題のボタンと、貼り付け欄) */
+.cx-fill {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 12px;
+}
+.cx-fill-paste {
+  flex: 1 1 260px;
+  min-width: 0;
+  min-height: 44px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1.5px dashed var(--baseline);
+  border-radius: 10px;
+  padding: 8px 10px;
+  resize: vertical;
+}
+.cx-fill-paste:focus {
+  outline: none;
+  border-style: solid;
+  border-color: var(--accent);
+}
+.cx-fill-linked {
+  flex: none;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cx-fill-note {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.6;
+}
 .cx-total-row {
   margin-top: 14px;
   padding-top: 12px;
@@ -2361,6 +2400,10 @@ button.member-card {
   /* iOS が入力時にズームしないよう 16px にする */
   .cx-bound {
     width: 88px;
+    font-size: 16px;
+  }
+  /* 16px 未満だとスマホで触ったときに拡大される */
+  .cx-fill-paste {
     font-size: 16px;
   }
   .cx-tl {
