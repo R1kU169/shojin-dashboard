@@ -11,11 +11,13 @@ import { isWarningOnly, runCode } from "../lib/run";
 import type { RunOutcome } from "../lib/run";
 import { readStore, removeStore, writeStore } from "../lib/storage";
 import type { LinkedProblem } from "../lib/types";
+import { BOOT_HASH } from "../lib/boot";
+import { applyImport, loadImported, loadProblem, PROBLEM_KEY, saveProblem } from "../lib/editorStore";
+import { decodeImport, taskLetter } from "../lib/importPayload";
 
 const CODE_KEY = (lang: string) => `shojin:editor:code:${lang}`;
 const STDIN_KEY = "shojin:editor:stdin";
 const LANG_KEY = "shojin:editor:lang";
-const PROBLEM_KEY = "shojin:editor:problem";
 
 // コード欄の入力支援・高さ変更は CodeEditor(計算量タブと共用)が持つ
 const INDENT_KEY = "shojin:editor:indent";
@@ -27,13 +29,22 @@ const STDIN_SAVE_MAX = 1_000_000;
 // 標準出力はこれより長ければ先頭だけを表示する(数MBの出力でページが固まらないように)
 const OUTPUT_SHOW_MAX = 100_000;
 
-function loadProblem(): LinkedProblem | null {
-  try {
-    const raw = readStore(PROBLEM_KEY);
-    return raw ? (JSON.parse(raw) as LinkedProblem) : null;
-  } catch {
-    return null;
-  }
+// ---- ブックマークレットからの取り込み(src/lib/bookmarklet.ts) ----------------------------
+// ブックマークレットは #/editor?import=… を名前付きのウィンドウで開く。前にボタンで開いたタブなら
+// そのタブの # 以降が変わって届く。自分で開いたエディターのタブには名前では届かない(別のタブ群)ので、
+// 取り込みのために開いた新しいタブから BroadcastChannel で知らせ、受け取ったタブがあれば新しいタブは閉じる。
+const CHANNEL = "shojin-editor";
+/** 他のエディターのタブからの返事を待つ時間 */
+const HANDOFF_WAIT_MS = 500;
+/** このタブの印(自分が送った知らせに自分で返事をしないように) */
+const TAB_ID = Math.random().toString(36).slice(2);
+/** 取り込みのために開かれたばかりのタブか。最初の取り込みで1回だけ使う */
+let freshImportTab = BOOT_HASH.includes("import=");
+
+interface ChannelMessage {
+  type: "import" | "ack";
+  id: string;
+  from: string;
 }
 
 /** クリップボードの API が使えないとき(古い WebView・http)の代わり。選択してコピーする */
@@ -105,6 +116,12 @@ export function EditorPage() {
   const [result, setResult] = useState<RunOutcome | null>(null);
   const [error, setError] = useState("");
   const [problem, setProblem] = useState<LinkedProblem | null>(loadProblem);
+  // 取り込んだ問題の一覧(問題の切り替えボタン)と、取り込みのたびに進める番号(コーナーケースが読み直す)
+  const [imported, setImported] = useState(loadImported);
+  const [importTick, setImportTick] = useState(0);
+  const [importNotice, setImportNotice] = useState("");
+  // 取り込みを、前から開いている別のタブのエディターに渡した(このタブは閉じる)
+  const [handedOff, setHandedOff] = useState(false);
   // 「コードをコピーして提出」を押した直後の表示切り替え
   const [copied, setCopied] = useState(false);
   const [copyErr, setCopyErr] = useState(false);
@@ -113,8 +130,54 @@ export function EditorPage() {
   const abortRef = useRef<AbortController | null>(null);
   const editorRef = useRef<CodeEditorHandle>(null);
 
-  // 「次に解く問題」等からの遷移(?contest=&task=&title=)で問題を連携する
+  // 取り込み(ブックマークレット)を、前から開いている別のタブのエディターに渡せたら、このタブは閉じる
+  const handOff = () => {
+    if (typeof BroadcastChannel === "undefined") return;
+    const ch = new BroadcastChannel(CHANNEL);
+    const id = Math.random().toString(36).slice(2);
+    const timer = setTimeout(() => ch.close(), HANDOFF_WAIT_MS);
+    ch.onmessage = (e: MessageEvent<ChannelMessage>) => {
+      const m = e.data;
+      if (m?.type !== "ack" || m.id !== id || m.from === TAB_ID) return;
+      clearTimeout(timer);
+      ch.close();
+      setHandedOff(true);
+      // ブックマークレットが開いたタブなので閉じられる(閉じられなければ案内が残る)
+      setTimeout(() => window.close(), 1200);
+    };
+    ch.postMessage({ type: "import", id, from: TAB_ID } satisfies ChannelMessage);
+  };
+
+  // URL で届いたもの: ブックマークレットの取り込み(?import=)と、
+  // 「次に解く問題」等からの遷移(?contest=&task=&title=)。どちらも URL を消すので1つの effect で扱う
   useEffect(() => {
+    const imp = params.get("import");
+    if (imp !== null) {
+      // 履歴に問題文を残さない
+      setParams({}, { replace: true });
+      const payload = decodeImport(imp);
+      if (!payload) {
+        setImportNotice("取り込めませんでした(届いたデータが壊れています)。AtCoder の問題ページでもう一度ボタンを押してください。");
+        setImportTick((t) => t + 1);
+        return;
+      }
+      const r = applyImport(payload, loadProblem());
+      setProblem(r.problem);
+      setImported(loadImported());
+      setImportTick((t) => t + 1);
+      setImportNotice(
+        r.total > 1
+          ? `${payload.contest} の ${r.total} 問を取り込みました${r.read < r.total ? `(「入力」を読めたのは ${r.read} 問)` : ""}。上の記号で問題を切り替えられます。`
+          : r.read === 0
+            ? `${r.problem.title ?? r.problem.task} を連携しましたが、問題文に「入力」が見つかりませんでした。`
+            : `${r.problem.title ?? r.problem.task} を取り込みました。`,
+      );
+      if (freshImportTab) {
+        freshImportTab = false;
+        handOff();
+      }
+      return;
+    }
     const contest = params.get("contest");
     const task = params.get("task");
     if (!contest || !task) return;
@@ -124,13 +187,30 @@ export function EditorPage() {
       title: params.get("title") ?? undefined,
     };
     setProblem(p);
-    writeStore(PROBLEM_KEY, JSON.stringify(p));
+    saveProblem(p);
     setParams({}, { replace: true }); // URLを綺麗に保つ(再訪時はlocalStorageから復元)
   }, [params, setParams]);
 
+  // 別のタブ(取り込みのために開いたばかりのタブ)からの知らせ: 保存された問題と問題文を読み直して返事をする
+  useEffect(() => {
+    if (typeof BroadcastChannel === "undefined") return;
+    const ch = new BroadcastChannel(CHANNEL);
+    ch.onmessage = (e: MessageEvent<ChannelMessage>) => {
+      const m = e.data;
+      if (m?.type !== "import" || m.from === TAB_ID) return;
+      const p = loadProblem();
+      setProblem(p);
+      setImported(loadImported());
+      setImportTick((t) => t + 1);
+      setImportNotice(`AtCoder から ${p?.title ?? p?.task ?? "問題"} を取り込みました。`);
+      ch.postMessage({ type: "ack", id: m.id, from: TAB_ID } satisfies ChannelMessage);
+    };
+    return () => ch.close();
+  }, []);
+
   const applyProblem = (p: LinkedProblem) => {
     setProblem(p);
-    writeStore(PROBLEM_KEY, JSON.stringify(p));
+    saveProblem(p);
   };
 
   /**
@@ -281,6 +361,7 @@ export function EditorPage() {
     return () => document.removeEventListener("keydown", onKey, true);
   }, []);
 
+  const sameContest = problem ? imported.find((c) => c.contest === problem.contest) : undefined;
   const copyLabel = copied
     ? "コピーしました ✓"
     : copyErr
@@ -367,7 +448,34 @@ export function EditorPage() {
             <ProblemSearch onPick={applyProblem} />
           )}
         </div>
+        {/* ブックマークレットで同じコンテストの問題を取り込んでいれば、記号で切り替える
+            (コンテスト中の問題は AtCoder Problems にまだ無く、問題の検索では出てこない) */}
+        {sameContest && sameContest.tasks.length > 1 && (
+          <div className="ep-tasks" role="group" aria-label={`${sameContest.contest} の取り込んだ問題`}>
+            {sameContest.tasks.map((t) => (
+              <button
+                key={t.task}
+                type="button"
+                className={t.task === problem?.task ? "ep-task active" : "ep-task"}
+                aria-pressed={t.task === problem?.task}
+                title={t.title}
+                onClick={() => applyProblem({ contest: sameContest.contest, task: t.task, title: t.title })}
+              >
+                {taskLetter(t)}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
+
+      {handedOff && (
+        <p className="ep-handoff" role="status">
+          ほかのタブで開いているエディターに読み込みました。このタブは閉じます(閉じないときは、このタブを閉じてください)。
+          <button type="button" className="linklike" onClick={() => setHandedOff(false)}>
+            このタブで続ける
+          </button>
+        </p>
+      )}
 
       <section className="card editor-card">
         {/* コード欄の右上に浮かせる操作。ツールバーに足すと問題連携が2行目に落ちるので、コードに対する操作はここに置く */}
@@ -487,7 +595,14 @@ export function EditorPage() {
         </section>
       </div>
 
-      <CaseGenerator lang={lang} code={code} problem={problem} onUseInput={setStdin} />
+      <CaseGenerator
+        lang={lang}
+        code={code}
+        problem={problem}
+        onUseInput={setStdin}
+        importTick={importTick}
+        importNotice={importNotice}
+      />
 
       <p className="muted editor-note">
         実行は{" "}

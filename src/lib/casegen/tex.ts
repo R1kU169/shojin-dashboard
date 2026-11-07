@@ -137,6 +137,9 @@ export function normalizeText(raw: string): string {
     // \mathrm{case} / \text{query} / {\rm Query}
     .replace(/\\(?:mathrm|text|textrm|mathit|operatorname|mathbf|textbf)\s*\{([^{}]*)\}/g, "$1")
     .replace(/\{\\(?:rm|it|bf)\s+([^{}]*)\}/g, "$1")
+    // 桁区切り: 10 \ 000 / 1\,000\,000 / 1{,}000 は1つの数(古い問題の制約に多い)。
+    // 後ろが3桁ちょうどのときだけ詰める(N \ M のような変数の間の空白は残す)
+    .replace(/(\d)[ \t]*(?:\\[ ,;:!]|~|\{,\})[ \t]*(?=\d{3}(?!\d))/g, "$1")
     // \ (空白) / \, / \; / \! / ~ は空白
     .replace(/\\[ ,;:!]/g, " ")
     .replace(/~/g, " ")

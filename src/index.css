@@ -1419,6 +1419,206 @@ button.member-card {
   padding: 10px 12px;
   resize: vertical;
 }
+/* 読み込み方の案内(ブックマークレット・まるごと貼り付け)。広い幅では2つを横に並べる */
+.cg-notice {
+  font-size: 13px;
+  line-height: 1.6;
+  margin: 0 0 12px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  color: var(--ink);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+.cg-guide {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 12px;
+}
+@media (max-width: 760px) {
+  .cg-guide {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.cg-way {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface-2);
+  padding: 14px 16px;
+}
+.cg-way-title {
+  font-size: 14px;
+  font-weight: 700;
+  margin: 0 0 6px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.cg-badge {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border-radius: 999px;
+  padding: 1px 8px;
+}
+.cg-way > .muted {
+  font-size: 12px;
+  line-height: 1.65;
+  margin: 0 0 10px;
+}
+.cg-bm-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+.cg-bm-row .linklike {
+  font-size: 12px;
+}
+/* ドラッグして使うリンク。押すボタンではないので、つまめる見た目(破線の枠)にする */
+.cg-bookmarklet {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--accent);
+  background: var(--surface);
+  border: 1.5px dashed color-mix(in srgb, var(--accent) 60%, transparent);
+  border-radius: 999px;
+  padding: 6px 16px;
+  cursor: grab;
+  user-select: none;
+}
+.cg-bookmarklet::before {
+  content: "⠿";
+  font-size: 12px;
+  opacity: 0.6;
+}
+.cg-bookmarklet:hover {
+  text-decoration: none;
+  border-style: solid;
+}
+.cg-bm-drag {
+  font-size: 12px;
+}
+/* スマホにはブックマークバーが無いので、ドラッグの案内は出さない(登録用の URL のコピーは残す) */
+@media (max-width: 560px) {
+  .cg-bm-drag {
+    display: none;
+  }
+}
+.cg-bm-hint {
+  font-size: 12px;
+  line-height: 1.6;
+  margin: 8px 0 0;
+}
+.cg-paste {
+  display: block;
+  width: 100%;
+  min-height: 72px;
+  border: 1.5px dashed var(--baseline);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  padding: 10px 12px;
+  resize: vertical;
+}
+.cg-paste:focus {
+  outline: none;
+  border-color: var(--accent);
+  border-style: solid;
+}
+.cg-paste-read {
+  margin-top: 8px;
+}
+.cg-paste-err {
+  font-size: 12px;
+  margin: 8px 0 0;
+}
+.cg-guide-foot {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin: 0;
+  font-size: 12px;
+}
+/* 読み込んだ入力・制約(ふだんは畳んでおく) */
+/* 「ほかの問題文を読み込む」は畳んだ見出しと同じ行の右端に置く */
+.cg-src {
+  position: relative;
+  margin-bottom: 12px;
+}
+.cg-src-detail summary {
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--ink-2);
+  /* 右端のリンクと重ならないように */
+  padding-right: 11em;
+}
+.cg-src-detail[open] summary {
+  margin-bottom: 10px;
+}
+.cg-reload {
+  position: absolute;
+  top: 1px;
+  right: 0;
+  font-size: 12px;
+}
+.cg-fields .cg-inputs {
+  margin-bottom: 0;
+}
+/* ブックマークレットで同じコンテストを取り込んだときの、問題の切り替え(エディターのツールバーの右下) */
+.ep-tasks {
+  flex-basis: 100%;
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: -4px;
+}
+@media (max-width: 560px) {
+  .ep-tasks {
+    justify-content: flex-start;
+    margin-top: 0;
+  }
+}
+.ep-task {
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  min-width: 30px;
+  padding: 3px 8px;
+  color: var(--ink-2);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+}
+.ep-task:hover {
+  color: var(--accent);
+}
+.ep-task.active {
+  color: #fff;
+  background: var(--accent-solid);
+  border-color: transparent;
+}
+.ep-handoff {
+  font-size: 13px;
+  line-height: 1.6;
+  margin: 0 0 14px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+}
 .cg-spec-view {
   margin-bottom: 12px;
 }

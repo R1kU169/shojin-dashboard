@@ -221,3 +221,22 @@ test("範囲の手直しを使う", () => {
   assert.deepEqual([slot(spec, "N").hull.lo, slot(spec, "N").hull.hi], [1n, 10n]);
   assert.deepEqual([slot(spec, "A[]").hull.lo, slot(spec, "A[]").hull.hi], [5n, 20n]);
 });
+
+test("TeX の桁区切り(10 \\ 000・1{,}000)を1つの数として読む", () => {
+  assert.equal(normalizeText("1 \\leq N \\leq 10 \\ 000"), "1 ≤ N ≤ 10000");
+  assert.equal(normalizeText("1 \\leq a_i \\leq 1 \\ 000 \\ 000 \\ 000"), "1 ≤ a_i ≤ 1000000000");
+  assert.equal(normalizeText("1\\le N\\le 1{,}000"), "1≤ N≤ 1000");
+  assert.equal(normalizeText("0 \\le K \\le 10\\,000"), "0 ≤ K ≤ 10000");
+  // 3桁ちょうどでなければ詰めない(N \ M の空白、2 つの数の並び)
+  assert.equal(normalizeText("N \\ 100"), "N 100");
+  assert.equal(normalizeText("1 \\ 10"), "1 10");
+  const spec = buildSpec("N\na_1 a_2 \\ldots a_N", "N は 1 以上 10 \\ 000 以下の整数\na_i は 1 以上 1 \\ 000 \\ 000 \\ 000 以下の整数");
+  assert.equal(spec.slots.get("N")?.hull.hi, 10000n);
+  assert.deepEqual(spec.warnings, []);
+});
+
+test("「a 以上 b 以下」の値に空白があっても式全体を読む(問題文の TeX は 2 \\times 10^5)", () => {
+  const spec = buildSpec("Q\nK", "Q は 1 以上 2 \\times 10^5 以下の整数\nK は 1 以上 \\min(Q, 10) 以下の整数");
+  assert.equal(spec.slots.get("Q")?.hull.hi, 200000n);
+  assert.equal(exprToString(spec.slots.get("K")!.hi[0]), "min(Q, 10)");
+});

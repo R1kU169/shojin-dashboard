@@ -378,8 +378,10 @@ function readPredicate(refs: CRef[], pred: string, facts: Fact[]): boolean {
 
   // a 以上 b 以下 / a 以上 / b 以下 / b 未満(長さの話でなければ値の範囲)
   if (!/長さ|文字/.test(p)) {
-    const lo = /(\S+?)\s*以上/.exec(p);
-    const hi = /(\S+?)\s*(以下|未満)/.exec(p.replace(/^.*以上/, ""));
+    // 値は空白を含むことがある(問題文の TeX は 2 \times 10^5 と書くので「2 × 10^5」になる)。
+    // 日本語や句読点の手前までを1つの式として読む
+    const lo = /([^\u3040-\u30ff\u3400-\u9fff、。]+?)\s*以上/.exec(p);
+    const hi = /([^\u3040-\u30ff\u3400-\u9fff、。]+?)\s*(以下|未満)/.exec(p.replace(/^.*以上/, ""));
     let any = false;
     const bound = (k: "lo" | "hi", e: Expr | null) => {
       if (!e) return;

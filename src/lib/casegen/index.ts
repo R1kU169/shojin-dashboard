@@ -5,3 +5,5 @@ export type { Overrides, Preset, Slot, Spec } from "./spec.ts";
 export { generateCase } from "./generate.ts";
 export type { GeneratedCase } from "./generate.ts";
 export { exprToString, formatBig } from "./expr.ts";
+export { splitStatement } from "./statement.ts";
+export type { StatementParts } from "./statement.ts";

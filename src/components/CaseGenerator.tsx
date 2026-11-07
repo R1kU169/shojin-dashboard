@@ -1,10 +1,13 @@
-import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { useDeferredValue, useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import type { ClipboardEvent } from "react";
-import { buildSpec, exprToString, formatBig } from "../lib/casegen";
+import { buildSpec, exprToString, formatBig, splitStatement } from "../lib/casegen";
 import type { GeneratedCase, Overrides, Slot, Spec } from "../lib/casegen";
 import type { CaseGenMessage, CaseGenRequest } from "../lib/casegen.worker";
+import { bookmarkletHref } from "../lib/bookmarklet";
+import { casesKey, loadCases } from "../lib/editorStore";
+import type { SavedCases } from "../lib/editorStore";
 import { GODBOLT_LANGS } from "../lib/godbolt";
-import { katexHtmlToText } from "../lib/katexPaste";
+import { katexHtmlToText, statementHtmlToText } from "../lib/katexPaste";
 import { isWarningOnly, prefersGodbolt, runCode } from "../lib/run";
 import type { RunOutcome } from "../lib/run";
 import { readStore, removeStore, writeStore } from "../lib/storage";
@@ -12,8 +15,7 @@ import type { LinkedProblem } from "../lib/types";
 import { WANDBOX_MAX_BODY } from "../lib/wandbox";
 import type { EditorLang } from "../lib/wandbox";
 
-// 問題ごとに「入力」「制約」と範囲の手直しを保存する(問題を連携していなければ共通の1つ)
-const STORE_KEY = (p: LinkedProblem | null) => `shojin:editor:cases:${p ? `${p.contest}/${p.task}` : "-"}`;
+// 問題ごとの「入力」「制約」と範囲の手直しは editorStore.ts(ブックマークレットの取り込みと共有)
 const OPEN_KEY = "shojin:editor:cases:open";
 
 /** Compiler Explorer に送る入力の上限(10MB まで通ることを実測。余裕を見て 8MB) */
@@ -23,28 +25,7 @@ const TIME_LIMIT_MS = 2000;
 /** ケースを作るのがこれより長くかかったら打ち切る(範囲の手直しで巨大な値を入れたときなど) */
 const GEN_TIMEOUT_MS = 30_000;
 
-interface Saved {
-  format: string;
-  constraints: string;
-  overrides: Overrides;
-}
-
-const EMPTY: Saved = { format: "", constraints: "", overrides: {} };
-
-function load(key: string): Saved {
-  try {
-    const raw = readStore(key);
-    if (!raw) return EMPTY;
-    const j = JSON.parse(raw) as Partial<Saved>;
-    return {
-      format: typeof j.format === "string" ? j.format : "",
-      constraints: typeof j.constraints === "string" ? j.constraints : "",
-      overrides: j.overrides && typeof j.overrides === "object" ? j.overrides : {},
-    };
-  } catch {
-    return EMPTY;
-  }
-}
+type Saved = SavedCases;
 
 type Status = "pending" | "running" | "ok" | "re" | "tle" | "killed" | "ce" | "big" | "error" | "skipped" | "aborted";
 
@@ -281,6 +262,54 @@ function SpecView({
   );
 }
 
+// ---- 読み込み方の案内 -------------------------------------------------------------
+
+/**
+ * ブックマークレットのリンク。React 19 は javascript: の href を描画しない(止める)ので、
+ * 描画のあとで DOM に直接付ける。この場で押しても AtCoder のページではないので、押したときは案内だけ出す
+ */
+function BookmarkletLink() {
+  const ref = useRef<HTMLAnchorElement>(null);
+  const href = useMemo(() => bookmarkletHref(`${location.origin}${location.pathname}`), []);
+  const [hint, setHint] = useState("");
+  useEffect(() => {
+    ref.current?.setAttribute("href", href);
+  }, [href]);
+  const copy = () => {
+    const done = (ok: boolean) =>
+      setHint(
+        ok
+          ? "コピーしました。ブラウザでブックマークを新しく作り、URL の欄に貼り付けてください(名前は「精進ボードに送る」など)。"
+          : "コピーできませんでした。上のボタンをブックマークバーにドラッグしてください。",
+      );
+    const p = navigator.clipboard?.writeText(href);
+    if (p) void p.then(() => done(true), () => done(false));
+    else done(false);
+  };
+  return (
+    <>
+      <div className="cg-bm-row">
+        <a
+          ref={ref}
+          className="cg-bookmarklet"
+          title="ブックマークバーにドラッグして登録してください"
+          onClick={(e) => {
+            e.preventDefault();
+            setHint("ここで押しても動きません。ブックマークバーにドラッグして登録し、AtCoder の問題ページで押してください。");
+          }}
+        >
+          精進ボードに送る
+        </a>
+        <span className="muted cg-bm-drag">← ブックマークバーへドラッグ</span>
+        <button type="button" className="linklike" onClick={copy}>
+          登録用の URL をコピー
+        </button>
+      </div>
+      {hint && <p className="muted cg-bm-hint">{hint}</p>}
+    </>
+  );
+}
+
 // ---- 本体 -----------------------------------------------------------------------
 
 interface Props {
@@ -289,13 +318,27 @@ interface Props {
   problem: LinkedProblem | null;
   /** 「標準入力に入れる」 */
   onUseInput: (input: string) => void;
+  /** ブックマークレットで取り込むたびに増える。増えたら保存を読み直してカードを開き、ケースを作る */
+  importTick: number;
+  /** 取り込みの結果の案内(取り込めなかったときの理由も) */
+  importNotice: string;
 }
 
-export function CaseGenerator({ lang, code, problem, onUseInput }: Props) {
-  const storeKey = STORE_KEY(problem);
+export function CaseGenerator({ lang, code, problem, onUseInput, importTick, importNotice }: Props) {
+  const storeKey = casesKey(problem);
   const [open, setOpen] = useState(() => readStore(OPEN_KEY) === "1");
-  const [saved, setSaved] = useState<Saved>(() => load(storeKey));
+  const [saved, setSaved] = useState<Saved>(() => loadCases(problem));
   const [savedKey, setSavedKey] = useState(storeKey);
+  const [seenTick, setSeenTick] = useState(importTick);
+  // 読み込んだあと、spec が新しい入力から作られたらケースを1回作る(取り込み・貼り付け・問題の切り替え)
+  const [autoGen, setAutoGen] = useState(false);
+  // 入力・制約があっても読み込み方の案内を出す(「読み込み直す」)
+  const [guide, setGuide] = useState(false);
+  // 入力・制約の欄を折りたたまずに出す(「自分で書く」)
+  const [manual, setManual] = useState(false);
+  const [notice, setNotice] = useState("");
+  const [pasteText, setPasteText] = useState("");
+  const [pasteError, setPasteError] = useState("");
   const [rows, setRows] = useState<Row[]>([]);
   const [gen, setGen] = useState<{ done: number; total: number } | null>(null);
   const [genErrors, setGenErrors] = useState<string[]>([]);
@@ -308,12 +351,32 @@ export function CaseGenerator({ lang, code, problem, onUseInput }: Props) {
   // まとめて実行の回ごとの番号。問題を切り替えたら進め、前の回の結果を新しいケースの行に書かない
   const runToken = useRef(0);
 
-  // 問題を切り替えたら、その問題の入力・制約を読み直す
-  if (savedKey !== storeKey) {
-    setSavedKey(storeKey);
-    setSaved(load(storeKey));
+  // 問題を切り替えたら・取り込みがあったら、その問題の入力・制約を読み直す
+  const resetView = () => {
     setRows([]);
     setGenErrors([]);
+    setGuide(false);
+    setManual(false);
+    setPasteText("");
+    setPasteError("");
+  };
+  if (savedKey !== storeKey) {
+    const next = loadCases(problem);
+    setSavedKey(storeKey);
+    setSaved(next);
+    resetView();
+    setNotice("");
+    // 読み込み済みの問題に切り替えたら、すぐケースを作る(「ケースを作る」を押す手間をなくす)
+    if (next.format.trim()) setAutoGen(true);
+  }
+  if (seenTick !== importTick) {
+    setSeenTick(importTick);
+    setSavedKey(storeKey);
+    setSaved(loadCases(problem));
+    resetView();
+    setNotice(importNotice);
+    setOpen(true);
+    setAutoGen(true);
   }
   // 前の問題のケース作り・まとめて実行は止める(前の問題のケースが新しい問題の下に並ばないように)
   useEffect(() => {
@@ -322,7 +385,11 @@ export function CaseGenerator({ lang, code, problem, onUseInput }: Props) {
     abortRef.current?.abort();
     runToken.current++;
     setGen(null);
-  }, [storeKey]);
+  }, [storeKey, importTick]);
+  // 開閉は覚えられなくてもよい
+  useEffect(() => {
+    writeStore(OPEN_KEY, open ? "1" : "0");
+  }, [open]);
 
   useEffect(() => {
     const t = setTimeout(() => {
@@ -350,12 +417,7 @@ export function CaseGenerator({ lang, code, problem, onUseInput }: Props) {
   const specText = `${saved.format}\n---\n${saved.constraints}\n---\n${JSON.stringify(saved.overrides)}`;
   const stale = rows.length > 0 && builtFrom !== specText;
 
-  const toggle = () => {
-    setOpen((o) => {
-      writeStore(OPEN_KEY, o ? "0" : "1"); // 開閉は覚えられなくてもよい
-      return !o;
-    });
-  };
+  const toggle = () => setOpen((o) => !o);
 
   // 問題ページからの貼り付けは、HTML に入っている元の TeX を使う(プレーンテキストでは添字が別の行に割れる)
   const pasteInto = (field: "format" | "constraints") => (e: ClipboardEvent<HTMLTextAreaElement>) => {
@@ -428,6 +490,43 @@ export function CaseGenerator({ lang, code, problem, onUseInput }: Props) {
     w.postMessage(req);
   };
 
+  // 読み込んだ直後は、spec(入力に遅れて作る)が新しい入力に追いついてから1回だけ作る。
+  // すぐ作ると、前の問題の spec で作ってしまう
+  const autoGenerate = useEffectEvent(() => generate(salt));
+  useEffect(() => {
+    if (!autoGen || !open || gen || running || deferred !== saved) return;
+    setAutoGen(false);
+    if (spec) autoGenerate();
+  }, [autoGen, open, gen, running, deferred, saved, spec]);
+
+  // 問題ページをまるごと貼り付けたもの(HTML なら数式を TeX に戻して)から「入力」「制約」を探す
+  const readWhole = (candidates: string[]): boolean => {
+    for (const text of candidates) {
+      if (!text.trim()) continue;
+      const parts = splitStatement(text);
+      if (parts.format === null) continue;
+      setSaved({ format: parts.format, constraints: parts.constraints ?? "", overrides: {} });
+      resetView();
+      setNotice(
+        parts.constraints === null
+          ? "入力の形式を読み込みました。「制約」の見出しは見つからなかったので、範囲は仮の値です(下の表で直せます)。"
+          : "貼り付けた問題ページから入力と制約を読み込みました。",
+      );
+      setAutoGen(true);
+      return true;
+    }
+    setPasteError("「入力」の見出しが見つかりませんでした。問題ページで全選択(Ctrl+A / ⌘A)してからコピーし、貼り付けてください。");
+    return false;
+  };
+
+  const pasteWhole = (e: ClipboardEvent<HTMLTextAreaElement>) => {
+    const html = e.clipboardData.getData("text/html");
+    const plain = e.clipboardData.getData("text/plain");
+    if (!html && !plain) return;
+    e.preventDefault();
+    readWhole([html ? statementHtmlToText(html) : "", plain]);
+  };
+
   const stopGenerate = () => {
     workerRef.current?.terminate();
     workerRef.current = null;
@@ -481,6 +580,42 @@ export function CaseGenerator({ lang, code, problem, onUseInput }: Props) {
     if (abortRef.current === ac) abortRef.current = null;
   };
 
+  const hasText = saved.format.trim() !== "" || saved.constraints.trim() !== "";
+  const showGuide = !hasText || guide;
+  const problemUrl = problem ? `https://atcoder.jp/contests/${problem.contest}/tasks/${problem.task}` : null;
+  const fields = (
+    <div className="cg-fields">
+      <p className="muted cg-hint">
+        問題ページの「入力」と「制約」の中身です。直接書き換えられます(TeX のままでも、
+        <code>A_1 A_2 ... A_N</code> / <code>1 ≤ N ≤ 2×10^5</code> のように手で書いても読めます)。
+      </p>
+      <div className="two-col cg-inputs">
+        <label className="cg-field">
+          <span className="io-label">入力の形式(問題ページの「入力」)</span>
+          <textarea
+            className="cg-area"
+            value={saved.format}
+            onChange={(e) => setSaved((s) => ({ ...s, format: e.target.value }))}
+            onPaste={pasteInto("format")}
+            spellCheck={false}
+            placeholder={"N M\nA_1 A_2 ... A_N\nu_1 v_1\n:\nu_M v_M"}
+          />
+        </label>
+        <label className="cg-field">
+          <span className="io-label">制約(問題ページの「制約」)</span>
+          <textarea
+            className="cg-area"
+            value={saved.constraints}
+            onChange={(e) => setSaved((s) => ({ ...s, constraints: e.target.value }))}
+            onPaste={pasteInto("constraints")}
+            spellCheck={false}
+            placeholder={"1 ≤ N ≤ 2×10^5\n0 ≤ M ≤ 2×10^5\n1 ≤ A_i ≤ 10^9\n1 ≤ u_i < v_i ≤ N"}
+          />
+        </label>
+      </div>
+    </div>
+  );
+
   const selected = rows.filter((r) => r.selected).length;
   // 実際に実行するケース(入力の空のケースは送らない)
   const runnable = rows.filter((r) => r.selected && r.input !== "").length;
@@ -499,42 +634,94 @@ export function CaseGenerator({ lang, code, problem, onUseInput }: Props) {
       </div>
       {open && (
         <>
-          <p className="muted cg-hint">
-            問題ページの「入力」と「制約」を、表示されているままコピーして貼り付けてください(TeX のままでも、
-            <code>A_1 A_2 ... A_N</code> / <code>1 ≤ N ≤ 2×10^5</code> のように手で書いても読めます)。
-            {problem && (
-              <>
-                {" "}
-                <a href={`https://atcoder.jp/contests/${problem.contest}/tasks/${problem.task}`} target="_blank" rel="noreferrer">
-                  問題ページを開く ↗
-                </a>
-              </>
-            )}
-          </p>
-          <div className="two-col cg-inputs">
-            <label className="cg-field">
-              <span className="io-label">入力</span>
-              <textarea
-                className="cg-area"
-                value={saved.format}
-                onChange={(e) => setSaved((s) => ({ ...s, format: e.target.value }))}
-                onPaste={pasteInto("format")}
-                spellCheck={false}
-                placeholder={"N M\nA_1 A_2 ... A_N\nu_1 v_1\n:\nu_M v_M"}
-              />
-            </label>
-            <label className="cg-field">
-              <span className="io-label">制約</span>
-              <textarea
-                className="cg-area"
-                value={saved.constraints}
-                onChange={(e) => setSaved((s) => ({ ...s, constraints: e.target.value }))}
-                onPaste={pasteInto("constraints")}
-                spellCheck={false}
-                placeholder={"1 ≤ N ≤ 2×10^5\n0 ≤ M ≤ 2×10^5\n1 ≤ A_i ≤ 10^9\n1 ≤ u_i < v_i ≤ N"}
-              />
-            </label>
-          </div>
+          {notice && (
+            <p className="cg-notice" role="status">
+              {notice}
+            </p>
+          )}
+          {showGuide && (
+            <div className="cg-guide">
+              <div className="cg-way">
+                <h3 className="cg-way-title">
+                  ボタンで読み込む <span className="cg-badge">おすすめ</span>
+                </h3>
+                <p className="muted">
+                  下のボタンをブックマークバーにドラッグして登録します(最初の1回だけ)。AtCoder の問題ページで押すと、
+                  その問題を連携して入力と制約を読み込み、ケースを作ります。「問題一括表示」のページで押すと、
+                  コンテストの問題をまとめて取り込みます。コンテスト中も使え、問題文はどこにも送りません。
+                </p>
+                <BookmarkletLink />
+              </div>
+              <div className="cg-way">
+                <h3 className="cg-way-title">問題ページをまるごと貼り付ける</h3>
+                <p className="muted">
+                  問題ページで全選択(Ctrl+A / ⌘A)してコピーし、下の欄に貼り付けてください。「入力」と「制約」を自動で見つけます。
+                  {problemUrl && (
+                    <>
+                      {" "}
+                      <a href={problemUrl} target="_blank" rel="noreferrer">
+                        問題ページを開く ↗
+                      </a>
+                    </>
+                  )}
+                </p>
+                <textarea
+                  className="cg-paste"
+                  value={pasteText}
+                  onChange={(e) => {
+                    setPasteText(e.target.value);
+                    setPasteError("");
+                  }}
+                  onPaste={pasteWhole}
+                  spellCheck={false}
+                  placeholder="ここに貼り付け(Ctrl+V / ⌘V)"
+                  aria-label="問題ページをまるごと貼り付ける欄"
+                />
+                {pasteText.trim() !== "" && (
+                  <button type="button" className="mypage-toggle cg-paste-read" onClick={() => readWhole([pasteText])}>
+                    読み取る
+                  </button>
+                )}
+                {pasteError && <p className="error-text cg-paste-err">{pasteError}</p>}
+              </div>
+              <p className="cg-guide-foot">
+                {!manual && (
+                  <button type="button" className="linklike" onClick={() => setManual(true)}>
+                    入力と制約を自分で書く
+                  </button>
+                )}
+                {hasText && (
+                  <button type="button" className="linklike" onClick={() => setGuide(false)}>
+                    読み込み直すのをやめる
+                  </button>
+                )}
+              </p>
+            </div>
+          )}
+          {manual ? (
+            fields
+          ) : (
+            hasText && (
+              <div className="cg-src">
+                <details className="cg-src-detail">
+                  <summary>読み込んだ入力・制約を見る・直す</summary>
+                  {fields}
+                </details>
+                {!showGuide && (
+                  <button
+                    type="button"
+                    className="linklike cg-reload"
+                    onClick={() => {
+                      setGuide(true);
+                      setNotice("");
+                    }}
+                  >
+                    ほかの問題文を読み込む
+                  </button>
+                )}
+              </div>
+            )
+          )}
 
           {spec && (
             <SpecView
@@ -545,41 +732,46 @@ export function CaseGenerator({ lang, code, problem, onUseInput }: Props) {
             />
           )}
 
-          <div className="cg-actions">
-            <button type="button" className="run-btn cg-make" onClick={() => generate(salt)} disabled={!spec || !!gen || running}>
-              ケースを作る
-            </button>
-            <button type="button" className="run-btn" onClick={() => void runAll()} disabled={!!gen || (!running && runnable === 0)}>
-              {running ? "中断" : "まとめて実行 ▶"}
-            </button>
-            {rows.length > 0 && !gen && !running && (
-              <button type="button" className="linklike" onClick={() => generate(salt + 1)}>
-                乱数を変えて作り直す
+          {/* 入力・制約がまだ無いうちは、案内だけを見せる(押せないボタンを並べない) */}
+          {(hasText || rows.length > 0) && (
+            <>
+            <div className="cg-actions">
+              <button type="button" className="run-btn cg-make" onClick={() => generate(salt)} disabled={!spec || !!gen || running}>
+                ケースを作る
               </button>
-            )}
-            {gen && (
-              <span className="sync-note">
-                <span className="sync-spinner" aria-hidden="true" />
-                ケースを作っています({gen.done}/{gen.total})
-                <button type="button" className="linklike" onClick={stopGenerate}>
-                  中断
+              <button type="button" className="run-btn" onClick={() => void runAll()} disabled={!!gen || (!running && runnable === 0)}>
+                {running ? "中断" : "まとめて実行 ▶"}
+              </button>
+              {rows.length > 0 && !gen && !running && (
+                <button type="button" className="linklike" onClick={() => generate(salt + 1)}>
+                  乱数を変えて作り直す
                 </button>
-              </span>
-            )}
-            {running && runAt >= 0 && (
-              <span className="sync-note">
-                <span className="sync-spinner" aria-hidden="true" />
-                {runAt + 1}/{runnable} 件目を実行中
-              </span>
-            )}
-          </div>
-          <p className="muted cg-backend">
-            {useCE
-              ? `Compiler Explorer(${GODBOLT_LANGS[lang.key].version})で実行します。時間はプログラムの実行時間で、AtCoder とは環境が違うので目安です(20秒で打ち切り)。`
-              : "Wandbox で実行します。時間は応答までの秒数で、コンパイルと通信を含みます(入力はコードと合わせて約1MBまで)。"}
-            答えが正しいかは確かめません。異常終了・時間切れ・おかしな出力(オーバーフローした負の数など)を見つけるのに使ってください。
-          </p>
-          {stale && <p className="cg-stale">入力・制約・範囲が変わりました。「ケースを作る」で作り直してください。</p>}
+              )}
+              {gen && (
+                <span className="sync-note">
+                  <span className="sync-spinner" aria-hidden="true" />
+                  ケースを作っています({gen.done}/{gen.total})
+                  <button type="button" className="linklike" onClick={stopGenerate}>
+                    中断
+                  </button>
+                </span>
+              )}
+              {running && runAt >= 0 && (
+                <span className="sync-note">
+                  <span className="sync-spinner" aria-hidden="true" />
+                  {runAt + 1}/{runnable} 件目を実行中
+                </span>
+              )}
+            </div>
+            <p className="muted cg-backend">
+              {useCE
+                ? `Compiler Explorer(${GODBOLT_LANGS[lang.key].version})で実行します。時間はプログラムの実行時間で、AtCoder とは環境が違うので目安です(20秒で打ち切り)。`
+                : "Wandbox で実行します。時間は応答までの秒数で、コンパイルと通信を含みます(入力はコードと合わせて約1MBまで)。"}
+              答えが正しいかは確かめません。異常終了・時間切れ・おかしな出力(オーバーフローした負の数など)を見つけるのに使ってください。
+            </p>
+            {stale && <p className="cg-stale">入力・制約・範囲が変わりました。「ケースを作る」で作り直してください。</p>}
+            </>
+          )}
           {genErrors.length > 0 && (
             <ul className="cg-warn">
               {genErrors.map((e, i) => (

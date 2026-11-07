@@ -1,3 +1,5 @@
+// ルーターより先に、開いたときの URL を取っておく
+import "./lib/boot";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { HashRouter } from "react-router-dom";

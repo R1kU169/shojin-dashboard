@@ -31,13 +31,9 @@ function blockText(root: Node): string {
   return out;
 }
 
-/** KaTeX の数式を含む HTML なら、数式を TeX に戻した文字列を返す。含まなければ null */
-export function katexHtmlToText(html: string): string | null {
-  if (!html.includes("application/x-tex")) return null;
-  const doc = new DOMParser().parseFromString(html, "text/html");
-  const nodes = [...doc.querySelectorAll(".katex")];
-  if (nodes.length === 0) return null;
-  for (const k of nodes) {
+/** 数式(KaTeX)を元の TeX に置き換えてから、行を保った文字列にする */
+function toText(doc: Document): string {
+  for (const k of doc.querySelectorAll(".katex")) {
     const tex = k.querySelector('annotation[encoding="application/x-tex"]')?.textContent;
     if (tex != null) k.replaceWith(doc.createTextNode(tex));
   }
@@ -47,4 +43,21 @@ export function katexHtmlToText(html: string): string | null {
     .join("\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
+}
+
+/** KaTeX の数式を含む HTML なら、数式を TeX に戻した文字列を返す。含まなければ null */
+export function katexHtmlToText(html: string): string | null {
+  if (!html.includes("application/x-tex")) return null;
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  if (!doc.querySelector(".katex")) return null;
+  return toText(doc);
+}
+
+/**
+ * 問題文の HTML を、見出しや箇条書きを1行ずつにした文字列にする。数式は TeX で返す。
+ * ページ全体をコピーしたもの(数式は KaTeX)にも、ブックマークレットが送るもの・サーバーの HTML
+ * (<var> の中が TeX のまま)にも使う。
+ */
+export function statementHtmlToText(html: string): string {
+  return toText(new DOMParser().parseFromString(html, "text/html"));
 }
