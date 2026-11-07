@@ -22,11 +22,12 @@ function decodeKatexCopy(s: string): string {
   // 否定(≠ など)は斜線の文字と = に割れる。前後の改行ごと1文字に戻す(その前の添字の区切りは残す)
   s = s.replace(/\n?\ue020\n?=/g, "≠");
   // 添字: 「本体 空白 改行 添字 改行 ゼロ幅空白 改行 空白」。入れ子の添字もあるので2回かける
+  // 本体の長さは 64 文字までにする(\S+ のままだと、空白の無い長い行で読み直しが文字数の2乗になり、ページが固まる)
   for (let k = 0; k < 2; k++) {
-    s = s.replace(/(\S+) \n([^\n]+)\n\u200b\n ?/g, "$1_{$2}");
+    s = s.replace(/(\S{1,64}) \n([^\n]{1,64})\n\u200b\n ?/g, "$1_{$2}");
   }
   // 累乗: 「本体 空白 改行 指数 改行 空白」。空白で終わらないものは元の空白区切り(N M など)
-  s = s.replace(/(\S+) \n(\S+)\n /g, "$1^{$2}");
+  s = s.replace(/(\S{1,64}) \n(\S{1,64})\n /g, "$1^{$2}");
   // 残った「空白 改行」は元の空白
   s = s.replace(/ \n/g, " ");
   return s.replace(/\u200b/g, "");
@@ -126,8 +127,10 @@ export function normalizeText(raw: string): string {
     .replace(/\\gt(?![a-zA-Z])/g, ">")
     .replace(/\\(?:neq|ne)(?![a-zA-Z])/g, "≠")
     .replace(/\\(?:times|cdot)(?![a-zA-Z])/g, "×")
-    .replace(/\\vdots(?![a-zA-Z])/g, "⋮")
-    .replace(/\\(?:ldots|cdots|dots)(?![a-zA-Z])/g, "…")
+    // 隣り合う数式(<var>a_{1,1}</var><var>\ldots</var><var>a_{1,W}</var>)をつなぐと「\ldotsa_{1,W}」になる。
+    // 省略の記号は後ろに英字が続いても読む(グリッドの1行は空白なしでつながっているので、空白は足さない)
+    .replace(/\\vdots/g, "⋮")
+    .replace(/\\(?:ldots|cdots|dots[bcmio]?)/g, "…")
     .replace(/\\in(?![a-zA-Z])/g, "∈")
     .replace(/\\(?:lbrace|\{)/g, "{")
     .replace(/\\(?:rbrace|\})/g, "}")

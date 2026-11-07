@@ -31,3 +31,14 @@ test("グリッド: 行の数と1行の長さ", () => {
   assert.deepEqual(m["|S|"], [null, 2000n]);
   assert.deepEqual(m["|S_i|"]?.[1], 2000n);
 });
+
+test("変数を引く・変数で割る上限は決めない(上限を入れると小さく出すぎる)", () => {
+  const m = map("N K\nA_1 A_2 \\ldots A_{N-K+1}", "1 \\le K \\le N \\le 2 \\times 10^5\n1 \\le L \\le N - K");
+  assert.equal(m["|A|"], undefined, "A_1 … A_{N-K+1} の長さ");
+  assert.equal(m.L, undefined, "L ≤ N - K");
+  assert.deepEqual(m.N, [1n, 200000n]);
+  // 定数を引くのはよい
+  const m2 = map("N\nA_1 \\ldots A_{N-1}", "2 \\le N \\le 10^5\n1 \\le M \\le \\min(10^5, N(N-1)/2)");
+  assert.deepEqual(m2["|A|"], [null, 99999n]);
+  assert.deepEqual(m2.M, [1n, 100000n]);
+});

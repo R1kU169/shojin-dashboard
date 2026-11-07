@@ -3244,7 +3244,10 @@ button.member-card {
   gap: 7px;
   font-variant-numeric: tabular-nums;
 }
-/* レートの下に小さく「緑まで 1,012」(次のコンテストで次の色に上がるのに必要なパフォ) */
+/* レートの下に小さく「緑まで 1,012」(次のコンテストで次の色に上がるのに必要なパフォ)。スマホ幅では「↑1,012」 */
+.rank-table .rank-next .narrow-only {
+  font-size: inherit;
+}
 .rank-next {
   display: block;
   margin-top: 2px;
@@ -3380,6 +3383,9 @@ button.member-card {
 /* 目安の一言(目安の行の下) */
 .re-guide-sub {
   color: var(--ink-2);
+}
+.re-nowrap {
+  white-space: nowrap;
 }
 /* 入れたパフォの目安: 最近の ABC の A〜G を解ける確率の小さな棒 */
 .re-guide {

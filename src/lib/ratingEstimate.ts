@@ -20,7 +20,7 @@ export const ABC_PERF_CAP = 2400;
 export const ABC_RATED_BELOW = 2000;
 
 /** 二分探索の範囲。大きな ABC の最下位は -600〜-900 になることがあるので、下は広く取る */
-const PERF_MIN = -4000;
+export const PERF_MIN = -4000;
 const PERF_MAX = 6000;
 
 const correction = (n: number) => ((Math.sqrt(1 - 0.81 ** n) / (1 - 0.9 ** n) - 1) / (Math.sqrt(19) - 1)) * 1200;

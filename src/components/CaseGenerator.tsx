@@ -73,8 +73,13 @@ function classify(r: RunOutcome, wallMs: number, compiled: boolean): CaseResult 
     stdoutLen: r.stdout.length,
     stderr: head(r.stderr, 2000),
   };
-  // Compiler Explorer はビルドに失敗すると標準エラーに「Build failed」を入れて返すので、buildFailed で見る
-  if (!compiled && (r.buildFailed || (r.compilerError && !isWarningOnly(r) && r.stdout === "" && r.stderr === "" && r.status !== "0"))) {
+  // Compiler Explorer はビルドに失敗すると buildFailed を返すので、それだけで見る(警告が出ていて、出力なしで
+  // 0 以外で終わったプログラムをコンパイルエラーにしない)。Wandbox はコンパイラの出力と終了コードから推す
+  const ce =
+    r.backend === "godbolt"
+      ? !!r.buildFailed
+      : !!r.buildFailed || (!!r.compilerError && !isWarningOnly(r) && r.stdout === "" && r.stderr === "" && r.status !== "0");
+  if (!compiled && ce) {
     return { ...base, status: "ce", compiler: head(r.compilerError, 4000) };
   }
   // 出力が上限を超えると、Wandbox は途中で切って終了コードを返さず、Compiler Explorer はプログラムを止める
@@ -788,7 +793,8 @@ export function CaseGenerator({ lang, code, problem, onUseInput, importTick, imp
                     type="checkbox"
                     checked={selected === rows.length}
                     onChange={(e) => setRows((rs) => rs.map((r) => ({ ...r, selected: e.target.checked })))}
-                    disabled={running}
+                    // 作っている途中に外すと、あとから増えたケースだけ選ばれたままになるので、作り終わるまで触らせない
+                    disabled={running || !!gen}
                   />
                   すべて選ぶ({selected}/{rows.length})
                 </label>
@@ -801,7 +807,7 @@ export function CaseGenerator({ lang, code, problem, onUseInput, importTick, imp
                   <CaseItem
                     key={r.id}
                     row={r}
-                    disabled={running}
+                    disabled={running || !!gen}
                     onSelect={(v) => setRows((rs) => rs.map((x) => (x.id === r.id ? { ...x, selected: v } : x)))}
                     onUse={() => onUseInput(r.input)}
                   />

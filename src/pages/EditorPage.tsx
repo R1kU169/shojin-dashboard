@@ -13,7 +13,7 @@ import { readStore, removeStore, writeStore } from "../lib/storage";
 import type { LinkedProblem } from "../lib/types";
 import { BOOT_HASH } from "../lib/boot";
 import { applyImport, loadImported, loadProblem, PROBLEM_KEY, saveProblem } from "../lib/editorStore";
-import { decodeImport, taskLetter } from "../lib/importPayload";
+import { MAX_TASKS, readImport, taskLetter } from "../lib/importPayload";
 
 const CODE_KEY = (lang: string) => `shojin:editor:code:${lang}`;
 const STDIN_KEY = "shojin:editor:stdin";
@@ -155,12 +155,19 @@ export function EditorPage() {
     if (imp !== null) {
       // 履歴に問題文を残さない
       setParams({}, { replace: true });
-      const payload = decodeImport(imp);
-      if (!payload) {
-        setImportNotice("取り込めませんでした(届いたデータが壊れています)。AtCoder の問題ページでもう一度ボタンを押してください。");
+      const read = readImport(imp);
+      if ("error" in read) {
+        setImportNotice(
+          read.error === "too-many"
+            ? `問題が多すぎて取り込めませんでした(${MAX_TASKS} 問まで)。問題ページで1問ずつボタンを押してください。`
+            : read.error === "too-large"
+              ? "問題文が長すぎて取り込めませんでした。問題ページで1問ずつボタンを押すか、問題ページを貼り付けてください。"
+              : "取り込めませんでした(届いたデータが壊れています)。AtCoder の問題ページでもう一度ボタンを押してください。",
+        );
         setImportTick((t) => t + 1);
         return;
       }
+      const payload = read.payload;
       const r = applyImport(payload, loadProblem());
       setProblem(r.problem);
       setImported(loadImported());

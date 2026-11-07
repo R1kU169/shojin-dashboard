@@ -7,7 +7,7 @@
 // 前回のスナップショットが public/snapshot/ に残っていれば、各部員は watermark 以降だけを
 // 取得して差分マージする(CIでは actions/cache で前回分を復元する)。
 // Node の fetch は gzip を送るので kenkoooo の gzip 必須制限(未対応は403)を通る。
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -28,8 +28,11 @@ const LIMIT = Number(process.env.SNAPSHOT_LIMIT) || MEMBERS.length;
 const OUT = fileURLToPath(new URL("../public/snapshot/", import.meta.url));
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+// 応答が止まったときに1件で数分待たないよう、打ち切る(問題一覧は数MBあるので長めに取る)
+const FETCH_TIMEOUT_MS = 90_000;
+
 async function getJson(url) {
-  const res = await fetch(url, { headers: { "User-Agent": UA } });
+  const res = await fetch(url, { headers: { "User-Agent": UA }, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
   if (!res.ok) throw new Error(`HTTP ${res.status}: ${url}`);
   return res.json();
 }
@@ -72,16 +75,20 @@ async function main() {
   await mkdir(path.join(OUT, "subs"), { recursive: true });
 
   console.log("[snapshot] problems.json / problem-models.json を取得中…");
-  // 利用規約の間隔(1秒以上)を守るため、並べずに順に取る
-  const problems = await getJson(`${BASE}/resources/problems.json`);
-  await sleep(PAGE_INTERVAL_MS);
-  const models = await getJson(`${BASE}/resources/problem-models.json`);
-  await sleep(PAGE_INTERVAL_MS);
-  await writeFile(path.join(OUT, "problems.json"), JSON.stringify(problems));
-  await writeFile(path.join(OUT, "problem-models.json"), JSON.stringify(models));
-  console.log(
-    `[snapshot] problems=${problems.length} models=${Object.keys(models).length}`,
-  );
+  // 利用規約の間隔(1秒以上)を守るため、並べずに順に取る。
+  // kenkoooo が落ちていても、前回の分(actions/cache で戻したもの)があればそれで続ける。
+  // ここで止めると、コードの変更も、atcoder.jp から取る公式成績(土日の夜の更新)もデプロイされなくなる
+  for (const file of ["problems.json", "problem-models.json"]) {
+    try {
+      const data = await getJson(`${BASE}/resources/${file}`);
+      await writeFile(path.join(OUT, file), JSON.stringify(data));
+      console.log(`[snapshot] ${file}: ${Array.isArray(data) ? data.length : Object.keys(data).length}件`);
+    } catch (e) {
+      if (!existsSync(path.join(OUT, file))) throw e;
+      console.warn(`[snapshot] ${file} の取得失敗、前回分で代用 (${e})`);
+    }
+    await sleep(PAGE_INTERVAL_MS);
+  }
 
   // コンテストタブ用: コンテストの開始・長さと問題セット。取れなければ前回の contests.json で代用する
   let kContests = null;
@@ -136,6 +143,15 @@ async function main() {
     );
     index.members.push({ id: m.id, ok: true, count: list.length });
     await sleep(MEMBER_INTERVAL_MS);
+  }
+  // 部員から外れた人の提出は消す(actions/cache で前回の public/snapshot を戻すので、消さないと公開され続ける)。
+  // SNAPSHOT_LIMIT で一部だけ取るときも、MEMBERS 全体と比べる
+  const current = new Set(MEMBERS.map((m) => `${m.id.toLowerCase()}.json`));
+  for (const f of await readdir(path.join(OUT, "subs"))) {
+    if (f.endsWith(".json") && !current.has(f)) {
+      await rm(path.join(OUT, "subs", f));
+      console.log(`[snapshot] 部員でなくなった ${f} を消しました`);
+    }
   }
 
   // 公式レーティング(プロフィールのユーザー名の色)を取得し ratings.json に書き出す。

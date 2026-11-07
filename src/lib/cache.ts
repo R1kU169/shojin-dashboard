@@ -28,7 +28,9 @@ import type {
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 // スナップショットは6時間ごとに作り直すので、レートは1時間で読み直す(土曜の ABC の結果を翌日まで待たせない)
-const RATING_TTL_MS = 60 * 60 * 1000;
+// 公式レーティングの表。土日の夜はコンテストの直後に作り直すので、コンテストの一覧と同じく短めにする
+// (スナップショットは no-cache で読むので、変わっていなければ中身は送られてこない)
+const RATING_TTL_MS = 10 * 60 * 1000;
 const SUBS_FRESH_MS = 10 * 60 * 1000; // 10分以内の再訪はAPIを叩かない
 // コンテストの一覧と公式成績。土日の夜はコンテストの直後に15分おきに作り直すので、短い間隔で読み直す
 // (小さいファイルで、スナップショットは no-cache で読むので変わっていなければ中身は送られてこない)
@@ -152,20 +154,15 @@ const ratingsMap = () =>
  * 無ければ(部員以外・snapshot未生成)devのみ atcoder.jp へフォールバックする。
  * 取得できない時は例外を投げる(呼び出し側で .catch(() => null) して中立色にする)。
  */
-export const getRating = (user: string): Promise<number> =>
-  cachedResource<number>(
-    `res:rating:${user.toLowerCase()}`,
-    async () => {
-      const key = user.toLowerCase();
-      const map = await ratingsMap().catch(
-        () => ({}) as Record<string, number>,
-      );
-      if (map[key] != null) return map[key];
-      if (!CAN_FETCH_ATCODER) throw new RatingUnavailable(user);
-      return fetchAtcoderRating(user);
-    },
-    RATING_TTL_MS,
-  );
+export const getRating = async (user: string): Promise<number> => {
+  // 部員は表(ratings.json のキャッシュ)から毎回引く。人ごとにもう一段キャッシュすると、
+  // 表を読み直したあとも古いレートが残り、同じ画面のレートと「次の色まで」が食い違う
+  const key = user.toLowerCase();
+  const map = await ratingsMap().catch(() => ({}) as Record<string, number>);
+  if (map[key] != null) return map[key];
+  if (!CAN_FETCH_ATCODER) throw new RatingUnavailable(user);
+  return cachedResource<number>(`res:rating:${key}`, () => fetchAtcoderRating(user), RATING_TTL_MS);
+};
 
 // 公式レーティング推移。snapshot(rating-history.json)を土台に、無ければatcoder.jpへ。
 const ratingHistories = () =>
@@ -183,20 +180,14 @@ const ratingHistories = () =>
 export const getRatingHistories = (): Promise<Record<string, RatePoint[]>> => ratingHistories();
 
 /** ユーザーの公式レーティング推移(時系列)。取得不可時は例外(呼び出し側で .catch)。 */
-export const getRatingHistory = (user: string): Promise<RatePoint[]> =>
-  cachedResource<RatePoint[]>(
-    `res:rhist:${user.toLowerCase()}`,
-    async () => {
-      const key = user.toLowerCase();
-      const map = await ratingHistories().catch(
-        () => ({}) as Record<string, RatePoint[]>,
-      );
-      if (map[key]) return map[key];
-      if (!CAN_FETCH_ATCODER) throw new RatingUnavailable(user);
-      return fetchRatingHistory(user);
-    },
-    RATING_TTL_MS,
-  );
+export const getRatingHistory = async (user: string): Promise<RatePoint[]> => {
+  // getRating と同じく、部員は表から毎回引く(人ごとのキャッシュを重ねない)
+  const key = user.toLowerCase();
+  const map = await ratingHistories().catch(() => ({}) as Record<string, RatePoint[]>);
+  if (map[key]) return map[key];
+  if (!CAN_FETCH_ATCODER) throw new RatingUnavailable(user);
+  return cachedResource<RatePoint[]>(`res:rhist:${key}`, () => fetchRatingHistory(user), RATING_TTL_MS);
+};
 
 // コンテストタブ: 部員が参加したコンテストの一覧(snapshot contests.json)。読めなければ例外(古いキャッシュがあればそれ)
 const contests = () =>

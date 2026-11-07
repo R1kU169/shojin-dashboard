@@ -1,7 +1,7 @@
 // ブックマークレットから届くデータ(#/editor?import=…)の変換と検証
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { decodeImport, encodeImport, fromBase64Url, linkedTitle, MAX_PARAM, taskLetter, toBase64Url } from "../src/lib/importPayload.ts";
+import { decodeImport, encodeImport, fromBase64Url, linkedTitle, MAX_PARAM, readImport, taskLetter, toBase64Url } from "../src/lib/importPayload.ts";
 import type { ImportPayload } from "../src/lib/importPayload.ts";
 import { bookmarkletHref, bookmarkletSource } from "../src/lib/bookmarklet.ts";
 
@@ -33,7 +33,14 @@ test("形のおかしいデータは受け取らない", () => {
   assert.equal(bad({ ...PAYLOAD, tasks: [] }), null);
   assert.equal(bad({ ...PAYLOAD, tasks: [{ ...PAYLOAD.tasks[0], task: "a b" }] }), null);
   assert.equal(bad({ ...PAYLOAD, tasks: [PAYLOAD.tasks[0], PAYLOAD.tasks[0]] }), null);
-  assert.equal(bad({ ...PAYLOAD, tasks: Array.from({ length: 21 }, (_, i) => ({ ...PAYLOAD.tasks[0], task: `t${i}` })) }), null);
+  const many = (n: number) => ({ ...PAYLOAD, tasks: Array.from({ length: n }, (_, i) => ({ ...PAYLOAD.tasks[0], task: `t${i}` })) });
+  assert.equal(bad(many(41)), null);
+  // EDPC の「問題一括表示」(26 問)は取り込める
+  assert.equal(bad(many(26))?.tasks.length, 26);
+  // 取り込めない理由を出し分ける
+  assert.deepEqual(readImport(toBase64Url(JSON.stringify(many(41)))), { error: "too-many" });
+  assert.deepEqual(readImport("a".repeat(MAX_PARAM + 1)), { error: "too-large" });
+  assert.deepEqual(readImport("%%%"), { error: "broken" });
   assert.equal(decodeImport("not-json"), null);
   assert.equal(decodeImport("a".repeat(MAX_PARAM + 1)), null);
   // 一覧にない問題を current にしたら、current は無いことにする

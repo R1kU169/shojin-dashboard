@@ -10,6 +10,8 @@
 //
 // ここを変えたら、登録し直してもらわないと反映されない。形を変えるときは importPayload.ts の v を上げる。
 
+import { MAX_TASKS } from "./importPayload.ts";
+
 const SOURCE = String.raw`(async () => {
   const APP = __APP__;
   const m = location.hostname === "atcoder.jp" && location.pathname.match(/^\/contests\/([^/]+)\/(?:tasks\/([^/]+)|tasks_print)\/?$/);
@@ -50,6 +52,10 @@ const SOURCE = String.raw`(async () => {
     alert("問題文が見つかりませんでした");
     return;
   }
+  if (tasks.length > __MAX__) {
+    alert("問題が多すぎるので(" + __MAX__ + " 問まで)、問題ページで1問ずつ押してください");
+    return;
+  }
   const w = window.open("", "shojin-editor");
   if (!w) {
     alert("ポップアップがブロックされました。atcoder.jp のポップアップを許可してください");
@@ -86,6 +92,7 @@ const SOURCE = String.raw`(async () => {
  */
 export function bookmarkletHref(appUrl: string): string {
   const src = SOURCE.replace("__APP__", JSON.stringify(appUrl))
+    .replaceAll("__MAX__", String(MAX_TASKS))
     .split("\n")
     .map((l) => l.trim())
     .join("\n");

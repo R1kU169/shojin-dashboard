@@ -151,6 +151,14 @@ const minus1 = (e: Expr): Expr => (e.k === "num" ? num(e.v - 1n) : bin("-", e, n
 
 /** 1 ≤ K < N ≤ 2×10^5 のような不等式の連鎖を事実にする。読めなければ false */
 function readChain(s: string, facts: Fact[]): boolean {
+  // (u_i, v_i) ≠ (u_j, v_j): 組が相異なる(多重辺が無い)。「(u_i, v_i) は相異なる」と同じ
+  const pair = /^\(([^()]*)\)\s*≠\s*\(([^()]*)\)$/.exec(s);
+  if (pair) {
+    const bases = basesIn(pair[1]);
+    if (bases.length < 2 || basesIn(pair[2]).join() !== bases.join()) return false;
+    facts.push({ k: "pairDistinct", refs: bases.map(gen) });
+    return true;
+  }
   // a_i ≠ b_i / A_i ≠ 0 / A_i ≠ A_j
   if (s.includes("≠")) {
     const [l, r, ...rest] = s.split("≠").map((x) => x.trim());
@@ -261,13 +269,18 @@ function readChain(s: string, facts: Fact[]): boolean {
 
 /** 「X は …」の主語を変数の並びにする */
 function subjects(s: string): CRef[] | null {
-  const t = s.replace(/\s*はそれぞれ$|\s*は$/, "").replace(/、|\s+と\s+/g, ",");
+  const t = s.replace(/\s*はそれぞれ$|\s*は$/, "").replace(/、|\s*および\s*|\s*及び\s*|\s+と\s+/g, ",");
   return readRefList(t);
 }
 
 function readLine(line: string, facts: Fact[]): boolean {
   // 「タイプ 2 のクエリにおいて、C は英小文字 1 文字」の前置きを落とす
-  const s = line.replace(/[。.]$/, "").replace(/^.*?(?:において|について|では|の場合)[、,]\s*/, "").trim();
+  // 文末の句点は落とすが、「# または .」の「.」は選択肢なので残す(空白・または・と・、の直後の「.」)
+  const s = line
+    .replace(/。$/, "")
+    .replace(/(?<![\s、,]|または|か|と)\.$/, "")
+    .replace(/^.*?(?:において|について|では|の場合)[、,]\s*/, "")
+    .trim();
   if (s === "") return true;
 
   // グラフ
@@ -356,6 +369,8 @@ function readLine(line: string, facts: Fact[]): boolean {
 /** 日本語の前置き(各クエリについて、/ タイプ 1 のクエリにおいて、)を落とし、「、」で分けて不等式として読む */
 function readChainIn(s: string, facts: Fact[]): boolean {
   let t = s.replace(/^.*?(?:において|について|では|の場合)[、,]?\s*/, "");
+  // 「i ≠ j ならば (u_i, v_i) ≠ (u_j, v_j)」の前置き
+  t = t.replace(/^[a-z]\s*≠\s*[a-z]\s*(?:ならば|なら|のとき)[、,]?\s*/, "");
   // (1 ≤ i ≤ N) / (i ≠ j) のような添字の範囲は落とす
   t = t.replace(/\((?=[^()]*[≤<≠])[^()]*\)/g, "").trim();
   if (hasJapanese(t.replace(/、/g, ""))) return false;

@@ -2,7 +2,7 @@
 //
 // 制約の式(M ≤ min(3×10^5, N(N-1)/2)・K ≤ N)は、ほかの変数の上限を入れて数にする。
 // 配列の長さ(|A|)は制約にはふつう書かれないので、入力の形式(A_1 … A_N / N 行の u_i v_i)から決める。
-import { evalExpr } from "./expr.ts";
+import { evalExpr, exprRefs } from "./expr.ts";
 import type { EvalEnv, Expr } from "./expr.ts";
 import { parseConstraints } from "./constraints.ts";
 import type { CRef } from "./constraints.ts";
@@ -17,6 +17,20 @@ export interface NamedBound {
   hi: bigint;
 }
 
+/**
+ * 変数を引く・変数で割る式か(N - K + 1 / N / K)。上限を求めるとき、ほかの変数に上限を入れると小さく出すぎる
+ * (K の上限 N を入れると N - K + 1 が 1 になる)ので、こういう式からは上限を決めない
+ */
+function shrinksByVariable(e: Expr): boolean {
+  if (e.k === "bin") {
+    if ((e.op === "-" || e.op === "/") && exprRefs(e.b).size > 0) return true;
+    return shrinksByVariable(e.a) || shrinksByVariable(e.b);
+  }
+  if (e.k === "neg") return exprRefs(e.a).size > 0;
+  if (e.k === "call") return e.args.some(shrinksByVariable);
+  return false;
+}
+
 const keyOf = (r: CRef) => {
   const core = r.sub ? `${r.base}_${r.sub}` : r.base;
   return r.bars ? `|${core}|` : core;
@@ -29,7 +43,7 @@ export function statementBounds(formatText: string, constraintsText: string): Na
   const push = (m: Map<string, Expr[]>, k: string, e: Expr) => m.set(k, [...(m.get(k) ?? []), e]);
   for (const f of parseConstraints(normalizeText(constraintsText)).facts) {
     if (f.k === "lo") push(los, keyOf(f.ref), f.e);
-    else if (f.k === "hi") push(his, keyOf(f.ref), f.e);
+    else if (f.k === "hi" && !shrinksByVariable(f.e)) push(his, keyOf(f.ref), f.e);
   }
 
   // 式の中の変数には、上限を求めるときは上限を、下限を求めるときは下限を入れる
@@ -79,6 +93,8 @@ export function statementBounds(formatText: string, constraintsText: string): Na
     const fromItems = (items: Item[], rows: Expr | null) => {
       for (const it of items) {
         if (it.k === "list" && it.ref.idx.length === 1) {
+          // A_K … A_N / A_1 … A_{N-K+1} のように変数を引く長さは、上限を入れると小さく出すぎるので決めない
+          if (exprRefs(it.from).size > 0 || shrinksByVariable(it.to)) continue;
           // A_1 A_2 … A_N の長さ。from が 1 でなければ to - from + 1
           const from = evalExpr(it.from, env);
           const to = evalExpr(it.to, env);

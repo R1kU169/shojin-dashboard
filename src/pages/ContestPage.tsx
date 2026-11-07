@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
-import { Link, Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { Link, Navigate, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { RatingCircle } from "../components/RatingCircle";
 import { StatCard } from "../components/StatCard";
 import { MEMBERS } from "../data/members";
@@ -141,6 +141,10 @@ export function ContestPage() {
 function ContestResults({ contest, list, now }: { contest: ClubContest; list: ClubContest[]; now: number }) {
   const { resolved } = useTheme();
   const nav = useNavigate();
+  // コンテストを選び直すとページごと作り直される(App の ErrorBoundary が URL ごと)。
+  // キーボードで選んでいた人が続けて選べるよう、選び直して来たときは選択欄に戻す
+  const location = useLocation();
+  const focusPicker = useRef((location.state as { focus?: string } | null)?.focus === "picker");
   const reduced = useReducedMotion();
   const [params, setParams] = useSearchParams();
   const panelHead = useRef<HTMLHeadingElement>(null);
@@ -238,9 +242,11 @@ function ContestResults({ contest, list, now }: { contest: ClubContest; list: Cl
   const { mode, ranked } = useMemo(() => rankMembers(scored), [scored]);
 
   const inRanking = new Set(ranked.map((r) => r.row.member.id));
-  // 提出をまだ読めていない人(参加したかどうか分からない)は表の後ろに状態だけ出す
-  const waiting = scored.filter((s) => !inRanking.has(s.row.member.id) && s.row.status !== "done");
-  const absent = scored.filter((s) => !inRanking.has(s.row.member.id) && s.row.status === "done");
+  // 提出をまだ読めていない人・手元のデータが古くて最新の提出を確認している人(参加したかどうか分からない)は、
+  // 表の後ろに状態だけ出す。「参加していない」に入れると、確認中なのに「参加した部員はいません」と出てしまう
+  const pending = (s: (typeof scored)[number]) => s.row.status !== "done" || !!s.row.refreshing;
+  const waiting = scored.filter((s) => !inRanking.has(s.row.member.id) && pending(s));
+  const absent = scored.filter((s) => !inRanking.has(s.row.member.id) && !pending(s));
   const loadedCount = rows.filter((r) => r.status === "done").length;
   const refreshingCount = rows.filter((r) => r.refreshing).length;
   const staleCount = rows.filter((r) => r.stale).length;
@@ -311,7 +317,16 @@ function ContestResults({ contest, list, now }: { contest: ClubContest; list: Cl
         </div>
         <label className="editor-lang cr-pick">
           コンテスト
-          <select value={contest.id} onChange={(e) => nav(`/contest/${e.target.value}`)}>
+          <select
+            value={contest.id}
+            onChange={(e) => nav(`/contest/${e.target.value}`, { state: { focus: "picker" } })}
+            ref={(el) => {
+              // 1回だけ(あとで別の所を押したときに選択欄へ引き戻さない)
+              if (!el || !focusPicker.current) return;
+              focusPicker.current = false;
+              el.focus();
+            }}
+          >
             {[...years].map(([y, cs]) => (
               <optgroup key={y} label={`${y}年`}>
                 {cs.map((c) => (
@@ -420,7 +435,8 @@ function ContestResults({ contest, list, now }: { contest: ClubContest; list: Cl
               </thead>
               <tbody>
                 {ranked.map((r) => {
-                  const medal = r.rank <= 3 && (r.official != null || r.score.score > 0);
+                  // 0 点の人にはメダルを付けない(登録だけして提出しなかった人も公式の順位は付く)
+                  const medal = r.rank <= 3 && r.score.score > 0;
                   return (
                     <tr key={r.row.member.id} className={r.rank === 1 ? "first-place" : undefined}>
                       <td className="cr-member">
@@ -438,7 +454,12 @@ function ContestResults({ contest, list, now }: { contest: ClubContest; list: Cl
                             {r.score.score > 0 && <span className="cr-time">{elapsedStr(r.score.time)}</span>}
                           </>
                         ) : (
-                          <span className="muted" title="提出をまだ読み込めていません">—</span>
+                          <span
+                            className="muted"
+                            title={r.row.status === "done" && !r.row.refreshing ? "時間内の提出はありません" : "提出をまだ読み込めていません"}
+                          >
+                            —
+                          </span>
                         )}
                       </td>
                       {r.score.cells.map((c) => (

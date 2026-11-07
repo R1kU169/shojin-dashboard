@@ -9,6 +9,7 @@ import {
   limitRating,
   nextRating,
   nextTierFloor,
+  PERF_MIN,
   perfToFallBelow,
   perfToReach,
   perfToRise,
@@ -47,9 +48,15 @@ export function RatingEstimator({ history, models }: { history: RatePoint[]; mod
     table && perf !== null ? (
       <span className="re-sub re-guide-sub">
         ABC の目安:{" "}
-        {groupChances(solveChances(table, perf))
-          .map((g) => `${g.short} ${g.letters.join("・")}`)
-          .join(" / ")}
+        {/* 区分ごとに折り返さない(狭い幅で「たまに」と「D」が別の行に分かれないように) */}
+        {groupChances(solveChances(table, perf)).map((g, i) => (
+          <span key={g.label}>
+            {i > 0 && " / "}
+            <span className="re-nowrap">
+              {g.short} {g.letters.join("・")}
+            </span>
+          </span>
+        ))}
       </span>
     ) : null;
 
@@ -159,7 +166,9 @@ export function RatingEstimator({ history, models }: { history: RatePoint[]; mod
                 return (
                   <li key={k}>
                     <span className="muted">{k === 1 ? "次の1回で" : `${k}回続けて`}</span>
-                    <strong>{p === null ? "届きません" : `パフォ ${fmt(p)} 以上`}</strong>
+                    <strong>
+                      {p === null ? "届きません" : p <= PERF_MIN ? "どのパフォでも届きます" : `パフォ ${fmt(p)} 以上`}
+                    </strong>
                   </li>
                 );
               })}
@@ -244,7 +253,9 @@ function PerfGuide({ table, perf }: { table: AbcTable; perf: number }) {
   const chances = solveChances(table, perf);
   return (
     <div className="re-guide">
-      <p className="re-guide-say">パフォ {fmt(perf)} の実力の目安(最近の ABC)</p>
+      <p className="re-guide-say">
+        パフォ {fmt(perf)} の実力の目安<span className="re-nowrap">(最近の ABC)</span>
+      </p>
       <dl className="re-groups">
         {groupChances(chances).map((g) => (
           <div key={g.label} className="re-group">

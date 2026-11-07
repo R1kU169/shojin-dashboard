@@ -240,3 +240,25 @@ test("「a 以上 b 以下」の値に空白があっても式全体を読む(�
   assert.equal(spec.slots.get("Q")?.hull.hi, 200000n);
   assert.equal(exprToString(spec.slots.get("K")!.hi[0]), "min(Q, 10)");
 });
+
+test("問題ページから取り込んだ文の読み違い(点検で見つけたもの)", () => {
+  // 隣り合う数式をつなぐと「\ldotsa」になる(EDPC H のグリッド)
+  assert.equal(normalizeText("a_{1, 1}\\ldotsa_{1, W}"), "a_{1, 1}…a_{1, W}");
+  // 「# または .」の「.」は選択肢
+  const grid = buildSpec("H W\nA_{1,1}A_{1,2}\\ldots A_{1,W}\n\\vdots\nA_{H,1}A_{H,2}\\ldots A_{H,W}", "1 \\le H, W \\le 10\nA_{i,j} は # または .");
+  assert.deepEqual([...grid.slots.values()].find((s) => s.name === "A")?.charset, ["#", "."]);
+  // 「s および t は」
+  const lcs = buildSpec("s\nt", "s および t は英小文字からなる文字列\n1 \\le |s|, |t| \\le 3000");
+  assert.equal(lcs.slots.get("s")?.type, "str");
+  assert.equal(lcs.slots.get("t")?.type, "str");
+  // (u_i, v_i) ≠ (u_j, v_j) は組が相異なる(多重辺を作らない)
+  for (const extra of ["(u_i, v_i) \\neq (u_j, v_j) (i \\neq j)", "i \\neq j ならば (u_i, v_i) \\neq (u_j, v_j)"]) {
+    const g = buildSpec("N M\nu_1 v_1\n\\vdots\nu_M v_M", `2 \\le N \\le 300\n1 \\le M \\le 2 \\times 10^4\n1 \\le u_i < v_i \\le N\n${extra}`);
+    assert.deepEqual(g.unread, [], extra);
+    assert.ok(g.graph, extra);
+  }
+  // 空白の無い長い行でも固まらない(KaTeX のコピーの読み直しが2乗にならない)
+  const t0 = performance.now();
+  normalizeText("N\n" + "a".repeat(90000) + "​");
+  assert.ok(performance.now() - t0 < 2000);
+});

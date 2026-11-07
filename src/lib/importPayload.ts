@@ -23,7 +23,8 @@ export interface ImportPayload {
 }
 
 const ID = /^[A-Za-z0-9_-]{1,64}$/;
-const MAX_TASKS = 20;
+/** 1回で取り込める問題の数(EDPC の「問題一括表示」は 26 問) */
+export const MAX_TASKS = 40;
 const MAX_TITLE = 200;
 const MAX_HTML = 100_000;
 /** URL の import= の長さの上限(base64 で 300KB ≒ 元の 225KB) */
@@ -51,28 +52,44 @@ export function encodeImport(p: ImportPayload): string {
   return toBase64Url(JSON.stringify(p));
 }
 
+/** 取り込めなかった理由(画面に出し分ける) */
+export type ImportError = "too-large" | "too-many" | "broken";
+
 /** URL の import= の値を読む。形がおかしければ null */
 export function decodeImport(param: string): ImportPayload | null {
-  if (param.length === 0 || param.length > MAX_PARAM) return null;
+  const r = readImport(param);
+  return "error" in r ? null : r.payload;
+}
+
+/** URL の import= の値を読む。取り込めなければ理由 */
+export function readImport(param: string): { payload: ImportPayload } | { error: ImportError } {
+  if (param.length > MAX_PARAM) return { error: "too-large" };
+  const p = parsePayload(param);
+  return typeof p === "string" ? { error: p } : { payload: p };
+}
+
+function parsePayload(param: string): ImportPayload | ImportError {
+  if (param.length === 0) return "broken";
   const json = fromBase64Url(param);
-  if (json === null) return null;
+  if (json === null) return "broken";
   let j: unknown;
   try {
     j = JSON.parse(json);
   } catch {
-    return null;
+    return "broken";
   }
-  if (typeof j !== "object" || j === null) return null;
+  if (typeof j !== "object" || j === null) return "broken";
   const o = j as Record<string, unknown>;
-  if (o.v !== 1 || typeof o.contest !== "string" || !ID.test(o.contest)) return null;
-  if (!Array.isArray(o.tasks) || o.tasks.length === 0 || o.tasks.length > MAX_TASKS) return null;
+  if (o.v !== 1 || typeof o.contest !== "string" || !ID.test(o.contest)) return "broken";
+  if (!Array.isArray(o.tasks) || o.tasks.length === 0) return "broken";
+  if (o.tasks.length > MAX_TASKS) return "too-many";
   const tasks: ImportTask[] = [];
   const seen = new Set<string>();
   for (const t of o.tasks as unknown[]) {
-    if (typeof t !== "object" || t === null) return null;
+    if (typeof t !== "object" || t === null) return "broken";
     const r = t as Record<string, unknown>;
-    if (typeof r.task !== "string" || !ID.test(r.task) || seen.has(r.task)) return null;
-    if (typeof r.html !== "string" || r.html.length > MAX_HTML) return null;
+    if (typeof r.task !== "string" || !ID.test(r.task) || seen.has(r.task)) return "broken";
+    if (typeof r.html !== "string" || r.html.length > MAX_HTML) return "broken";
     const title = typeof r.title === "string" ? r.title.trim().slice(0, MAX_TITLE) : "";
     seen.add(r.task);
     tasks.push({ task: r.task, title, html: r.html });

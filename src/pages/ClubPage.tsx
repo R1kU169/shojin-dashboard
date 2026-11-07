@@ -480,7 +480,10 @@ export function ClubPage() {
                           style={{ color: TIER_COLORS[resolved][tierIndex(r.next.floor)] }}
                           title={`次のコンテストでパフォ ${r.next.perf.toLocaleString("en-US")} 以上なら${TIER_LABELS[tierIndex(r.next.floor)]}(${r.next.floor})に上がります`}
                         >
-                          {TIER_LABELS[tierIndex(r.next.floor)]}まで {r.next.perf.toLocaleString("en-US")}
+                          {/* スマホ幅では列が広がって表がはみ出すので、記号と数だけにする(色で次の色を示す) */}
+                          <span className="wide-only">{TIER_LABELS[tierIndex(r.next.floor)]}まで </span>
+                          <span className="narrow-only">↑</span>
+                          {r.next.perf.toLocaleString("en-US")}
                         </span>
                       )}
                     </td>
