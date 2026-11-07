@@ -46,6 +46,8 @@ test("問題名と記号", () => {
   assert.equal(linkedTitle("ふつうの名前"), "ふつうの名前");
   assert.equal(taskLetter({ task: "abc481_c", title: "C. Bank Accounts" }), "C");
   assert.equal(taskLetter({ task: "abc001_1", title: "" }), "1");
+  assert.equal(taskLetter({ task: "abc300_h", title: "Ex. Fibonacci" }), "Ex");
+  assert.equal(taskLetter({ task: "abc481_a", title: "" }), "A");
 });
 
 test("ブックマークレットは JavaScript として読め、ボードの URL を埋め込む", () => {

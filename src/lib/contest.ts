@@ -32,7 +32,7 @@ export function shortContestName(id: string): string {
 }
 
 /** 問題記号の並び: 短いほうが先、同じ長さは辞書順(A..H のあとに Ex) */
-function compareIndex(a: string, b: string): number {
+export function compareIndex(a: string, b: string): number {
   return a.length - b.length || (a < b ? -1 : a > b ? 1 : 0);
 }
 

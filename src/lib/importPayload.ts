@@ -87,8 +87,8 @@ export function linkedTitle(title: string): string {
   return m ? `${m[1]}. ${m[2]}` : title;
 }
 
-/** 問題の記号(「C - Bank Accounts」→「C」)。読めなければ問題IDの末尾 */
+/** 問題の記号(「C - Bank Accounts」→「C」、「Ex. …」→「Ex」)。読めなければ問題IDの末尾を大文字で */
 export function taskLetter(t: { task: string; title: string }): string {
   const m = t.title.match(/^([A-Za-z0-9]{1,4})\s*[-.]\s/);
-  return m ? m[1].toUpperCase() : (t.task.split("_").pop() ?? t.task).toUpperCase();
+  return m ? m[1] : (t.task.split("_").pop() ?? t.task).toUpperCase();
 }

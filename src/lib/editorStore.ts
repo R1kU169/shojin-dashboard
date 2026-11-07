@@ -2,8 +2,9 @@
 // 共有するもの: 連携中の問題・問題ごとの「入力」「制約」・取り込んだ問題の一覧。
 import { splitStatement } from "./casegen";
 import type { Overrides } from "./casegen";
+import { compareIndex } from "./contest";
 import type { ImportPayload } from "./importPayload";
-import { linkedTitle } from "./importPayload";
+import { linkedTitle, taskLetter } from "./importPayload";
 import { statementHtmlToText } from "./katexPaste";
 import { readStore, writeStore } from "./storage";
 import type { LinkedProblem } from "./types";
@@ -96,13 +97,14 @@ export function loadImported(): ImportedContest[] {
 function rememberImported(contest: string, tasks: { task: string; title: string }[]): void {
   const list = loadImported();
   const prev = list.find((c) => c.contest === contest);
-  // 問題ページで1問ずつ押したときも、同じコンテストの問題は1つの一覧にまとめる(記号の順に並べる)
+  // 問題ページで1問ずつ押したときも、同じコンテストの問題は1つの一覧にまとめる
+  // (記号の順。コンテストタブと同じく、短い記号が先で Ex は H のあと)
   const merged = new Map((prev?.tasks ?? []).map((t) => [t.task, t]));
   for (const t of tasks) merged.set(t.task, t);
   const next: ImportedContest = {
     contest,
     at: Date.now(),
-    tasks: [...merged.values()].sort((a, b) => a.title.localeCompare(b.title, "en")),
+    tasks: [...merged.values()].sort((a, b) => compareIndex(taskLetter(a), taskLetter(b))),
   };
   writeStore(IMPORTED_KEY, JSON.stringify([next, ...list.filter((c) => c.contest !== contest)].slice(0, IMPORTED_KEEP)));
 }
