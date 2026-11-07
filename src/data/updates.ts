@@ -17,6 +17,17 @@ export interface Update {
 // 新しいものが先頭。追加するときは必ず配列の先頭に足すこと。
 export const UPDATES: Update[] = [
   {
+    id: "2026-11-08b",
+    date: "2026-11-08",
+    title: "計算量タブ: 辞書・集合の copy などを正しく数えるように",
+    items: [
+      "辞書・集合・deque・Counter の d.copy() を「未知の関数」として O(1) にしていたのを、要素数ぶんとして数えるようにしました(ループの中でコピーすると O(N²) と出ます)",
+      "defaultdict(int) を「int の要素数」ぶんと読み、|int| という意味のない変数が出ていたのを直しました",
+      "集合の union・intersection・update、Counter の most_common、SortedList の pop、文字列の isdigit なども数えるようにしました",
+      "内訳で max(a) や defaultdict(int) が「a.max(…)」「int.defaultdict(…)」と出ていたのを直しました",
+    ],
+  },
+  {
     id: "2026-11-08a",
     date: "2026-11-08",
     title: "コーナーケースの入力と制約をかんたんに読み込めるように",

@@ -148,7 +148,7 @@ export class Analyzer {
   symbolOrder: string[] = [];
   symCount = new Map<string, number>();
   origins = new Map<string, { origin: string; line: number }>();
-  inputs = new Map<string, { line: number; via: string; array: boolean }>();
+  inputs = new Map<string, { line: number; via: string; array: boolean; kind?: ContainerKind }>();
   warnings: AnalysisWarning[] = [];
   items: BreakdownItem[] = [];
   called = new Set<string>();
@@ -193,7 +193,7 @@ export class Analyzer {
         else if (n.kind === "branch") n.branches.forEach((b) => visit(b, false));
         else if (n.kind === "input") {
           for (const s of n.scalars) if (!this.inputs.has(s)) this.inputs.set(s, { line: n.loc.line, via: n.via, array: false });
-          for (const a of n.arrays) if (!this.inputs.has(a)) this.inputs.set(a, { line: n.loc.line, via: n.via, array: true });
+          for (const a of n.arrays) if (!this.inputs.has(a)) this.inputs.set(a, { line: n.loc.line, via: n.via, array: true, kind: n.kinds?.[a] });
         }
         void top;
       }
@@ -269,7 +269,8 @@ export class Analyzer {
       if (e.sigil === "%") return "hmap";
       const d = this.declOf(e.name);
       if (d && d.container !== "unknown") return d.container;
-      if (this.inputs.get(e.name)?.array) return "array";
+      const inp = this.inputs.get(e.name);
+      if (inp?.array) return inp.kind ?? "array";
       return "unknown";
     }
     if (e.kind === "index") {
@@ -808,10 +809,11 @@ export class Analyzer {
       // ラムダや関数名の引数(Thread(target=main) / setTimeout(f))は1回ぶん数える
       return argv.reduce((acc, a) => plus(acc, this.callbackCost(a, env, line) ?? empty()), empty());
     }
-    return this.applyRule(rule, name, target, recv ? argv : argv, kind, env, line);
+    // 自由関数は第1引数を受け手として扱う(heappush(h, x) の伸びなど)が、内訳の名前は max(a) の形で出す
+    return this.applyRule(rule, name, target, recv ? argv : argv, kind, env, line, !recv);
   }
 
-  applyRule(rule: BuiltinRule, name: string, recv: SExpr | null, args: SExpr[], kind: ContainerKind, env: WalkEnv, line: number): Cost {
+  applyRule(rule: BuiltinRule, name: string, recv: SExpr | null, args: SExpr[], kind: ContainerKind, env: WalkEnv, line: number, free = false): Cost {
     const ctx: CallCtx = {
       args,
       recv,
@@ -854,7 +856,9 @@ export class Analyzer {
         if (k === "oset" || k === "omap") this.warn(`${line}行目: std::lower_bound を set / map に使うと O(N) です。s.lower_bound(x) を使ってください`, "warn", line);
       }
     }
-    const label = `${recv ? `${sexprText(recv, 16)}.` : ""}${name}(…)`;
+    const label = free
+      ? `${name}(${recv ? `${sexprText(recv, 16)}${args.length > 1 ? ", …" : ""}` : "…"})`
+      : `${recv ? `${sexprText(recv, 16)}.` : ""}${name}(…)`;
     if (!isConst(time)) {
       this.item({ axis: "time", kind: "builtin", loc: { line, endLine: line }, label, expr: time, text: "", reason: rule.note ?? "既知の関数", conf: rule.conf ?? "high" });
     }

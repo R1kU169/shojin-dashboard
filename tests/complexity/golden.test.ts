@@ -2516,6 +2516,99 @@ const CASES: Golden[] = [
     time: "O(N + M)",
     noWarn: true,
   },
+  {
+    id: "追加66 Python: ループのたびに辞書を copy する(投票の集計)",
+    lang: "pypy",
+    code: `
+      from collections import defaultdict, Counter
+
+      N, M = list(map(int,input().split()))
+
+      voters = {i + 1: [] for i in range(N)}
+      candidates = defaultdict(int)
+
+      for _ in range(M):
+        a, b = list(map(int,input().split()))
+        voters[a].append(b)
+        candidates[a] += 1
+
+      cur = max(candidates.values())
+      cur_ = cur
+      cur_indexes = {}
+
+      for k, v in candidates.items():
+        if cur == v:
+          cur_indexes[k] = 0
+
+      cur_indexes_ = cur_indexes.copy()
+      candidates_ = candidates.copy()
+
+      for k in range(1, N+1):
+        candidates_.pop(k, None)
+        for second in voters[k]:
+          if cur_ < candidates_[second] + 1:
+            cur_indexes_ = {second: 0}
+
+          candidates_[second] += 1
+          if cur_ == candidates_[second]:
+            cur_indexes_[second] = 0
+
+        print(next(iter(cur_indexes_.keys())))
+        cur_indexes_ = cur_indexes.copy()
+        candidates_ = candidates.copy()
+        cur_ = cur`,
+    time: "O(N·M)",
+    space: "O(N + M)",
+    noWarn: true,
+  },
+  {
+    id: "追加67 Python: 辞書・集合・deque・Counter の copy は要素数ぶん",
+    lang: "python",
+    code: `
+      from collections import deque, Counter
+      n = int(input())
+      a = list(map(int, input().split()))
+      d = {}
+      for i in range(n):
+          d[i] = i
+      s = set(a)
+      q = deque(a)
+      c = Counter(a)
+      for i in range(n):
+          e = d.copy()
+          t = s.copy()
+          r = q.copy()
+          f = c.copy()`,
+    time: "O(N²)",
+  },
+  {
+    id: "追加68 Python: defaultdict(int) は O(1)(|int| を作らない)",
+    lang: "python",
+    code: `
+      from collections import defaultdict
+      n = int(input())
+      d = defaultdict(int)
+      g = defaultdict(list)
+      h = defaultdict(lambda: 0)
+      for i in range(n):
+          d[i % 10] += 1
+      print(len(d))`,
+    time: "O(N)",
+    noWarn: true,
+  },
+  {
+    id: "追加69 Python: 入力から作った集合の union / update は引数の大きさ",
+    lang: "python",
+    code: `
+      n = int(input())
+      a = set(map(int, input().split()))
+      b = set(map(int, input().split()))
+      s = set()
+      for i in range(n):
+          c = a.union(b)
+          s.update(b)`,
+    time: "O(N² + N·|b|)",
+  },
 ];
 
 for (const g of CASES) test(g.id, () => void check(g));

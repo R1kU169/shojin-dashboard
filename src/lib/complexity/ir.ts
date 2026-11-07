@@ -141,7 +141,17 @@ export type IrNode =
   | { kind: "return"; value: SExpr | null; loc: Loc }
   /** 入力の読み取り。scalars はスカラ、arrays は配列として読んだ変数。lens は長さが分かる配列 */
   /** refs: 読み取りの式が使っている、前に読んだ入力の名前(b = line.split() の line)。配列の長さの推定から外す */
-  | { kind: "input"; scalars: string[]; arrays: string[]; lens: Record<string, SExpr>; loc: Loc; via: string; refs?: string[] }
+  | {
+      kind: "input";
+      scalars: string[];
+      arrays: string[];
+      lens: Record<string, SExpr>;
+      /** 入れ物の種類が配列でないもの(set(map(int, input().split())) は hset) */
+      kinds?: Record<string, ContainerKind>;
+      loc: Loc;
+      via: string;
+      refs?: string[];
+    }
   /** jump は break / continue / exit などの飛び越しの文(その語) */
   | { kind: "stmt"; loc: Loc; jump?: string };
 

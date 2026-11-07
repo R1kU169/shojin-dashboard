@@ -113,11 +113,12 @@ interface InputFound {
   scalars: string[];
   arrays: string[];
   lens: Record<string, SExpr>;
+  kinds: Record<string, ContainerKind>;
 }
 
 /** 文の式から入力の読み取りを拾う。無ければ null */
 function inputOf(e: SExpr, ctx: LowerCtx): InputFound | null {
-  const out: InputFound = { scalars: [], arrays: [], lens: {} };
+  const out: InputFound = { scalars: [], arrays: [], lens: {}, kinds: {} };
   const addTarget = (t: SExpr, value: SExpr) => {
     if (t.kind === "list") {
       for (const it of t.items) {
@@ -125,8 +126,12 @@ function inputOf(e: SExpr, ctx: LowerCtx): InputFound | null {
         else if (it.kind === "sym") out.scalars.push(it.name);
       }
     } else if (t.kind === "sym") {
-      if (t.sigil === "@" || looksArray(value)) out.arrays.push(t.name);
-      else out.scalars.push(t.name);
+      if (t.sigil === "@" || looksArray(value)) {
+        out.arrays.push(t.name);
+        // 外側で別の入れ物に入れていれば、その種類(set(map(int, input().split())) は集合、Counter(…) は辞書)
+        const k = value.kind === "call" ? ctx.spec.typeKind[value.name] : undefined;
+        if (k && k !== "array") out.kinds[t.name] = k;
+      } else out.scalars.push(t.name);
     } else if (t.kind === "un" && t.op === "*") out.arrays.push(...targetNames(t.e));
   };
   walk(e, (x) => {
@@ -403,7 +408,7 @@ function finishAssign(e0: SExpr & { kind: "assign" }, toks: readonly Tok[], ctx:
   const inp = inputOf(e, ctx);
   if (inp) {
     const refs = sourceRefs(value, ctx);
-    out.push({ kind: "input", scalars: inp.scalars, arrays: inp.arrays, lens: inp.lens, loc: l, via: src, refs: refs.length ? refs : undefined });
+    out.push({ kind: "input", scalars: inp.scalars, arrays: inp.arrays, lens: inp.lens, kinds: inp.kinds, loc: l, via: src, refs: refs.length ? refs : undefined });
     for (const n of [...inp.scalars, ...inp.arrays]) {
       ctx.inputNames.add(n);
       delete ctx.consts[n];
@@ -505,7 +510,7 @@ export function lowerStmt(toks: readonly Tok[], ctx: LowerCtx): IrNode[] {
   const out: IrNode[] = [];
   const inp = inputOf(e, ctx);
   if (inp) {
-    out.push({ kind: "input", scalars: inp.scalars, arrays: inp.arrays, lens: inp.lens, loc: l, via: tokText(toks) });
+    out.push({ kind: "input", scalars: inp.scalars, arrays: inp.arrays, lens: inp.lens, kinds: inp.kinds, loc: l, via: tokText(toks) });
     for (const n of [...inp.scalars, ...inp.arrays]) {
       ctx.inputNames.add(n);
       delete ctx.consts[n];

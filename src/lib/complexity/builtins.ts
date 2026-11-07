@@ -103,6 +103,10 @@ const ORDERED_METHODS: Record<string, BuiltinRule> = table([
   ["keys values items entries iter to_a", r(one)],
 ]);
 for (const n of ["insert", "emplace", "add", "put", "Add", "set", "insert_or_assign", "try_emplace", "entry"]) ORDERED_METHODS[n] = r(logS, { grows: true });
+// SortedList.update(xs) は xs を1つずつ入れる(× log)。集合の演算は両方をなめる
+ORDERED_METHODS.update = r((c) => mul(c.size(c.args[0] ?? null), logS(c)), { grows: true });
+// SortedList.pop() / pop(i) は log
+ORDERED_METHODS.pop = r(logS);
 
 const HASH_METHODS: Record<string, BuiltinRule> = table([
   ["insert emplace erase find count contains at add remove discard get put containsKey has delete Add Remove Contains ContainsKey TryGetValue getOrDefault get_or_insert entry or_insert setdefault pop key? has_key? hasKey getOrDefault mgetOrPut hasKeyOrPut del excl incl inc fetch dig store haskey get! delete! push! set", r(one, { conf: "medium", note: "ハッシュは平均 O(1)(最悪 O(N))" })],
@@ -111,6 +115,25 @@ const HASH_METHODS: Record<string, BuiltinRule> = table([
 for (const n of ["insert", "emplace", "add", "put", "Add", "set", "setdefault", "entry", "incl", "inc", "store", "push!", "get!", "mgetOrPut", "hasKeyOrPut", "try_emplace", "insert_or_assign", "<<", "add?"]) HASH_METHODS[n] = r(one, { grows: true, conf: "medium" });
 // Ruby の h.keys / h.values / h.to_a は配列を作る
 for (const n of ["to_a", "sort_by", "min_by", "max_by", "sum", "count", "map", "select", "reject", "each", "each_pair", "each_key", "each_value", "sort", "group_by", "find", "any?", "all?"]) HASH_METHODS[n] = r(S, { loopArg: 0 });
+
+/** 受け手と引数の両方をなめる集合の演算(a.union(b) / a.issubset(b))。引数が無ければ受け手だけ */
+const SplusA = (c: CallCtx): Expr => (c.args[0] ? add(S(c), c.size(c.args[0])) : S(c));
+const SET_OPS = "union intersection difference symmetric_difference issubset issuperset isdisjoint intersection_update difference_update symmetric_difference_update";
+// Python の辞書・集合・Counter
+Object.assign(
+  HASH_METHODS,
+  table([
+    [SET_OPS, r(SplusA)],
+    ["popitem", r(one)],
+    ["fromkeys subtract", r(A(0))],
+    ["elements total", r(S)],
+    ["most_common", r(SlogS)],
+  ]),
+);
+// d.update(e) / s.update(t) は引数の要素数ぶん足す
+HASH_METHODS.update = r(A(0), { grows: true, conf: "medium" });
+// SortedSet の集合の演算も両方をなめる
+for (const n of SET_OPS.split(" ")) ORDERED_METHODS[n] = r(SplusA);
 
 const PQ_METHODS: Record<string, BuiltinRule> = table([
   ["push emplace pop add offer poll remove insert extract Enqueue Dequeue TryDequeue push_back pushpop replace del", r(logS)],
@@ -124,12 +147,19 @@ const DEQUE_METHODS: Record<string, BuiltinRule> = table([
   ["index count contains remove_item", r(S)],
 ]);
 for (const n of ["push_back", "push_front", "append", "appendleft", "push", "offer", "addFirst", "addLast", "offerFirst", "offerLast", "enqueue", "Enqueue", "add", "unshift", "Push"]) DEQUE_METHODS[n] = r(one, { grows: true });
+// Python の deque: extend / extendleft は引数の要素数、途中への挿入と反転は全体
+DEQUE_METHODS.extend = r(A(0), { grows: true });
+DEQUE_METHODS.extendleft = r(A(0), { grows: true });
+DEQUE_METHODS.insert = r(S);
+DEQUE_METHODS.reverse = r(S);
 
 const STRING_METHODS: Record<string, BuiltinRule> = table([
   ["find rfind replace split join count strip lstrip rstrip upper lower reverse reversed startswith endswith index rindex indexOf lastIndexOf contains includes starts_with ends_with trim chars bytes lines split_whitespace to_string to_owned substr substring slice repeat Replace Split Contains IndexOf Substring ToUpper ToLower Trim ToCharArray each_char gsub sub tr scan to_s capitalize swapcase center ljust rjust zfill format encode decode count_chars toCharArray charAt? toUpperCase toLowerCase", r(S)],
   ["size length len empty at back front push_back pop_back charAt [] Length is_empty append", r(one)],
 ]);
 for (const n of ["push_back", "append", "push", "push_str", "Append", "add"]) STRING_METHODS[n] = r(one, { grows: true });
+// s.isdigit() などは文字列の長さ(1文字に使うことが多いが、長い文字列なら長さぶん)
+for (const n of ["isdigit", "isalpha", "isalnum", "isnumeric", "isdecimal", "isupper", "islower", "isspace"]) STRING_METHODS[n] = r(S);
 STRING_METHODS.substr = r((c) => (c.args.length >= 2 ? c.bound(c.args[1]) : S(c)));
 // Python の "o".join(xs) は区切りではなく xs の要素数
 STRING_METHODS.join = r((c) => (c.args.length >= 1 ? c.size(c.args[0]) : S(c)));
@@ -219,7 +249,7 @@ for (const n of ["convolution", "convolution_ll", "convolution_int"]) CPP_FREE[n
 const PY_FREE = table([
   ["sorted", r(AlogA(0), { cmpArg: 1 })],
   ["map filter", r((c) => c.size(c.args[1] ?? c.args[0] ?? null), { loopArg: 0 })],
-  ["sum max min all any list tuple set frozenset dict reversed enumerate zip Counter accumulate deque bytearray defaultdict", r((c) => (c.args.length === 1 || (c.args.length >= 1 && c.args[0].kind === "lambda") ? c.size(c.args[c.args[0]?.kind === "lambda" ? 1 : 0] ?? null) : ONE), { loopArg: 0 })],
+  ["sum max min all any list tuple set frozenset dict reversed enumerate zip Counter accumulate deque bytearray", r((c) => (c.args.length === 1 || (c.args.length >= 1 && c.args[0].kind === "lambda") ? c.size(c.args[c.args[0]?.kind === "lambda" ? 1 : 0] ?? null) : ONE), { loopArg: 0 })],
   ["len abs print input int float str ord chr divmod range bin hex oct round isinstance type id hash bool iter next open exit quit sqrt isqrt floor ceil log log2 log10 exp comb perm factorial setrecursionlimit", r(one)],
   ["gcd lcm", r((c) => logOfExpr(c.bound(c.args[1] ?? c.args[0] ?? null)), { conf: "medium" })],
   ["pow", r((c) => (c.args.length === 3 ? logOfExpr(c.bound(c.args[1])) : ONE))],
@@ -233,6 +263,8 @@ const PY_FREE = table([
   ["permutations combinations product combinations_with_replacement groupby chain islice count cycle repeat", r(one)],
 ]);
 for (const n of ["convolution", "convolution_int"]) PY_FREE[n] = r(convolution);
+// defaultdict(int) の第1引数は値を作る関数なので O(1)。defaultdict(int, d) は d を写す
+PY_FREE.defaultdict = r((c) => (c.args.length >= 2 ? c.size(c.args[1]) : ONE));
 
 const JAVA_FREE = table([
   ["sort parallelSort", r(AlogA(0), { cmpArg: 1 })],
@@ -395,11 +427,18 @@ export const TABLE_OF: Record<string, FreeTable> = {
   php: "php",
 };
 
+/**
+ * どの入れ物でも意味が同じメソッド(丸ごとの複製は要素数)。種類ごとの表に無ければここを引く。
+ * 種類の表に書き漏らすと、種類が分かっているのに「未知の関数」として O(1) になってしまう
+ * (辞書の d.copy() がそうだった)。UNKNOWN_METHODS 全体には落とさない(index・insert などは種類で意味が違う)
+ */
+const ANY_KIND_METHODS: Record<string, BuiltinRule> = table([["copy clone dup", r(S)]]);
+
 export function lookupMethod(kind: ContainerKind, name: string): BuiltinRule | null {
   const t = METHODS[kind];
   if (t && t[name]) return t[name];
   if (kind === "unknown" || kind === "user" || kind === "scalar") return UNKNOWN_METHODS[name] ?? null;
-  return null;
+  return ANY_KIND_METHODS[name] ?? null;
 }
 
 export function lookupFree(lang: string, name: string): BuiltinRule | null {
