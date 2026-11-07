@@ -3244,6 +3244,164 @@ button.member-card {
   gap: 7px;
   font-variant-numeric: tabular-nums;
 }
+/* レートの下に小さく「緑まで 1,012」(次のコンテストで次の色に上がるのに必要なパフォ) */
+.rank-next {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- レート予測(個人ページ) ---------- */
+.re-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+}
+@media (max-width: 760px) {
+  .re-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 18px;
+  }
+}
+.re-h {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink-2);
+  margin: 0 0 8px;
+}
+.re-col > .re-h:not(:first-child) {
+  margin-top: 18px;
+}
+.re-tier {
+  font-weight: 700;
+}
+.re-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.re-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 4px 12px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--grid);
+  font-size: 14px;
+}
+.re-row:last-child {
+  border-bottom: none;
+}
+.re-value {
+  /* 狭い幅で次の行に折り返したときも右に寄せる */
+  margin-left: auto;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.re-sub {
+  display: block;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--muted);
+}
+.re-first {
+  font-size: 13px;
+  line-height: 1.7;
+  margin: 0;
+}
+.re-input-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--ink-2);
+}
+.re-input {
+  width: 96px;
+  font: inherit;
+  font-family: var(--font-mono);
+  font-size: 14px;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 5px 10px;
+}
+.re-sim {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+}
+.re-slider {
+  flex: 1 1 180px;
+  min-width: 0;
+  accent-color: var(--accent);
+}
+.re-result {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 14px 0 6px;
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
+.re-to {
+  font-size: 26px;
+  line-height: 1;
+}
+.re-delta {
+  font-weight: 700;
+  color: var(--muted);
+}
+.re-delta.plus {
+  color: #1b8a3a;
+}
+.re-delta.minus {
+  color: #c62828;
+}
+:root[data-theme="dark"] .re-delta.plus {
+  color: #4cc46a;
+}
+:root[data-theme="dark"] .re-delta.minus {
+  color: #ef6b6b;
+}
+.re-keep {
+  font-size: 13px;
+  line-height: 1.6;
+  margin: 0;
+}
+.re-times {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+}
+.re-times li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.re-notes {
+  font-size: 11px;
+  line-height: 1.6;
+  margin: 16px 0 0;
+}
+/* 16px 未満だとスマホで触ったときに拡大される */
+@media (max-width: 560px) {
+  .re-input {
+    font-size: 16px;
+  }
+}
 .rank-toolbar-label {
   font-size: 13px;
 }

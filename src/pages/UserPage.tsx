@@ -8,6 +8,7 @@ import { Heatmap } from "../components/Heatmap";
 import { LangBreakdown } from "../components/LangBreakdown";
 import { PaceChart } from "../components/PaceChart";
 import { RatingChart } from "../components/RatingChart";
+import { RatingEstimator } from "../components/RatingEstimator";
 import { RatingCircle } from "../components/RatingCircle";
 import { Spotlight } from "../components/Spotlight";
 import { Tile } from "../components/Tile";
@@ -44,6 +45,8 @@ function UserDashboard({ userId }: { userId: string }) {
   // 公式レーティング(プロフィールのユーザー名の色)。アバター・色味・レート表示に使う。
   const [rating, setRating] = useState<number | null>(null);
   const [history, setHistory] = useState<RatePoint[]>([]);
+  // 推移を読めたか(部員でなければ読めない。読めた空の推移は「未レートの部員」)
+  const [historyOk, setHistoryOk] = useState(false);
   const [listTab, setListTab] = useState<ListTab>("rec");
 
   useEffect(() => {
@@ -54,6 +57,7 @@ function UserDashboard({ userId }: { userId: string }) {
     let cancel = false;
     setRating(null);
     setHistory([]);
+    setHistoryOk(false);
     getRating(userId)
       .then((r) => {
         if (!cancel) setRating(r);
@@ -63,7 +67,9 @@ function UserDashboard({ userId }: { userId: string }) {
       });
     getRatingHistory(userId)
       .then((h) => {
-        if (!cancel) setHistory(h);
+        if (cancel) return;
+        setHistory(h);
+        setHistoryOk(true);
       })
       .catch(() => {
         if (!cancel) setHistory([]);
@@ -410,6 +416,9 @@ function UserDashboard({ userId }: { userId: string }) {
           }
         />
       </div>
+
+      {/* レート予測(部員だけ。推移が読めた人) */}
+      {historyOk && <RatingEstimator key={userId} history={history} />}
 
       <section className="card">
         <div className="card-head">

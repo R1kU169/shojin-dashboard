@@ -3,8 +3,9 @@ import { Link } from "react-router-dom";
 import { AnimatedNumber } from "../components/AnimatedNumber";
 import { RatingCircle } from "../components/RatingCircle";
 import { MEMBERS } from "../data/members";
-import { getRating, peekSubmissions, refreshSubmissions } from "../lib/cache";
+import { getRating, getRatingHistories, peekSubmissions, refreshSubmissions } from "../lib/cache";
 import { TIER_COLORS, TIER_LABELS, tierIndex } from "../lib/colors";
+import { nextTierFloor, perfToReach } from "../lib/ratingEstimate";
 import { computeStats, todayEpochDay } from "../lib/stats";
 import type { UserStats } from "../lib/stats";
 import type { Member, ProblemModels } from "../lib/types";
@@ -20,6 +21,8 @@ interface Row {
   refreshing?: boolean;
   /** 最新の提出を取れず、手元のデータで表示している */
   stale?: boolean;
+  /** 次の色と、次のコンテストでそこへ上がるのに必要なパフォ(レート予測。src/lib/ratingEstimate.ts) */
+  next?: { floor: number; perf: number | null };
 }
 
 type Period = "week" | "month" | "all";
@@ -62,6 +65,20 @@ export function ClubPage() {
       setRows((rs) =>
         rs.map((r) => (r.member.id === id ? { ...r, ...patch } : r)),
       );
+    // 次の色までに必要なパフォ。推移(rating-history.json)は全員分を1回だけ読む
+    getRatingHistories()
+      .then((map) => {
+        if (cancel) return;
+        for (const m of MEMBERS) {
+          const h = map[m.id.toLowerCase()];
+          // パフォの入っていない古いデータ・未レートの人には出さない
+          if (!h || h.length === 0 || h.some((p) => typeof p.p !== "number")) continue;
+          const perfs = h.map((p) => p.p as number);
+          const floor = nextTierFloor(h[h.length - 1].r);
+          if (floor !== null) update(m.id, { next: { floor, perf: perfToReach(perfs, floor) } });
+        }
+      })
+      .catch(() => {});
     // 公式レーティングは届いた人から出す
     for (const m of MEMBERS) {
       getRating(m.id)
@@ -455,6 +472,15 @@ export function ClubPage() {
                               </span>
                             </>
                           )}
+                        </span>
+                      )}
+                      {r.rating != null && r.rating > 0 && r.next && r.next.perf !== null && (
+                        <span
+                          className="rank-next"
+                          style={{ color: TIER_COLORS[resolved][tierIndex(r.next.floor)] }}
+                          title={`次のコンテストでパフォ ${r.next.perf.toLocaleString("en-US")} 以上なら${TIER_LABELS[tierIndex(r.next.floor)]}(${r.next.floor})に上がります`}
+                        >
+                          {TIER_LABELS[tierIndex(r.next.floor)]}まで {r.next.perf.toLocaleString("en-US")}
                         </span>
                       )}
                     </td>

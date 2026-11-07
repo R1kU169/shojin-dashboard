@@ -15,6 +15,7 @@ const TIMEOUT_MS = 15_000;
 interface HistoryEntry {
   IsRated: boolean;
   NewRating: number;
+  Performance: number;
   EndTime: string;
 }
 
@@ -62,7 +63,7 @@ export async function fetchRatingHistory(user: string): Promise<RatePoint[]> {
   const pts: RatePoint[] = [];
   for (const h of hist) {
     if (!h.IsRated) continue;
-    pts.push({ t: Math.floor(new Date(h.EndTime).getTime() / 1000), r: h.NewRating });
+    pts.push({ t: Math.floor(new Date(h.EndTime).getTime() / 1000), r: h.NewRating, p: h.Performance });
   }
   return pts;
 }

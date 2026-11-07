@@ -167,7 +167,8 @@ async function main() {
         };
         if (!h.IsRated) continue;
         r = h.NewRating;
-        pts.push({ t: Math.floor(new Date(h.EndTime).getTime() / 1000), r: h.NewRating });
+        // p はレート予測に使う(InnerPerformance ではなく、上限で頭打ちにした Performance がレートの計算に入る)
+        pts.push({ t: Math.floor(new Date(h.EndTime).getTime() / 1000), r: h.NewRating, p: h.Performance });
       }
       ratings[key] = r;
       histories[key] = pts;

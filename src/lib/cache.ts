@@ -179,6 +179,9 @@ const ratingHistories = () =>
     RATING_TTL_MS,
   );
 
+/** 部員全員の公式レーティング推移({ id(小文字): RatePoint[] })。クラブ内ランキングのレート予測に使う */
+export const getRatingHistories = (): Promise<Record<string, RatePoint[]>> => ratingHistories();
+
 /** ユーザーの公式レーティング推移(時系列)。取得不可時は例外(呼び出し側で .catch)。 */
 export const getRatingHistory = (user: string): Promise<RatePoint[]> =>
   cachedResource<RatePoint[]>(

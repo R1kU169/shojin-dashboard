@@ -51,6 +51,11 @@ export interface RatePoint {
   t: number;
   /** その時点の NewRating */
   r: number;
+  /**
+   * その回のパフォーマンス(履歴の Performance。上限で頭打ちにした値)。レート予測に使う。
+   * 古いスナップショット・取得に失敗して前回分を使った人には無い
+   */
+  p?: number;
 }
 
 /** 予定されているコンテスト(ホームの「次のABC」表示用) */
