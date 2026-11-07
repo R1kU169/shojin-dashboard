@@ -5,7 +5,7 @@ import type { GeneratedCase, Overrides, Slot, Spec } from "../lib/casegen";
 import type { CaseGenMessage, CaseGenRequest } from "../lib/casegen.worker";
 import { GODBOLT_LANGS } from "../lib/godbolt";
 import { katexHtmlToText } from "../lib/katexPaste";
-import { isWarningOnly, prefersGodbolt, runCase } from "../lib/run";
+import { isWarningOnly, prefersGodbolt, runCode } from "../lib/run";
 import type { RunOutcome } from "../lib/run";
 import { readStore, removeStore, writeStore } from "../lib/storage";
 import type { LinkedProblem } from "../lib/types";
@@ -96,7 +96,7 @@ function classify(r: RunOutcome, wallMs: number, compiled: boolean): CaseResult 
   if (!compiled && (r.buildFailed || (r.compilerError && !isWarningOnly(r) && r.stdout === "" && r.stderr === "" && r.status !== "0"))) {
     return { ...base, status: "ce", compiler: head(r.compilerError, 4000) };
   }
-  // Wandbox は出力が上限を超えると途中で切り、終了コードを返さない
+  // 出力が上限を超えると、Wandbox は途中で切って終了コードを返さず、Compiler Explorer はプログラムを止める
   if (r.truncated) return { ...base, status: "big" };
   if (r.timedOut) return { ...base, status: "tle" };
   // Wandbox は時間(約30秒)かメモリの上限で SIGKILL する(128 + 9)
@@ -460,7 +460,7 @@ export function CaseGenerator({ lang, code, problem, onUseInput }: Props) {
       patch(t.id, { status: "running" });
       const t0 = performance.now();
       try {
-        const r = await runCase(lang, code, t.input, ac.signal);
+        const r = await runCode(lang, code, t.input, ac.signal);
         const res = classify(r, performance.now() - t0, compiled);
         patch(t.id, res);
         if (res.status === "ce") {

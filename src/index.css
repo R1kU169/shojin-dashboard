@@ -1052,6 +1052,11 @@ button.member-card {
 .editor-version {
   font-size: 12px;
 }
+/* 標準出力の見出しの横に出す実行時間(Compiler Explorer だけが返す) */
+.editor-time {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
 .run-btn {
   font: inherit;
   font-weight: 700;

@@ -5,6 +5,7 @@ import { CaseGenerator } from "../components/CaseGenerator";
 import { CodeEditor } from "../components/CodeEditor";
 import type { CodeEditorHandle } from "../components/CodeEditor";
 import { ProblemSearch } from "../components/ProblemSearch";
+import { GODBOLT_LANGS } from "../lib/godbolt";
 import { EDITOR_LANGS } from "../lib/wandbox";
 import { isWarningOnly, runCode } from "../lib/run";
 import type { RunOutcome } from "../lib/run";
@@ -308,7 +309,8 @@ export function EditorPage() {
             ))}
           </select>
         </label>
-        <span className="muted editor-version">{lang.version}</span>
+        {/* Compiler Explorer で実行する言語はそちらの版を出す(Wandbox は CE に接続できないときと、CE が実行できない言語だけ) */}
+        <span className="muted editor-version">{(GODBOLT_LANGS[lang.key] ?? lang).version}</span>
         <label className="editor-lang">
           インデント
           <select
@@ -433,23 +435,31 @@ export function EditorPage() {
                     : `終了コード ${result.status || "不明"}`}
               </span>
             )}
+            {/* 出力が多すぎて止めたときの時間は意味がないので出さない */}
+            {result?.timeMs !== undefined && !result.truncated && (
+              <span className="muted editor-time" title="プログラムの実行時間(コンパイルと通信は含まない)。AtCoder とは環境が違うので目安です">
+                {result.timeMs.toLocaleString()} ms
+              </span>
+            )}
           </div>
           {running && <p className="muted">実行中…</p>}
           {error && <p className="error-text">{error}</p>}
           {result !== null && (
             <>
-              {result.backend === "godbolt" && (
+              {result.fallback && (
                 <p className="fallback-note">
-                  ⚠ {result.fallback === "size" ? "入力が大きい(約1MBを超える)ため" : "Wandboxが停止中のため"}{" "}
-                  <a href="https://godbolt.org" target="_blank" rel="noreferrer">
-                    Compiler Explorer
+                  ⚠ Compiler Explorer に接続できなかったため{" "}
+                  <a href="https://wandbox.org" target="_blank" rel="noreferrer">
+                    Wandbox
                   </a>{" "}
                   で実行しました({result.backendVersion})
                 </p>
               )}
               {result.truncated && (
                 <p className="fallback-note">
-                  ⚠ 出力が Wandbox の上限(約128KB)を超えたため、途中で切られています
+                  ⚠ 出力が{" "}
+                  {result.backend === "godbolt" ? "Compiler Explorer の上限(約32KB)" : "Wandbox の上限(約128KB)"}
+                  を超えたため、そこで実行を止めています
                 </p>
               )}
               <pre className="io-out">{result.stdout ? clip(result.stdout) : "(出力なし)"}</pre>
@@ -481,14 +491,14 @@ export function EditorPage() {
 
       <p className="muted editor-note">
         実行は{" "}
-        <a href="https://wandbox.org" target="_blank" rel="noreferrer">
-          Wandbox
-        </a>
-        (停止中や入力が約1MBを超えるときは{" "}
         <a href="https://godbolt.org" target="_blank" rel="noreferrer">
           Compiler Explorer
         </a>
-        )で、コーナーケースのまとめて実行は実行時間を測れる Compiler Explorer を先に使います(コードは外部サービスに送信されます)。
+        で行います(JavaScript・TypeScript・Nim・PHP・Bash と、Compiler Explorer に接続できないときは{" "}
+        <a href="https://wandbox.org" target="_blank" rel="noreferrer">
+          Wandbox
+        </a>
+        )。コードと入力は外部サービスに送信されます。
       </p>
     </div>
   );

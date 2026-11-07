@@ -1,11 +1,14 @@
-// 実行バックエンドの切り替え。通常の実行はWandboxで行い、Wandbox側の障害を検出したときと
-// 入力が大きくて送れないときだけCompiler Explorerにフォールバックする(runCode)。
-// コーナーケースのまとめて実行は、実行時間を測れるCompiler Explorerを先に使う(runCase)。
+// 実行バックエンドの切り替え。Compiler Explorer が実行できる言語はそちらを先に使い、
+// 接続できないときと、Compiler Explorer が実行できない言語(JavaScript・TypeScript・Nim・PHP・Bash)は Wandbox で実行する。
 //
-// 背景: Wandboxは実行サンドボックス(コンテナ)だけが落ちることがあり、その間は
+// Compiler Explorer を先に使う理由: 2026-11 に実測すると、テンプレートのコードの応答は
+// C++ で Wandbox 12〜43秒 / CE 3〜4秒、Python で 6.5〜9秒 / 0.5〜0.9秒、Java で 20〜29秒 / 3〜4.6秒と、
+// どの言語も CE の方が数倍速かった。CE は実行時間も返し、C++ は -O2 つきで AtCoder に近く、約1MBを超える入力も送れる。
+//
+// Wandbox は実行サンドボックス(コンテナ)だけが落ちることがあり、その間は
 // どの言語・どんなコードでも "OCI runtime error: crun: clone: Resource
 // temporarily unavailable" (終了コード126)しか返らなくなる。生のまま表示すると
-// 自分のコードのせいだと誤解するので、代替サービスに逃がしたうえで理由を出す。
+// 自分のコードのせいだと誤解するので、理由を添えたエラーにする。
 import { fitsWandbox, runCode as runWandbox } from "./wandbox";
 import type { EditorLang, RunResult } from "./wandbox";
 import { GODBOLT_LANGS, runCodeGodbolt } from "./godbolt";
@@ -15,20 +18,23 @@ export type Backend = "wandbox" | "godbolt";
 export interface RunOutcome extends RunResult {
   /** 実際に実行したサービス */
   backend: Backend;
-  /** フォールバックした時だけ: 実際に動いた処理系のバージョン */
-  backendVersion?: string;
-  /** Compiler Explorer に切り替えた理由(Wandbox が止まっている / 入力が大きくて Wandbox に送れない) */
-  fallback?: "down" | "size";
+  /** 実際に動いた処理系のバージョン */
+  backendVersion: string;
+  /** Compiler Explorer に接続できず、代わりに Wandbox で実行した */
+  fallback?: boolean;
 }
 
 /**
  * Wandboxのサンドボックス障害(コンテナを起動できない)かどうか。
  * これらの文字列はWandboxの実行基盤が出すものでコンパイラの出力ではないため、
  * ユーザーのコードが原因で誤検知することはない。
+ * コンパイルの段階で落ちればコンパイラの出力に、コンパイルが通って実行の段階で落ちれば
+ * 標準エラーに出る(2026-11 に実測: 終了コード 126 で program_error に出て、応答まで54秒かかった)
  */
 function isSandboxFailure(r: RunResult): boolean {
-  return /OCI runtime|\bcrun\b|Resource temporarily unavailable/i.test(
-    r.compilerError,
+  return (
+    /OCI runtime|\bcrun\b|Resource temporarily unavailable/i.test(r.compilerError) ||
+    (r.status === "126" && /OCI runtime error/i.test(r.stderr))
   );
 }
 
@@ -54,62 +60,17 @@ export function isWarningOnly(r: RunResult): boolean {
   return r.status === "0" || r.stdout !== "" || r.stderr !== "";
 }
 
-/**
- * コードを実行する。Wandboxが使えない場合はCompiler Explorerに切り替える。
- * 中断(AbortError)はそのまま投げ直す。どちらでも実行できない場合は例外。
- */
-export async function runCode(
-  lang: EditorLang,
-  code: string,
-  stdin: string,
-  signal?: AbortSignal,
-): Promise<RunOutcome> {
-  let reason: string;
-  let fallback: "down" | "size" = "down";
-  const g = GODBOLT_LANGS[lang.key];
-  if (!fitsWandbox(lang, code, stdin)) {
-    // 送っても 413 で弾かれるだけなので、最初から Compiler Explorer に回す
-    if (!g) throw new Error(`入力が大きすぎて Wandbox に送れません(コードと合わせて約1MBまで)。${lang.label} は代替の実行環境がないため、入力を小さくしてください。`);
-    reason = "入力が大きすぎて Wandbox に送れません";
-    fallback = "size";
-  } else {
-    try {
-      const r = await runWandbox(lang, code, stdin, signal);
-      if (!isSandboxFailure(r)) return { ...r, backend: "wandbox" };
-      reason = "Wandboxの実行サンドボックスが停止しています";
-    } catch (e) {
-      if ((e as Error).name === "AbortError") throw e;
-      reason = `Wandboxに接続できませんでした (${(e as Error).message})`;
-    }
-  }
-
-  if (!g) {
-    throw new Error(
-      `${reason}。${lang.label} は代替の実行環境がないため、時間をおいて試すか、他の言語をお使いください。`,
-    );
-  }
-  try {
-    const r = await runCodeGodbolt(g, code, stdin, signal);
-    return { ...r, backend: "godbolt", backendVersion: g.version, fallback };
-  } catch (e) {
-    if ((e as Error).name === "AbortError") throw e;
-    throw new Error(
-      `${reason}。代替のCompiler Explorerにも接続できませんでした (${(e as Error).message})`,
-    );
-  }
-}
-
-/** まとめて実行で Compiler Explorer を先に使うか(実行時間が分かる言語) */
+/** Compiler Explorer で実行する言語か(実行時間が分かる) */
 export function prefersGodbolt(lang: EditorLang): boolean {
   return lang.key in GODBOLT_LANGS;
 }
 
 /**
- * コーナーケースのまとめて実行用。Compiler Explorer が使える言語はそちらを先に使う
- * (実行時間を返す・C++ などは -O2 つきで AtCoder に近い・約1MBを超える入力も送れる)。
- * Compiler Explorer に接続できなければ Wandbox で実行する(入力が送れる大きさなら)。
+ * コードを実行する。Compiler Explorer が実行できる言語はそちらを先に使い、接続できなければ
+ * Wandbox で実行する(入力が送れる大きさなら)。エディターの実行とコーナーケースのまとめて実行で共通。
+ * 中断(AbortError)はそのまま投げ直す。どちらでも実行できない場合は例外。
  */
-export async function runCase(
+export async function runCode(
   lang: EditorLang,
   code: string,
   stdin: string,
@@ -123,13 +84,23 @@ export async function runCase(
       return { ...r, backend: "godbolt", backendVersion: g.version };
     } catch (e) {
       if ((e as Error).name === "AbortError") throw e;
-      reason = `Compiler Explorerに接続できませんでした (${(e as Error).message})`;
+      reason = `Compiler Explorerに接続できませんでした (${(e as Error).message})。`;
     }
   }
   if (!fitsWandbox(lang, code, stdin)) {
-    throw new Error(`${reason ? `${reason}。` : ""}入力が大きすぎて Wandbox に送れません(コードと合わせて約1MBまで)`);
+    throw new Error(
+      `${reason}入力が大きすぎて Wandbox に送れません(コードと合わせて約1MBまで)。${g ? "" : `${lang.label} は Compiler Explorer で実行できないため、入力を小さくしてください。`}`,
+    );
   }
-  const r = await runWandbox(lang, code, stdin, signal);
-  if (isSandboxFailure(r)) throw new Error(`${reason ? `${reason}。` : ""}Wandboxの実行サンドボックスが停止しています`);
-  return { ...r, backend: "wandbox" };
+  let r: RunResult;
+  try {
+    r = await runWandbox(lang, code, stdin, signal);
+  } catch (e) {
+    if ((e as Error).name === "AbortError") throw e;
+    throw new Error(`${reason}Wandbox${reason ? "にも" : "に"}接続できませんでした (${(e as Error).message})`);
+  }
+  if (isSandboxFailure(r)) {
+    throw new Error(`${reason}Wandboxの実行サンドボックスが停止しています。時間をおいて試してください。`);
+  }
+  return { ...r, backend: "wandbox", backendVersion: lang.version, ...(g ? { fallback: true } : {}) };
 }

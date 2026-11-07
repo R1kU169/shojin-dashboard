@@ -106,7 +106,7 @@ int main(void) {
   },
   {
     key: "csharp",
-    label: "C# (Mono)",
+    label: "C#",
     compiler: "mono-6.12.0.199",
     version: "Mono 6.12",
     template: `using System;
@@ -275,7 +275,10 @@ export interface RunResult {
   timedOut?: boolean;
   /** コンパイルに失敗した(Compiler Explorer だけが返す。そのとき標準エラーに Build failed が入る) */
   buildFailed?: boolean;
-  /** 出力が長すぎて途中で打ち切られ、終了コードが分からない(Wandbox は 128KiB で打ち切って status を空にする) */
+  /**
+   * 出力が長すぎて途中で打ち切られ、終了コードが分からない
+   * (Wandbox は 128KiB で打ち切って status を空にする。Compiler Explorer は約32KBを超えるとプログラムを止める)
+   */
   truncated?: boolean;
 }
 

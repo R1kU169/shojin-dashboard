@@ -1,6 +1,5 @@
 // Compiler Explorer (https://godbolt.org) でコードをコンパイル・実行する。
-// 通常の実行では Wandbox が止まっているとき・入力が約1MBを超えるときの代わり、
-// コーナーケースのまとめて実行では実行時間を測れるので先に使う(run.ts が切り替える)。
+// Wandbox より応答がずっと速く実行時間も分かるので、実行できる言語はこちらを先に使う(run.ts が切り替える)。
 // CORS全開放・APIキー不要なのでブラウザから直接叩ける。
 // 注意: コードと標準入力は外部サービス(godbolt.org)に送信される。
 import type { RunResult } from "./wandbox";
@@ -24,7 +23,13 @@ export interface GodboltLang {
 // ここに無い言語(js/ts/nim/php/bash)はCompiler Explorerが実行に対応して
 // いない(コンパイルのみ、または言語自体が無い)ためフォールバックできない。
 export const GODBOLT_LANGS: Record<string, GodboltLang> = {
-  cpp: { compiler: "g132", lang: "c++", args: "-O2 -std=gnu++2b", version: "GCC 13.2 / C++23" },
+  // 警告は Wandbox の C++(warning スイッチ = -Wall -Wextra から未使用変数の2つを黙らせる)とそろえる
+  cpp: {
+    compiler: "g132",
+    lang: "c++",
+    args: "-O2 -std=gnu++2b -Wall -Wextra -Wno-unused-variable -Wno-unused-but-set-variable",
+    version: "GCC 13.2 / C++23",
+  },
   python: { compiler: "python314", lang: "python", args: "", version: "CPython 3.14" },
   pypy: { compiler: "pypy310", lang: "python", args: "", version: "PyPy 3.10" },
   java: { compiler: "java2202", lang: "java", args: "", version: "JDK 22.0.2" },
@@ -50,6 +55,8 @@ interface CeResponse {
   code?: number;
   didExecute?: boolean;
   timedOut?: boolean;
+  /** 出力が上限を超えて切られた */
+  truncated?: boolean;
   /** 実行にかかった時間(ミリ秒) */
   execTime?: number;
   stdout?: CeText[];
@@ -67,6 +74,11 @@ function joinLines(lines: CeText[] | undefined): string {
   const s = (lines ?? []).map((l) => l.text ?? "").join("\n").replace(ANSI, "");
   return s === "" ? "" : `${s}\n`;
 }
+
+// CE は標準出力・標準エラーがそれぞれ約32KB(32,768 バイト)を超えるとプログラムを止め(終了コード 143)、
+// 出力の最後の行に [Truncated] を足す(2026-11 に実測)。印は取り除き、truncated として返す
+const TRUNCATED_MARK = "[Truncated]";
+const withoutMark = (lines: CeText[] | undefined) => (lines ?? []).filter((l) => l.text !== TRUNCATED_MARK);
 
 /** コードを実行して結果を返す。ネットワーク/サービスエラー時は例外。 */
 export async function runCodeGodbolt(
@@ -106,15 +118,16 @@ export async function runCodeGodbolt(
       : j.didExecute === false
         ? 1
         : (j.code ?? 0);
-  const stderr = joinLines(j.stderr);
+  const stderr = joinLines(withoutMark(j.stderr));
   return {
     status: String(status),
     signal: "",
     compilerError,
-    stdout: joinLines(j.stdout),
+    stdout: joinLines(withoutMark(j.stdout)),
     stderr: j.timedOut ? `${stderr}実行時間の上限を超えました\n` : stderr,
     ...(j.didExecute !== false && buildCode === 0 && typeof j.execTime === "number" ? { timeMs: j.execTime } : {}),
     ...(j.timedOut ? { timedOut: true } : {}),
     ...(buildCode !== 0 ? { buildFailed: true } : {}),
+    ...(j.truncated ? { truncated: true } : {}),
   };
 }

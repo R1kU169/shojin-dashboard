@@ -17,6 +17,17 @@ export interface Update {
 // 新しいものが先頭。追加するときは必ず配列の先頭に足すこと。
 export const UPDATES: Update[] = [
   {
+    id: "2026-11-07a",
+    date: "2026-11-07",
+    title: "エディターの実行を速くしました",
+    items: [
+      "実行を Compiler Explorer で行うようにしました。C++ は数十秒かかることがあったのが約4秒、Python は約1秒で結果が出ます",
+      "実行時間(ミリ秒)を終了コードの横に出すようにしました",
+      "JavaScript・TypeScript・Nim・PHP・Bash と、Compiler Explorer に接続できないときは、これまでどおり Wandbox で実行します",
+      "Wandbox の実行環境が止まっているとき、1分近く待たされたうえに意味の分からないエラーが出ていたのを、止まっていると分かる表示にしました",
+    ],
+  },
+  {
     id: "2026-10-25a",
     date: "2026-10-25",
     title: "コンテストタブを追加: 部員の結果を一覧で見られるように",
