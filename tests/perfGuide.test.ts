@@ -1,7 +1,7 @@
 // パフォの目安: 最近の ABC の各記号を解ける確率と、その一言
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { describeChances, recentAbcTable, solveChances } from "../src/lib/perfGuide.ts";
+import { groupChances, recentAbcTable, solveChances } from "../src/lib/perfGuide.ts";
 import type { ProblemModels } from "../src/lib/types.ts";
 
 const A = Math.log(6) / 400;
@@ -28,12 +28,12 @@ test("難易度ちょうどのパフォなら半々", () => {
   assert.ok(c.find((x) => x.letter === "A")!.p > 0.99);
 });
 
-test("一言の言い分け", () => {
-  const say = (ps: number[]) => describeChances(ps.map((p, i) => ({ letter: "ABCDEFG"[i], p })));
-  assert.equal(say([1, 0.99, 0.81, 0.55, 0.15, 0.02, 0]), "C までほぼ解けて、D が半々くらい");
-  assert.equal(say([0.99, 0.96, 0.5, 0.2, 0.03, 0, 0]), "B までほぼ解けて、C が半々くらい");
-  assert.equal(say([1, 1, 1, 1, 0.91, 0.68, 0.19]), "E までほぼ解けて、F も解けることが多い");
-  assert.equal(say([0.97, 0.82, 0.19, 0.04, 0, 0, 0]), "B までほぼ解けて、C はときどき解ける");
-  assert.equal(say([0.5, 0.1, 0, 0, 0, 0, 0]), "A が解けるかどうかくらい");
-  assert.equal(say([1, 1, 1, 1, 1, 1, 0.9]), "G までほぼ解けるくらい");
+test("解ける度合いで分ける", () => {
+  const groups = (ps: number[]) => groupChances(ps.map((p, i) => ({ letter: "ABCDEFG"[i], p }))).map((g) => `${g.short}: ${g.letters.join("・")}`);
+  // パフォ 433 くらい
+  assert.deepEqual(groups([1, 0.96, 0.53, 0.22, 0.04, 0, 0]), ["ほぼ毎回: A・B", "2回に1回: C", "たまに: D"]);
+  // パフォ 1210 くらい
+  assert.deepEqual(groups([1, 1, 0.95, 0.86, 0.44, 0.09, 0.01]), ["ほぼ毎回: A・B・C・D", "2回に1回: E"]);
+  // ほぼ毎回解ける問題が無い
+  assert.deepEqual(groups([0.5, 0.2, 0.05, 0, 0, 0, 0]), ["2回に1回: A", "たまに: B"]);
 });

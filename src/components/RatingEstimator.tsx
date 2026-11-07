@@ -15,7 +15,7 @@ import {
   tierFloor,
   tierOf,
 } from "../lib/ratingEstimate";
-import { describeChances, recentAbcTable, solveChances } from "../lib/perfGuide";
+import { groupChances, recentAbcTable, solveChances } from "../lib/perfGuide";
 import type { AbcTable } from "../lib/perfGuide";
 import type { ProblemModels, RatePoint } from "../lib/types";
 import { useTheme } from "../theme";
@@ -42,9 +42,16 @@ export function RatingEstimator({ history, models }: { history: RatePoint[]; mod
   const [perfText, setPerfText] = useState(() => String(rise ?? Math.max(now, 400)));
   const [targetText, setTargetText] = useState(() => String(up ?? now + 100));
 
-  /** 目安の一言(最近の ABC で C までほぼ解けて、D が半々くらい) */
+  /** 目安の行に添える、そのパフォの実力で ABC の問題を解ける度合い(ほぼ毎回 A・B / 2回に1回 C / たまに D) */
   const guide = (perf: number | null) =>
-    table && perf !== null ? <span className="re-sub re-guide-sub">最近の ABC で {describeChances(solveChances(table, perf))}</span> : null;
+    table && perf !== null ? (
+      <span className="re-sub re-guide-sub">
+        ABC の目安:{" "}
+        {groupChances(solveChances(table, perf))
+          .map((g) => `${g.short} ${g.letters.join("・")}`)
+          .join(" / ")}
+      </span>
+    ) : null;
 
   const tierName = (rating: number) => {
     const t = tierOf(rating);
@@ -226,20 +233,26 @@ export function RatingEstimator({ history, models }: { history: RatePoint[]; mod
         ABC は 2000 以上だと Unrated で、パフォは {fmt(ABC_PERF_CAP)} までです。
         新しいコンテストの結果は、レートの更新のあとのデータ更新(6時間ごと、土日の夜は 22:45〜0:00 にも)で入ります。
         {table &&
-          ` 「最近の ABC で…」は、AtCoder Problems の難易度から、そのくらいの実力の人が ABC${table.from}〜${table.to} の各問題を解ける確率を平均した目安です(実際のパフォは解いた早さやペナルティでも変わります)。`}
+          ` 「ABC の目安」は、そのパフォくらいの実力の人が ABC${table.from}〜${table.to} の各問題を解ける確率(AtCoder Problems の難易度から計算)で分けています。ほぼ毎回は 80% 以上、2回に1回は 35〜80%、たまには 10〜35% です。実際のパフォは解いた早さやペナルティでも変わります。`}
       </p>
     </section>
   );
 }
 
-/** 入れたパフォの目安: 最近の ABC の A〜G をそれぞれ解ける確率 */
+/** 入れたパフォの実力の目安: 最近の ABC の A〜G を解ける度合いの区分と、それぞれの確率 */
 function PerfGuide({ table, perf }: { table: AbcTable; perf: number }) {
   const chances = solveChances(table, perf);
   return (
     <div className="re-guide">
-      <p className="re-guide-say">
-        最近の ABC なら <strong>{describeChances(chances)}</strong>
-      </p>
+      <p className="re-guide-say">パフォ {fmt(perf)} の実力の目安(最近の ABC)</p>
+      <dl className="re-groups">
+        {groupChances(chances).map((g) => (
+          <div key={g.label} className="re-group">
+            <dt>{g.label}</dt>
+            <dd>{g.letters.join(" ・ ")}</dd>
+          </div>
+        ))}
+      </dl>
       <div className="re-letters" role="list" aria-label={`最近の ABC(${table.from}〜${table.to})の各問題を解ける確率`}>
         {chances.map((c) => {
           const pct = Math.round(c.p * 100);

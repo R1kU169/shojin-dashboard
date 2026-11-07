@@ -63,26 +63,30 @@ export function solveChances(table: AbcTable, perf: number): LetterChance[] {
   });
 }
 
-/** 「ほぼ解ける」とみなす確率 */
-const SOLID = 0.8;
+/** 解ける度合いの区分。確率がこの下限以上の問題を入れる(これより低い問題は出さない) */
+export const LEVELS = [
+  { min: 0.8, label: "ほぼ毎回解ける", short: "ほぼ毎回" },
+  { min: 0.35, label: "2回に1回くらい", short: "2回に1回" },
+  { min: 0.1, label: "たまに解ける", short: "たまに" },
+] as const;
+
+export interface ChanceGroup {
+  label: string;
+  short: string;
+  letters: string[];
+}
 
 /**
- * 確率を一言にする。例: 「C までほぼ解けて、D が半々くらい」
- * ほぼ解ける(80% 以上)いちばん後ろの記号と、その次の記号の確率で言い分ける
+ * 問題を解ける度合いで分ける。例(パフォ 433): ほぼ毎回解ける A・B / 2回に1回くらい C / たまに解ける D。
+ * 空の区分は出さない。10% 未満の問題はどこにも入れない
  */
-export function describeChances(chances: readonly LetterChance[]): string {
-  let last = -1;
-  while (last + 1 < chances.length && chances[last + 1].p >= SOLID) last++;
-  if (last === chances.length - 1) return `${chances[last].letter} までほぼ解けるくらい`;
-  const next = chances[last + 1];
-  const tail =
-    next.p >= 0.6
-      ? `${next.letter} も解けることが多い`
-      : next.p >= 0.35
-        ? `${next.letter} が半々くらい`
-        : next.p >= 0.15
-          ? `${next.letter} はときどき解ける`
-          : `${next.letter} はまだ難しい`;
-  if (last < 0) return next.p >= 0.35 ? `${next.letter} が解けるかどうかくらい` : `${next.letter} もまだ難しいくらい`;
-  return `${chances[last].letter} までほぼ解けて、${tail}`;
+export function groupChances(chances: readonly LetterChance[]): ChanceGroup[] {
+  const out: ChanceGroup[] = [];
+  for (let i = 0; i < LEVELS.length; i++) {
+    const { min, label, short } = LEVELS[i];
+    const max = i === 0 ? Infinity : LEVELS[i - 1].min;
+    const letters = chances.filter((c) => c.p >= min && c.p < max).map((c) => c.letter);
+    if (letters.length > 0) out.push({ label, short, letters });
+  }
+  return out;
 }

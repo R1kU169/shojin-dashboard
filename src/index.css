@@ -3390,9 +3390,31 @@ button.member-card {
   border: 1px solid var(--border);
 }
 .re-guide-say {
-  margin: 0 0 10px;
+  margin: 0 0 8px;
   font-size: 13px;
+  font-weight: 700;
   line-height: 1.6;
+}
+/* 解ける度合いの区分(ほぼ毎回解ける / 2回に1回くらい / たまに解ける) */
+.re-groups {
+  margin: 0 0 12px;
+  display: grid;
+  gap: 4px;
+}
+.re-group {
+  display: grid;
+  grid-template-columns: 8.5em 1fr;
+  gap: 8px;
+  align-items: baseline;
+  font-size: 13px;
+}
+.re-group dt {
+  color: var(--muted);
+}
+.re-group dd {
+  margin: 0;
+  font-weight: 700;
+  letter-spacing: 0.02em;
 }
 .re-letters {
   display: grid;
