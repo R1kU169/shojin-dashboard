@@ -168,5 +168,55 @@ export function expandMacros(toks: Tok[], rules: LexRules, d: Dialect, warn: (w:
   const withLead = (body: Tok[], at: Tok): Tok[] => (body.length ? [{ ...body[0], sp: at.sp, nl: at.nl }, ...body.slice(1)] : body);
   const expanded = expand(out, 0, new Set());
   if (count >= MAX_EXPANSIONS) warn({ line: 1, code: "macro-limit", message: "マクロの展開が多すぎるので途中で打ち切りました" });
-  return { toks: expanded, consts };
+  return { toks: expandTypeAliases(expanded, withLead), consts };
+}
+
+/** 別名を元の型に置き換える入れ物(数の型 using ll = long long; は置き換えない) */
+const CONTAINER_TYPES = new Set(["vector", "set", "multiset", "unordered_set", "map", "multimap", "unordered_map", "deque", "queue", "stack", "priority_queue", "string", "basic_string", "array", "bitset", "list"]);
+
+/**
+ * 3. 入れ物の型の別名 using vi = vector<int>; / typedef vector<ll> vl; を元の型に置き換える。
+ * 置き換えないと vi a(n) が配列と読めず、大きさ N も、sort(a) の要素数も分からなくなる
+ */
+function expandTypeAliases(toks: Tok[], withLead: (body: Tok[], at: Tok) => Tok[]): Tok[] {
+  const aliases = new Map<string, Tok[]>();
+  const defs: [number, number][] = [];
+  const resolve = (body: Tok[]): Tok[] => body.flatMap((b) => (b.k === "ident" && aliases.has(b.v) ? aliases.get(b.v)! : [b]));
+  for (let i = 0; i < toks.length; i++) {
+    const t = toks[i];
+    if (t.v !== "using" && t.v !== "typedef") continue;
+    let end = i + 1;
+    while (end < toks.length && !(toks[end].k === "op" && toks[end].v === ";")) end++;
+    if (end >= toks.length) break;
+    let name: string | null = null;
+    let body: Tok[] = [];
+    if (t.v === "using" && toks[i + 1]?.k === "ident" && toks[i + 2]?.k === "op" && toks[i + 2].v === "=") {
+      name = toks[i + 1].v;
+      body = toks.slice(i + 3, end);
+    } else if (t.v === "typedef" && end - i >= 3 && toks[end - 1].k === "ident") {
+      name = toks[end - 1].v;
+      body = toks.slice(i + 1, end - 1);
+    }
+    defs.push([i, end]);
+    i = end;
+    if (!name) continue;
+    const resolved = resolve(body);
+    if (resolved.some((b) => b.k === "ident" && CONTAINER_TYPES.has(b.v))) aliases.set(name, resolved);
+  }
+  if (aliases.size === 0) return toks;
+  const res: Tok[] = [];
+  let d = 0;
+  for (let i = 0; i < toks.length; i++) {
+    // 定義の文そのものは書き換えない(読み捨てる文として残す)
+    if (d < defs.length && i === defs[d][0]) {
+      res.push(...toks.slice(defs[d][0], defs[d][1] + 1));
+      i = defs[d][1];
+      d++;
+      continue;
+    }
+    const t = toks[i];
+    const body = t.k === "ident" ? aliases.get(t.v) : undefined;
+    res.push(...(body ? withLead(body.map((b) => ({ ...b, line: t.line })), t) : [t]));
+  }
+  return res;
 }

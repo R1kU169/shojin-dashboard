@@ -102,6 +102,8 @@ function classify(arg: SExpr, pos: number, params: string[], mids: Set<string>, 
   if (arg.kind === "sym" && mids.has(arg.name)) return "half";
   if (arg.kind === "bin" && (arg.op === "+" || arg.op === "-") && arg.l.kind === "sym" && mids.has(arg.l.name)) return "half";
   if (isHalf(arg)) return "half";
+  // gcd(b, a % b): 余りを取る互除法。2回で値が半分以下になるので log 回
+  if (arg.kind === "bin" && (arg.op === "%" || arg.op === "mod") && arg.l.kind === "sym" && params.includes(arg.l.name) && arg.r.kind === "sym" && params.includes(arg.r.name)) return "half";
   if (arg.kind === "bin" && (arg.op === "-" || arg.op === "+") && arg.l.kind === "sym" && params.includes(arg.l.name) && (arg.r.kind === "num" || arg.r.kind === "sym")) {
     return arg.op === "-" ? "step-down" : "step-up";
   }
@@ -133,7 +135,10 @@ function baseCaseBounds(body: readonly IrNode[], params: string[]): Map<string, 
   const out = new Map<string, SExpr>();
   for (const n of body.slice(0, 8)) {
     if (n.kind !== "branch") continue;
-    for (const c of n.conds) {
+    for (let k = 0; k < n.conds.length; k++) {
+      const c = n.conds[k];
+      // 打ち切りは return する分岐だけ(ナップサックの if wt <= w: のような途中の分岐は打ち切りではない)
+      if (!c || !n.branches[k]?.some((b) => b.kind === "return")) continue;
       walk(c, (x) => {
         if (x.kind !== "cmp") return;
         if (x.l.kind === "sym" && params.includes(x.l.name) && ["==", ">=", ">"].includes(x.op) && !out.has(x.l.name)) out.set(x.l.name, x.r);
@@ -264,7 +269,10 @@ export function estimateRecursion(inp: RecInput): RecEstimate {
     for (const i of varying) {
       const p = params[i];
       const base = bases.get(p);
-      let b = base ? boundOf(base, env)?.expr ?? null : null;
+      // if i == 0: return のように定数で打ち切るなら、0 は状態数ではない(数え下げていく)。
+      // 表の大きさか、仮引数の記号(呼び出し側で実際の引数に置き換わる)を使う
+      const bb = base ? boundOf(base, env)?.expr ?? null : null;
+      let b = bb && constValue(bb) === null ? bb : null;
       if (!b && memo.table && memo.source === "array") {
         const d = memoDim(memo.table, i, env);
         if (d) {
@@ -274,7 +282,11 @@ export function estimateRecursion(inp: RecInput): RecEstimate {
       }
       if (!b) {
         b = env.sym(p);
-        conf = "low";
+        // 定数まで数え下げる仮引数は、呼び出し側の引数(f(n - 1) の n)がそのまま状態数になる。
+        // 打ち切りが分からないときだけ、記号の積とみなした旨を出す
+        if (bb && constValue(bb) !== null) {
+          if (conf === "high") conf = "medium";
+        } else conf = "low";
       }
       states = mul(states, b);
       depth = add(depth, b);

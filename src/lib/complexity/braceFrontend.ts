@@ -83,7 +83,9 @@ export class BraceParser {
       if (c >= 0) {
         // 閉じ括弧の後ろが式の続き(Go / Rust の if (a + b) % 2 == 0 {)なら、括弧は条件の一部
         const after = this.t[c + 1];
-        if (!after || after.k !== "op" || after.nl || ["{", ";", "++", "--"].includes(after.v)) {
+        // Rust の for (dy, dx) in [...] { は、括弧がパターンで見出しの一部(括弧の中だけを見出しにしない)
+        const patternIn = !!after && !after.nl && after.v === "in";
+        if (!patternIn && (!after || after.k !== "op" || after.nl || ["{", ";", "++", "--"].includes(after.v))) {
           const inner = this.t.slice(this.i + 1, c);
           this.i = c + 1;
           return inner;

@@ -239,7 +239,7 @@ export interface IterCount {
 }
 
 const WRAP_CALLS = new Set(["axes", "enumerate", "reversed", "sorted", "set", "list", "tuple", "iter", "frozenset", "deque", "zip", "Counter", "sorted_by", "each_with_index", "pairs", "ipairs", "keys", "values", "eachindex", "collect", "items", "reverse", "rev", "Reverse", "chain", "sort", "uniq", "unique", "withIndex", "entries", "Object.entries", "Object.keys", "Object.values"]);
-const WRAP_MEMBERS = new Set(["items", "keys", "values", "iter", "into_iter", "iter_mut", "chars", "bytes", "rev", "reverse", "reversed", "enumerate", "each", "each_with_index", "entries", "copied", "cloned", "to_a", "with_index", "each_char", "each_key", "each_value", "pairs", "mpairs", "mitems", "items", "keySet", "entrySet", "AsEnumerable", "Keys", "Values", "sorted", "uniq", "zip", "windows", "chunks", "to_vec", "toList", "toSeq", "lines", "split", "split_whitespace", "Split", "sort", "values_mut", "enumerated"]);
+const WRAP_MEMBERS = new Set(["items", "keys", "values", "iter", "into_iter", "iter_mut", "chars", "bytes", "rev", "reverse", "reversed", "enumerate", "each", "each_with_index", "entries", "copied", "cloned", "to_a", "with_index", "each_char", "each_key", "each_value", "pairs", "mpairs", "mitems", "items", "keySet", "entrySet", "AsEnumerable", "Keys", "Values", "sorted", "uniq", "zip", "windows", "chunks", "to_vec", "toList", "toSeq", "lines", "split", "split_whitespace", "split_ascii_whitespace", "Split", "sort", "values_mut", "enumerated"]);
 
 /** 最後の引数がコレクションの関数(Haskell の map f xs / filter p xs / nub xs / sortOn f xs) */
 const WRAP_LAST = new Set(["nub", "nubBy", "sortOn", "sortBy", "filter", "map", "mapMaybe", "takeWhile", "dropWhile", "group", "groupBy", "tails", "inits", "zip", "zip3", "concat", "concatMap", "M.toList", "M.keys", "M.elems", "M.assocs", "S.toList", "S.elems", "V.toList", "elems", "assocs", "indices"]);
@@ -468,6 +468,31 @@ export function inferLoop(loop: LoopNode, env: BoundEnv): LoopFactor {
   return whileLoop(loop, env);
 }
 
+/** i & -i(最下位のビット)。Fenwick 木(BIT)で i を進める・戻す刻み */
+function isLowbit(by: SExpr | null, v: string): boolean {
+  if (!by || by.kind !== "bin" || by.op !== "&") return false;
+  const isV = (x: SExpr) => x.kind === "sym" && x.name === v;
+  const isNegV = (x: SExpr) => x.kind === "un" && x.op === "-" && isV(x.e);
+  return (isV(by.l) && isNegV(by.r)) || (isNegV(by.l) && isV(by.r));
+}
+
+/** i &= i - 1(最下位の立っているビットを消す)の i - 1 */
+const isMinusOne = (by: SExpr | null, v: string): boolean =>
+  !!by && by.kind === "bin" && by.op === "-" && by.l.kind === "sym" && by.l.name === v && by.r.kind === "num" && by.r.value === 1;
+
+/**
+ * ビットずつ動くループ: i += i & -i / i -= i & -i(Fenwick 木)、i &= i - 1(立っているビットを数える)。
+ * どれも log 回。回数の元は、上限(i <= n)・初期値・どちらも分からなければ主記号の順に取る
+ */
+function bitSteps(u: { op: string; by: SExpr | null } | null, v: string, limE: SExpr | null, start: SExpr | null, env: BoundEnv): LoopFactor | null {
+  if (!u) return null;
+  const lowbit = (u.op === "+=" || u.op === "-=") && isLowbit(u.by, v);
+  const clearLow = u.op === "&=" && isMinusOne(u.by, v);
+  if (!lowbit && !clearLow) return null;
+  const base = (limE ? boundOf(limE, env)?.expr : null) ?? (start ? boundOf(start, env)?.expr : null) ?? Q;
+  return { expr: logOfExpr(base), conf: "high", reason: lowbit ? `${v} を最下位のビットずつ動かす(Fenwick 木)` : `${v} の立っているビットを1つずつ消す` };
+}
+
 function forC(loop: LoopNode, b: Extract<LoopNode["bound"], { form: "for-c" }>, env: BoundEnv): LoopFactor {
   const line = loop.loc.line;
   const v = b.var;
@@ -479,6 +504,9 @@ function forC(loop: LoopNode, b: Extract<LoopNode["bound"], { form: "for-c" }>, 
   const u = b.update ? updateOf(b.update, v) : null;
   const lim = limitOf(b.cond, v);
   const initVal = b.init ? findInit(b.init, v) : null;
+  // Fenwick 木 for (; i <= n; i += i & -i) / for (; i > 0; i -= i & -i)、for (; i > 0; i &= i - 1)
+  const bits = bitSteps(u, v, lim && lim.kind === "lt" ? lim.E : null, initVal ?? env.initialValue(v, loop), env);
+  if (bits) return bits;
   // 部分集合の列挙 for (s = mask; s > 0; s = (s - 1) & mask)
   if (u && u.op === "&=") {
     return { expr: [{ coef: 1, factors: [{ v: "?", pow: 0, log: 0, exp: 1, fact: 0 }] }], conf: "low", reason: "部分集合の列挙", warn: `${line}行目: 部分集合の列挙の正確な合計は 3^N です(表示は上界)` };
@@ -659,7 +687,12 @@ function whileLoop(loop: LoopNode, env: BoundEnv): LoopFactor {
       for (const vName of vs) {
         const init = env.initialValue(vName, loop);
         const bb = init ? boundOf(init, env) : null;
-        if (bb && (!hi || (constValue(bb.expr) ?? 0) > (constValue(hi) ?? 0) || constValue(bb.expr) === null)) hi = bb.expr;
+        if (!bb) continue;
+        // 記号(n)を定数(lo = -1)より優先する。定数どうしのときだけ大きい方(記号を 0 とみなして比べると、
+        // lo, hi = -1, n で -1 を選び、二分探索を 1 回と数えてしまう)
+        const bv = constValue(bb.expr);
+        const hv = hi ? constValue(hi) : null;
+        if (!hi || (hv !== null && (bv === null || bv > hv))) hi = bb.expr;
       }
       if (hi) return { expr: logOfExpr(hi), conf: "high", reason: "二分探索" };
       return { expr: logOfExpr(Q), conf: "medium", reason: "二分探索", warn: `${line}行目: 二分探索の範囲の上限が分かりません。log N とみなしました` };
@@ -670,7 +703,21 @@ function whileLoop(loop: LoopNode, env: BoundEnv): LoopFactor {
   const dec = cond.kind === "assign" ? cond : cond.kind === "cmp" && cond.l.kind === "assign" ? cond.l : null;
   if (dec && dec.kind === "assign" && dec.op === "--" && dec.target.kind === "sym") {
     const t = dec.target.name;
+    // int t = 1; // cin >> t; while (t--) solve(); のように、入力で読まず定数で始めるなら定数回
+    const init = env.isInputVar(t) ? null : env.initialValue(t, loop);
+    if (init && init.kind === "num") return { expr: lit(Math.max(1, init.value)), conf: "high", reason: `${t} 回(${init.value} から減らす)` };
     return { expr: env.sym(t), conf: "high", reason: `${t} 回(マルチテスト)`, info: env.isInputVar(t) ? "マルチテストです。範囲指定の N は1ケースあたりの値にしてください" : undefined };
+  }
+
+  // while (i >>= 1) / while (i /= 2): 条件の中で半分にしていく
+  if (cond.kind === "assign" && cond.target.kind === "sym" && cond.value && cond.value.kind === "num") {
+    const x = cond.target.name;
+    const k = cond.value.value;
+    if (((cond.op === ">>=" || cond.op === "shr=") && k >= 1) || ((cond.op === "/=" || cond.op === "//=") && k >= 2)) {
+      const init = env.initialValue(x, loop);
+      const X = (init ? boundOf(init, env)?.expr : null) ?? Q;
+      return { expr: logOfExpr(X), conf: "high", reason: `${x} を半分ずつにする` };
+    }
   }
 
   // 直前の大きい要素をリンクでたどるスタック:
@@ -752,6 +799,15 @@ function whileLoop(loop: LoopNode, env: BoundEnv): LoopFactor {
       const X = first && first.kind === "sym" ? startOf(first.name) : Q;
       return { expr: logOfExpr(X), conf: "medium", reason: "ユークリッドの互除法" };
     }
+  }
+
+  // Fenwick 木 while i <= n: i += i & -i / while i > 0: i -= i & -i、while (x) x &= x - 1
+  for (const a of assigns) {
+    if (a.target.kind !== "sym" || !cv.includes(a.target.name)) continue;
+    const x = a.target.name;
+    const lim = limitOf(cond, x);
+    const bits = bitSteps(updateOf(a, x), x, lim && lim.kind === "lt" ? lim.E : null, env.initialValue(x, loop), env);
+    if (bits) return bits;
   }
 
   // 条件の変数を ±k で動かす代入。刻みが定数のもの(r += 1)を、和を足していくもの(s += a[r])より先に見る

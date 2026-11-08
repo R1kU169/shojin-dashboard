@@ -112,7 +112,7 @@ const HASH_METHODS: Record<string, BuiltinRule> = table([
   ["insert emplace erase find count contains at add remove discard get put containsKey has delete Add Remove Contains ContainsKey TryGetValue getOrDefault get_or_insert entry or_insert setdefault pop key? has_key? hasKey getOrDefault mgetOrPut hasKeyOrPut del excl incl inc fetch dig store haskey get! delete! push! set", r(one, { conf: "medium", note: "ハッシュは平均 O(1)(最悪 O(N))" })],
   ["size empty len is_empty clear Count keys values items entries iter", r(one)],
 ]);
-for (const n of ["insert", "emplace", "add", "put", "Add", "set", "setdefault", "entry", "incl", "inc", "store", "push!", "get!", "mgetOrPut", "hasKeyOrPut", "try_emplace", "insert_or_assign", "<<", "add?"]) HASH_METHODS[n] = r(one, { grows: true, conf: "medium" });
+for (const n of ["insert", "emplace", "add", "put", "Add", "set", "setdefault", "entry", "incl", "inc", "store", "push!", "get!", "mgetOrPut", "hasKeyOrPut", "try_emplace", "insert_or_assign", "<<", "add?", "merge", "putIfAbsent", "computeIfAbsent", "computeIfPresent", "compute"]) HASH_METHODS[n] = r(one, { grows: true, conf: "medium" });
 // Ruby の h.keys / h.values / h.to_a は配列を作る
 for (const n of ["to_a", "sort_by", "min_by", "max_by", "sum", "count", "map", "select", "reject", "each", "each_pair", "each_key", "each_value", "sort", "group_by", "find", "any?", "all?"]) HASH_METHODS[n] = r(S, { loopArg: 0 });
 
@@ -154,7 +154,7 @@ DEQUE_METHODS.insert = r(S);
 DEQUE_METHODS.reverse = r(S);
 
 const STRING_METHODS: Record<string, BuiltinRule> = table([
-  ["find rfind replace split join count strip lstrip rstrip upper lower reverse reversed startswith endswith index rindex indexOf lastIndexOf contains includes starts_with ends_with trim chars bytes lines split_whitespace to_string to_owned substr substring slice repeat Replace Split Contains IndexOf Substring ToUpper ToLower Trim ToCharArray each_char gsub sub tr scan to_s capitalize swapcase center ljust rjust zfill format encode decode count_chars toCharArray charAt? toUpperCase toLowerCase", r(S)],
+  ["find rfind replace split join count strip lstrip rstrip upper lower reverse reversed startswith endswith index rindex indexOf lastIndexOf contains includes starts_with ends_with trim chars bytes lines split_whitespace split_ascii_whitespace to_string to_owned substr substring slice repeat Replace Split Contains IndexOf Substring ToUpper ToLower Trim ToCharArray each_char gsub sub tr scan to_s capitalize swapcase center ljust rjust zfill format encode decode count_chars toCharArray charAt? toUpperCase toLowerCase", r(S)],
   ["size length len empty at back front push_back pop_back charAt [] Length is_empty append", r(one)],
 ]);
 for (const n of ["push_back", "append", "push", "push_str", "Append", "add"]) STRING_METHODS[n] = r(one, { grows: true });

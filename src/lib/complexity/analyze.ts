@@ -456,17 +456,15 @@ export class Analyzer {
   initialValue(name: string, loop: LoopNode, env: WalkEnv): SExpr | null {
     for (let f = env.before.length - 1; f >= 0; f--) {
       const fr = env.before[f];
-      for (let k = fr.upto - 1; k >= 0; k--) {
-        const n = fr.list[k];
+      // 文の並びごとの索引(変数名 → 値を決める文の位置)から、upto より手前の最後のものを引く。
+      // 手前の文を毎回すべて読み直すと、ループが N 個並ぶコードで全体が N² になる
+      const at = assignIndex(fr.list).get(name);
+      if (!at) continue;
+      for (let j = lastBefore(at, fr.upto); j >= 0; j--) {
+        const n = fr.list[at[j]];
         if (n === loop) continue;
-        if (n.kind === "assign" && n.op === "=" && n.value) {
-          if (n.target.kind === "sym" && n.target.name === name) return n.value;
-          if (n.target.kind === "list" && n.value.kind === "list") {
-            const i = n.target.items.findIndex((x) => x.kind === "sym" && x.name === name);
-            if (i >= 0 && n.value.items[i]) return n.value.items[i];
-          }
-        }
-        if (n.kind === "decl" && n.name === name && n.init) return n.init;
+        const v = valueFor(n, name);
+        if (v) return v;
       }
     }
     // for (int l = 0, r = 0; …) の初期化
@@ -636,7 +634,8 @@ export class Analyzer {
     }
     // Python / Java の文字列の += はコピーになりうる
     if (op === "+=" && target.kind === "sym" && (this.lang === "python" || this.lang === "pypy" || this.lang === "java") && value && (value.kind === "str" || this.kindOf(target) === "string") && env.outer.length > 0 && !this.stringConcatWarned) {
-      this.stringConcatWarned = true;
+      // 1回目の走査では warn が捨てられるので、印は警告を実際に出す2回目で付ける(1回目で付けると一度も出ない)
+      if (this.pass !== 1) this.stringConcatWarned = true;
       this.warn(`${line}行目: 文字列の += は長さぶんのコピーになりえます(ここでは1回 O(1) で数えています)`, "info", line);
     }
     return c;
@@ -763,7 +762,9 @@ export class Analyzer {
   callCost(name: string, ns: string | null, recv: SExpr | null, args: SExpr[] | null, env: WalkEnv, reading: boolean, line: number): Cost {
     // 受け手が名前空間(std:: / Math. / heapq.)なら自由関数
     if (recv && recv.kind === "sym" && (NAMESPACES.has(recv.name) || (/^[A-Z]/.test(recv.name) && !this.decls.has(recv.name) && !this.inputs.has(recv.name)))) {
-      return this.callCost(name, recv.name, null, args ?? [], env, reading, line);
+      // Integer::sum / Math.PI のように呼んでいない参照(関数を値として渡すだけ)は数えない
+      if (args === null) return empty();
+      return this.callCost(name, recv.name, null, args, env, reading, line);
     }
     const argv = args ?? [];
     // 自己呼び出し(再帰)
@@ -2141,4 +2142,51 @@ function extremeInits(nodes: readonly IrNode[], name: string): SExpr[] | null {
   };
   visit(nodes);
   return ok && inits.length > 0 ? inits : null;
+}
+
+/** 文が name の値を決めるなら、その値(x = v / (a, b) = (v, w) / int x = v) */
+function valueFor(n: IrNode, name: string): SExpr | null {
+  if (n.kind === "assign" && n.op === "=" && n.value) {
+    if (n.target.kind === "sym" && n.target.name === name) return n.value;
+    if (n.target.kind === "list" && n.value.kind === "list") {
+      const i = n.target.items.findIndex((x) => x.kind === "sym" && x.name === name);
+      if (i >= 0 && n.value.items[i]) return n.value.items[i];
+    }
+  }
+  if (n.kind === "decl" && n.name === name && n.init) return n.init;
+  return null;
+}
+
+const ASSIGN_INDEX = new WeakMap<readonly IrNode[], Map<string, number[]>>();
+
+/** 文の並びの、変数名 → 値を決める文の位置(昇順)。並びごとに1回だけ作る */
+function assignIndex(list: readonly IrNode[]): Map<string, number[]> {
+  let m = ASSIGN_INDEX.get(list);
+  if (m) return m;
+  m = new Map();
+  const put = (name: string, k: number) => {
+    const xs = m!.get(name);
+    if (xs) xs.push(k);
+    else m!.set(name, [k]);
+  };
+  list.forEach((n, k) => {
+    if (n.kind === "assign" && n.op === "=" && n.value) {
+      if (n.target.kind === "sym") put(n.target.name, k);
+      else if (n.target.kind === "list") for (const x of n.target.items) if (x.kind === "sym") put(x.name, k);
+    } else if (n.kind === "decl" && n.init) put(n.name, k);
+  });
+  ASSIGN_INDEX.set(list, m);
+  return m;
+}
+
+/** 昇順の位置の並び xs の中で、upto より手前の最後の要素の添字(無ければ -1) */
+function lastBefore(xs: readonly number[], upto: number): number {
+  let lo = -1;
+  let hi = xs.length;
+  while (hi - lo > 1) {
+    const mid = (lo + hi) >> 1;
+    if (xs[mid] < upto) lo = mid;
+    else hi = mid;
+  }
+  return lo;
 }

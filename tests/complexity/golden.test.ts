@@ -2609,6 +2609,223 @@ const CASES: Golden[] = [
           s.update(b)`,
     time: "O(N² + N·|b|)",
   },
+  {
+    id: "追加70 Python: Fenwick 木(i += i & -i / i -= i & -i)は log",
+    lang: "pypy",
+    code: `
+      n = int(input())
+      a = list(map(int, input().split()))
+      bit = [0] * (n + 1)
+      def add(i, x):
+          while i <= n:
+              bit[i] += x
+              i += i & -i
+      def total(i):
+          s = 0
+          while i > 0:
+              s += bit[i]
+              i -= i & -i
+          return s
+      ans = 0
+      for j, v in enumerate(a):
+          ans += j - total(v)
+          add(v, 1)
+      print(ans)`,
+    time: "O(N log N)",
+  },
+  {
+    id: "追加71 C++: Fenwick 木の for(初期化なし・++i)",
+    lang: "cpp",
+    code: `
+      #include <bits/stdc++.h>
+      using namespace std;
+      int n; vector<long long> bit;
+      void add(int i, long long x) { for (++i; i <= n; i += i & -i) bit[i] += x; }
+      long long sum(int i) { long long s = 0; for (; i > 0; i -= i & -i) s += bit[i]; return s; }
+      int main() {
+          int q; cin >> n >> q;
+          bit.assign(n + 1, 0);
+          while (q--) { int t, a, b; cin >> t >> a >> b; if (t == 0) add(a, b); else cout << sum(b) - sum(a) << "\\n"; }
+      }`,
+    time: "O(Q log N + N)",
+  },
+  {
+    id: "追加72 C++: i &= i - 1 は立っているビットの数(部分集合の列挙ではない)",
+    lang: "cpp",
+    code: `
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main() { int n; cin >> n; long long c = 0; for (int x = 1; x <= n; x++) { for (int i = x; i > 0; i &= i - 1) c++; } cout << c; }`,
+    time: "O(N log N)",
+  },
+  {
+    id: "追加73 Python: 再帰の互除法 gcd(y, x % y)",
+    lang: "pypy",
+    code: `
+      def gcd(x, y):
+          if y == 0:
+              return x
+          return gcd(y, x % y)
+      n = int(input())
+      a = list(map(int, input().split()))
+      g = 0
+      for v in a:
+          g = gcd(g, v)
+      print(g)`,
+    time: "O(N log N)",
+  },
+  {
+    id: "追加74 C++: セグメント木の while (i >>= 1) と for (l += n, r += n; …)",
+    lang: "cpp",
+    code: `
+      #include <bits/stdc++.h>
+      using namespace std;
+      int n; vector<long long> t;
+      void upd(int i, long long v) { i += n; t[i] = v; while (i >>= 1) t[i] = t[2 * i] + t[2 * i + 1]; }
+      long long qry(int l, int r) { long long s = 0; for (l += n, r += n; l < r; l >>= 1, r >>= 1) { if (l & 1) s += t[l++]; if (r & 1) s += t[--r]; } return s; }
+      int main() { int q; cin >> n >> q; t.assign(2 * n, 0); while (q--) { int a, b, c; cin >> a >> b >> c; if (a == 0) upd(b, c); else cout << qry(b, c) << "\\n"; } }`,
+    time: "O(Q log N + N)",
+  },
+  {
+    id: "追加75 Rust: for (dy, dx) in [...] はパターン(C の for の括弧ではない)",
+    lang: "rust",
+    code: `
+      use std::io::*;
+      use std::collections::VecDeque;
+      fn main() {
+          let mut s = String::new();
+          stdin().read_to_string(&mut s).unwrap();
+          let mut it = s.split_ascii_whitespace().map(|x| x.parse::<usize>().unwrap());
+          let h = it.next().unwrap();
+          let w = it.next().unwrap();
+          let mut d = vec![vec![0usize; w]; h];
+          let mut q = VecDeque::new();
+          q.push_back((0usize, 0usize));
+          while let Some((y, x)) = q.pop_front() {
+              for (dy, dx) in [(0i64, 1i64), (1, 0), (0, -1), (-1, 0)] {
+                  let ny = y as i64 + dy;
+                  let nx = x as i64 + dx;
+                  if ny < 0 || nx < 0 || ny >= h as i64 || nx >= w as i64 { continue; }
+                  let (ny, nx) = (ny as usize, nx as usize);
+                  if d[ny][nx] != 0 { continue; }
+                  d[ny][nx] = d[y][x] + 1;
+                  q.push_back((ny, nx));
+              }
+          }
+          println!("{}", d[h - 1][w - 1]);
+      }`,
+    time: "O(H·W)",
+  },
+  {
+    id: "追加76 C++: int t = 1; while (t--) は定数回(変数 T にしない)",
+    lang: "cpp",
+    code: `
+      #include <bits/stdc++.h>
+      using namespace std;
+      void solve() { int n; cin >> n; long long s = 0; for (int i = 0; i < n; i++) { long long x; cin >> x; s += x; } cout << s << "\\n"; }
+      int main() { int t = 1; // cin >> t;
+          while (t--) solve(); }`,
+    time: "O(N)",
+  },
+  {
+    id: "追加77 Python: lo, hi = -1, n の二分探索は log N(定数 -1 を上限にしない)",
+    lang: "pypy",
+    code: `
+      n, q = map(int, input().split())
+      a = sorted(map(int, input().split()))
+      for _ in range(q):
+          x = int(input())
+          lo, hi = -1, n
+          while hi - lo > 1:
+              mid = (lo + hi) // 2
+              if a[mid] >= x:
+                  hi = mid
+              else:
+                  lo = mid
+          print(hi)`,
+    time: "O(N log N + Q log N)",
+  },
+  {
+    id: "追加78 Python: 0 まで数え下げるメモ化再帰(Frog 2)は状態数 N × 遷移 K",
+    lang: "pypy",
+    code: `
+      import sys
+      from functools import lru_cache
+      sys.setrecursionlimit(10**6)
+      n, k = map(int, input().split())
+      h = list(map(int, input().split()))
+      @lru_cache(maxsize=None)
+      def f(i):
+          if i == 0:
+              return 0
+          best = 10**18
+          for j in range(1, k + 1):
+              if i - j >= 0:
+                  best = min(best, f(i - j) + abs(h[i] - h[i - j]))
+          return best
+      print(f(n - 1))`,
+    time: "O(N·K)",
+  },
+  {
+    id: "追加79 Python: メモ化のナップサック(return しない分岐は打ち切りではない)",
+    lang: "pypy",
+    code: `
+      import sys
+      from functools import lru_cache
+      sys.setrecursionlimit(10**6)
+      n, W = map(int, input().split())
+      wt = []
+      v = []
+      for _ in range(n):
+          a, b = map(int, input().split())
+          wt.append(a)
+          v.append(b)
+      @lru_cache(maxsize=None)
+      def f(i, w):
+          if i == n:
+              return 0
+          best = f(i + 1, w)
+          if wt[i] <= w:
+              best = max(best, f(i + 1, w - wt[i]) + v[i])
+          return best
+      print(f(0, W))`,
+    time: "O(N·W)",
+  },
+  {
+    id: "追加80 Java: cnt.merge(x, 1, Integer::sum) の Integer::sum は呼び出しではない",
+    lang: "java",
+    code: `
+      import java.util.*;
+      public class Main { public static void main(String[] args) { Scanner sc = new Scanner(System.in); int n = sc.nextInt(); Map<Integer, Integer> cnt = new HashMap<>(); for (int i = 0; i < n; i++) { int x = sc.nextInt(); cnt.merge(x, 1, Integer::sum); } System.out.println(cnt.size()); } }`,
+    time: "O(N)",
+  },
+  {
+    id: "追加81 C++: using vi = vector<int>; / typedef vector<ll> vl; は元の型として読む",
+    lang: "cpp",
+    code: `
+      #include <bits/stdc++.h>
+      using namespace std;
+      using ll = long long;
+      using vi = vector<int>;
+      typedef vector<ll> vl;
+      using vvi = vector<vi>;
+      #define all(x) (x).begin(), (x).end()
+      int main() { int n; cin >> n; vi a(n); for (auto& x : a) cin >> x; sort(all(a)); vl b(n); vvi g(n); for (int i = 0; i < n; i++) b[i] = a[i]; cout << b[0]; }`,
+    time: "O(N log N)",
+    space: "O(N)",
+  },
+  {
+    id: "追加82 Python: 文字列の += の注意は出す(1回目の走査で印を付けて消していた)",
+    lang: "python",
+    code: `
+      n = int(input())
+      s = ""
+      for i in range(n):
+          s += "a"
+      print(s)`,
+    time: "O(N)",
+    warn: /文字列の \+= は長さぶんのコピー/,
+  },
 ];
 
 for (const g of CASES) test(g.id, () => void check(g));

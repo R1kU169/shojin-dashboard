@@ -28,7 +28,7 @@ const KEYWORDS = new Set(["return", "delete", "throw", "goto", "new", "case", "d
 /** 宣言の前に付いてよい語(C 系) */
 const DECL_MODS = new Set(["static", "const", "constexpr", "consteval", "constinit", "final", "public", "private", "protected", "volatile", "register", "extern", "inline", "mutable", "thread_local", "readonly", "unsigned", "signed", "struct", "class", "enum", "typename", "override", "virtual", "scope", "immutable", "shared", "__gshared", "internal", "sealed", "unsafe", "transient", "synchronized", "abstract", "fixed"]);
 /** 1行の分割・数値変換として時間に数えない呼び出し(I1) */
-export const READ_FUNCS = new Set(["split", "split_whitespace", "splitlines", "words", "lines", "map", "Select", "int", "float", "parse", "parseInt", "parseFloat", "Number", "BigInt", "to_i", "to_f", "list", "tuple", "collect", "ToArray", "ToList", "toList", "read", "readInt", "strip", "rstrip", "lstrip", "trim", "chomp", "chop", "unwrap", "expect", "trim_end", "Parse", "atoi", "stoi", "stoll", "intval", "explode", "preg_split", "str_split", "array_map", "fromJust", "chars", "bytes", "to_vec", "to_string", "String", "as_bytes", "Split", "Trim", "ReadLine", "readLine", "readline", "input", "next", "nextInt", "nextLong", "nextDouble", "nextLine", "Scan", "Scanln", "Fscan", "scanf", "fscanf", "fgets", "gets", "getline", "readln", "readf", "to", "text", "decode", "buffer", "stdin", "iter", "unpack", "filter", "join", "toInt", "match", "tonumber", "shift", "splice", "lower", "upper", "casefold", "swapcase"]);
+export const READ_FUNCS = new Set(["split", "split_whitespace", "split_ascii_whitespace", "splitlines", "words", "lines", "map", "Select", "int", "float", "parse", "parseInt", "parseFloat", "Number", "BigInt", "to_i", "to_f", "list", "tuple", "collect", "ToArray", "ToList", "toList", "read", "readInt", "strip", "rstrip", "lstrip", "trim", "chomp", "chop", "unwrap", "expect", "trim_end", "Parse", "atoi", "stoi", "stoll", "intval", "explode", "preg_split", "str_split", "array_map", "fromJust", "chars", "bytes", "to_vec", "to_string", "String", "as_bytes", "Split", "Trim", "ReadLine", "readLine", "readline", "input", "next", "nextInt", "nextLong", "nextDouble", "nextLine", "Scan", "Scanln", "Fscan", "scanf", "fscanf", "fgets", "gets", "getline", "readln", "readf", "to", "text", "decode", "buffer", "stdin", "iter", "unpack", "filter", "join", "toInt", "match", "tonumber", "shift", "splice", "lower", "upper", "casefold", "swapcase"]);
 
 export const loc = (toks: readonly Tok[], line?: number): Loc => ({ line: toks[0]?.line ?? line ?? 1, endLine: lastLine(toks, toks[0]?.line ?? line ?? 1) });
 
@@ -82,7 +82,7 @@ function pureConversion(e: SExpr | null): boolean {
 }
 
 /** 行を語に分ける呼び出し(分けた元の変数は、できた配列の長さではなく中身) */
-const SPLIT_FUNCS = new Set(["split", "split_whitespace", "splitWhitespace", "Split", "explode", "preg_split", "str_split", "words", "chars", "each_char", "lines", "Fields"]);
+const SPLIT_FUNCS = new Set(["split", "split_whitespace", "split_ascii_whitespace", "splitWhitespace", "Split", "explode", "preg_split", "str_split", "words", "chars", "each_char", "lines", "Fields"]);
 
 /** 読み取りの元になった入力の名前(split(line) / s.split() / explode(" ", $s) の line / s)。回数(range(n) の n)は含めない */
 function sourceRefs(e: SExpr | null, ctx: LowerCtx): string[] {
@@ -101,8 +101,8 @@ function sourceRefs(e: SExpr | null, ctx: LowerCtx): string[] {
 function looksArray(e: SExpr): boolean {
   let arr = false;
   walk(e, (x) => {
-    if (x.kind === "call" && ["split", "map", "list", "collect", "words", "lines", "explode", "preg_split", "str_split", "array_map", "readlines", "split_whitespace", "Split", "ToArray", "ToList", "tuple", "sorted", "readLines", "mapIt", "readarray", "read_all"].includes(x.name)) arr = true;
-    if (x.kind === "member" && ["split", "map", "collect", "split_whitespace", "Split", "ToArray", "ToList", "readlines", "chars", "bytes", "to_vec", "each_char", "lines", "toList", "readLines", "mapIt", "splitWhitespace"].includes(x.name)) arr = true;
+    if (x.kind === "call" && ["split", "map", "list", "collect", "words", "lines", "explode", "preg_split", "str_split", "array_map", "readlines", "split_whitespace", "split_ascii_whitespace", "Split", "ToArray", "ToList", "tuple", "sorted", "readLines", "mapIt", "readarray", "read_all"].includes(x.name)) arr = true;
+    if (x.kind === "member" && ["split", "map", "collect", "split_whitespace", "split_ascii_whitespace", "Split", "ToArray", "ToList", "readlines", "chars", "bytes", "to_vec", "each_char", "lines", "toList", "readLines", "mapIt", "splitWhitespace"].includes(x.name)) arr = true;
     if (x.kind === "comp") arr = true;
     return !arr;
   });

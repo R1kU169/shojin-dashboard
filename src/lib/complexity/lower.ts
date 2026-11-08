@@ -62,10 +62,14 @@ function varOf(toks: readonly Tok[]): string | null {
   return ids.length ? ids[ids.length - 1].v : null;
 }
 
-/** C 系の for の初期化部から変数名(int i = 0 / i := 0 / $i = 0 / auto it = s.begin()) */
+/** 代入の演算子(= / := と、l += n のような複合代入) */
+const ASSIGN_OPS = new Set(["=", ":=", "+=", "-=", "*=", "/=", "%=", "<<=", ">>=", "&=", "|=", "^="]);
+
+/** C 系の for の初期化部から変数名(int i = 0 / i := 0 / $i = 0 / auto it = s.begin() / l += n) */
 function initVar(toks: readonly Tok[]): string | null {
   const first = splitTop(toks, ",")[0] ?? [];
-  const eq = findTop(first, (x) => x.k === "op" && (x.v === "=" || x.v === ":="));
+  // for (l += n, r += n; l < r; l >>= 1, r >>= 1) の l(= だけを見ると、右辺の n を変数と取り違える)
+  const eq = findTop(first, (x) => x.k === "op" && ASSIGN_OPS.has(x.v));
   if (eq > 0 && first[eq - 1].k === "ident") return first[eq - 1].v;
   return varOf(first);
 }
