@@ -5,11 +5,14 @@ import {
   buildContestIndex,
   contestIdOf,
   contestProblems,
+  coversContest,
   elapsedStr,
+  KENKOOOO_LAG_SEC,
   mergeUpcoming,
   parseContestTable,
   pickDefaultContest,
   rankMembers,
+  refreshOrder,
   scoreMember,
   shortContestName,
   submissionUrl,
@@ -310,13 +313,37 @@ test("mergeUpcoming と pickDefaultContest", () => {
     NOW,
   );
   assert.deepEqual(list.map((c) => c.id), ["abc481", "abc480"]);
-  // 終了から 6 時間以内なら参加人数 0 でも選ぶ
+  // 問題セットがまだ無ければ(スナップショットがまだ見ていない)、終了から1日以内は参加人数 0 でも選ぶ
+  // (GitHub Actions の定期実行が数時間遅れても、直近のコンテストを開けるように)
   assert.equal(pickDefaultContest(list, NOW)?.id, "abc481");
-  assert.equal(pickDefaultContest(list, NOW + 7 * 3600)?.id, "abc480");
+  assert.equal(pickDefaultContest(list, NOW + 7 * 3600)?.id, "abc481");
+  assert.equal(pickDefaultContest(list, NOW + 25 * 3600)?.id, "abc480");
   // 開催中のものは選ばない
   assert.equal(pickDefaultContest(list, START + 100)?.id, "abc480");
   assert.equal(pickDefaultContest([], NOW), undefined);
   // 開催中のスナップショットで問題セットがあり 0 人と分かっているもの(Rated 範囲外の ARC など)は、終了直後でも選ばない
   const arc: ClubContest = { ...ABC481, id: "arc233", start: START + 60, joined: 0 };
   assert.equal(pickDefaultContest([arc, older], NOW + 200)?.id, "abc480");
+});
+
+test("coversContest: 終了から kenkoooo の遅れの見込みより後に取ったデータだけ、提出がそろっているとみなす", () => {
+  const end = START + 6000;
+  assert.equal(coversContest(0, ABC481), false);
+  assert.equal(coversContest((end + 60) * 1000, ABC481), false);
+  assert.equal(coversContest((end + KENKOOOO_LAG_SEC) * 1000, ABC481), true);
+});
+
+test("refreshOrder: このコンテストに提出がある人 → 直近のコンテストによく出ている人 → 最近提出した人の順", () => {
+  const prev = (n: number): ClubContest => ({ ...ABC481, id: `abc${481 - n}`, start: START - n * 7 * 86400 });
+  const list = [ABC481, prev(1), prev(2), prev(3)];
+  const at = (c: ClubContest, sec: number) => ({ ...sub("a", 0, "AC"), contest_id: c.id, epoch_second: c.start + sec });
+  const locals = [
+    null, // 手元にデータが無い
+    { list: [at(prev(3), 10)], watermark: 100 }, // 1回
+    { list: [at(prev(1), 10), at(prev(2), 10)], watermark: 50 }, // 2回
+    { list: [at(ABC481, 10)], watermark: 10 }, // このコンテストに提出がある
+    { list: [at(prev(1), 9000)], watermark: 200 }, // 時間外だけ(0回)だが最近提出した
+    { list: [at(prev(1), 20)], watermark: 300 }, // 1回・より最近
+  ];
+  assert.deepEqual(refreshOrder(ABC481, list, locals), [3, 2, 5, 1, 4, 0]);
 });

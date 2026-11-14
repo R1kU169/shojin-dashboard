@@ -177,11 +177,58 @@ export const contestEnd = (c: { start: number; duration: number }) => c.start + 
 
 /**
  * 部員が参加したかもしれないコンテストか。スナップショットで参加人数を数えていればそれを信じる。
- * 問題セットがまだ無い(スナップショットが開催中の様子をまだ見ていない)ものは、終わって6時間以内なら参加したかもしれないとみなす
- * (終了直後に開いた人のため。開催中のスナップショットで 0 人と分かっている Rated 範囲外の ARC などは選ばない)
+ * 問題セットがまだ無い(スナップショットが開催中の様子をまだ見ていない)ものは、終わって1日以内なら参加したかもしれないとみなす
+ * (終了直後に開いた人のため。GitHub Actions の定期実行は数時間遅れたり飛ばされたりするので、6時間では足りなかった。
+ * 開催中のスナップショットで 0 人と分かっている Rated 範囲外の ARC などは選ばない)
  */
 export function mayHaveMembers(c: ClubContest, now: number): boolean {
-  return c.joined > 0 || (c.problems.length === 0 && now - contestEnd(c) < 6 * 60 * 60);
+  return c.joined > 0 || (c.problems.length === 0 && now - contestEnd(c) < DAY_SEC);
+}
+
+/**
+ * kenkoooo に提出が載るまでの遅れの見込み(秒)。混んでいるコンテストの直後は数十分遅れることがある。
+ * 終了からこれより前に取ったデータでは、時間内の提出が無くても「参加していない」とは言い切らない
+ */
+export const KENKOOOO_LAG_SEC = 30 * 60;
+
+/** atMs(最後に kenkoooo から最新まで取れた時刻・ミリ秒)のデータで、そのコンテストの提出がそろっていると言えるか */
+export function coversContest(atMs: number, c: { start: number; duration: number }): boolean {
+  return atMs / 1000 >= contestEnd(c) + KENKOOOO_LAG_SEC;
+}
+
+/**
+ * 最新の提出を取り直す順番の重み(大きいほど先に取る)。kenkoooo へは1人ずつ間をあけて問い合わせるので、
+ * 参加していそうな部員を先に取り、表が早く埋まるようにする。
+ * 手元のデータですでにこのコンテストの提出がある人 → 直近のコンテスト(recent)によく参加している人の順
+ */
+export function refreshWeight(c: ClubContest, recent: ClubContest[], subs: Submission[]): number {
+  const byId = new Map(recent.map((r) => [r.id, r]));
+  const joined = new Set<string>();
+  let here = false;
+  for (const s of subs) {
+    if (inContest(s, c)) here = true;
+    const r = byId.get(s.contest_id);
+    if (r && inContest(s, r)) joined.add(r.id);
+  }
+  return (here ? 1000 : 0) + joined.size;
+}
+
+/**
+ * 取り直す順番。refreshWeight の大きい順、同じなら最後に提出した時刻(watermark)の新しい順(最近よく解いている人が先)。
+ * 並べ替えた添字を返す(同じなら元の順)
+ */
+export function refreshOrder(
+  c: ClubContest,
+  list: ClubContest[],
+  locals: ({ list: Submission[]; watermark: number } | null)[],
+): number[] {
+  // このコンテストより前に終わった、直近 10 回(部員の参加の傾向を見る)
+  const recent = list
+    .filter((r) => r.id !== c.id && contestEnd(r) <= c.start)
+    .sort((a, b) => b.start - a.start)
+    .slice(0, 10);
+  const keys = locals.map((l) => ({ w: l ? refreshWeight(c, recent, l.list) : 0, wm: l?.watermark ?? 0 }));
+  return keys.map((_, i) => i).sort((a, b) => keys[b].w - keys[a].w || keys[b].wm - keys[a].wm || a - b);
 }
 
 /** 最初に開くコンテスト: 終了したもののうち最も新しい、部員が参加したかもしれないもの */

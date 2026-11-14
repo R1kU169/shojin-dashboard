@@ -16,9 +16,11 @@ import { TIER_COLORS, tierIndex } from "../lib/colors";
 import {
   contestEnd,
   contestProblems,
+  coversContest,
   elapsedStr,
   pickDefaultContest,
   rankMembers,
+  refreshOrder,
   resultKind,
   scoreMember,
   shortContestName,
@@ -39,6 +41,8 @@ interface Row {
   refreshing?: boolean;
   /** 最新の提出を取れず、手元のデータで表示している */
   stale?: boolean;
+  /** list がいつ時点のものか(最後に kenkoooo から最新まで取れた時刻・ミリ秒。分からなければ 0) */
+  at?: number;
 }
 
 interface Scored {
@@ -192,6 +196,7 @@ function ContestResults({ contest, list, now }: { contest: ClubContest; list: Cl
             update(m.id, {
               status: "done",
               list: local.list,
+              at: local.at,
               refreshing: !local.fresh && !local.cooldown && !covered,
               stale: local.cooldown && !covered,
             });
@@ -199,9 +204,11 @@ function ContestResults({ contest, list, now }: { contest: ClubContest; list: Cl
           return local;
         }),
       );
-      // 2. このコンテストの提出がそろっていない人だけ、kenkoooo から最新の提出を順に取って差し替える
-      for (const [i, m] of MEMBERS.entries()) {
+      // 2. このコンテストの提出がそろっていない人だけ、kenkoooo から最新の提出を順に取って差し替える。
+      // 1人ずつ間をあけて取るので、参加していそうな人(手元のデータで提出がある人・最近のコンテストによく出ている人)から取る
+      for (const i of refreshOrder(contest, list, locals)) {
         if (cancel) break;
+        const m = MEMBERS[i];
         const local = locals[i];
         if (local?.fresh || (local && local.at >= coveredAt)) continue;
         if (!local) update(m.id, { status: "loading" });
@@ -213,7 +220,7 @@ function ContestResults({ contest, list, now }: { contest: ClubContest; list: Cl
             },
             ctl.signal,
           );
-          if (!cancel) update(m.id, { status: "done", list: r.list, refreshing: false, stale: !r.live });
+          if (!cancel) update(m.id, { status: "done", list: r.list, at: r.at, refreshing: false, stale: !r.live });
         } catch {
           if (!cancel) update(m.id, local ? { refreshing: false, stale: true } : { status: "error" });
         }
@@ -223,7 +230,7 @@ function ContestResults({ contest, list, now }: { contest: ClubContest; list: Cl
       cancel = true;
       ctl.abort();
     };
-  }, [contest]);
+  }, [contest, list]);
 
   const problems = useMemo(
     () => contestProblems(contest, rows.flatMap((r) => (r.list ? [r.list] : []))),
@@ -242,9 +249,11 @@ function ContestResults({ contest, list, now }: { contest: ClubContest; list: Cl
   const { mode, ranked } = useMemo(() => rankMembers(scored), [scored]);
 
   const inRanking = new Set(ranked.map((r) => r.row.member.id));
-  // 提出をまだ読めていない人・手元のデータが古くて最新の提出を確認している人(参加したかどうか分からない)は、
-  // 表の後ろに状態だけ出す。「参加していない」に入れると、確認中なのに「参加した部員はいません」と出てしまう
-  const pending = (s: (typeof scored)[number]) => s.row.status !== "done" || !!s.row.refreshing;
+  // 参加したかどうかまだ分からない人は、表の後ろに状態だけ出す。「参加していない」に入れるのは、
+  // 終了から kenkoooo の遅れの見込みより後まで提出を取れている人だけ
+  // (提出を読めていない・最新の提出を確認中・取れずに古いデータのまま・終了の直後に取ってまだ載っていないかもしれない)
+  const pending = (s: (typeof scored)[number]) =>
+    s.row.status !== "done" || !!s.row.refreshing || !coversContest(s.row.at ?? 0, contest);
   const waiting = scored.filter((s) => !inRanking.has(s.row.member.id) && pending(s));
   const absent = scored.filter((s) => !inRanking.has(s.row.member.id) && !pending(s));
   const loadedCount = rows.filter((r) => r.status === "done").length;
@@ -478,7 +487,7 @@ function ContestResults({ contest, list, now }: { contest: ClubContest; list: Cl
                   <tr key={s.row.member.id}>
                     <td className="cr-member">
                       <span className="cr-rank">—</span>
-                      <MemberName row={s.row} style={tierColor(s.row.rating)} />
+                      <MemberName row={s.row} style={tierColor(s.row.rating)} unconfirmed />
                     </td>
                     <td colSpan={problems.length + 4} />
                   </tr>
@@ -551,7 +560,7 @@ function ContestResults({ contest, list, now }: { contest: ClubContest; list: Cl
   );
 }
 
-function MemberName({ row, style }: { row: Row; style?: CSSProperties }) {
+function MemberName({ row, style, unconfirmed }: { row: Row; style?: CSSProperties; unconfirmed?: boolean }) {
   return (
     <>
       <Link to={`/u/${row.member.id}`} style={style}>
@@ -577,6 +586,15 @@ function MemberName({ row, style }: { row: Row; style?: CSSProperties }) {
       )}
       {row.status === "pending" && <span className="muted rank-stale"> 読み込み中…</span>}
       {row.status === "error" && <span className="error-text rank-stale"> 取得失敗</span>}
+      {unconfirmed && row.status === "done" && !row.refreshing && !row.stale && (
+        <span
+          className="muted rank-stale"
+          title="コンテストの直後は、AtCoder Problems に提出がまだ載っていないことがあります。少し時間をおいて開き直すと、もう一度確かめます"
+        >
+          {" "}
+          確認待ち
+        </span>
+      )}
     </>
   );
 }
