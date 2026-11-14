@@ -12,6 +12,8 @@
 import { fitsWandbox, runCode as runWandbox } from "./wandbox";
 import type { EditorLang, RunResult } from "./wandbox";
 import { GODBOLT_LANGS, runCodeGodbolt } from "./godbolt";
+import { usedPyLibs, wrapPython } from "./pywrap";
+import type { PyLib } from "./pywrap";
 
 export type Backend = "wandbox" | "godbolt";
 
@@ -22,6 +24,27 @@ export interface RunOutcome extends RunResult {
   backendVersion: string;
   /** Compiler Explorer に接続できず、代わりに Wandbox で実行した */
   fallback?: boolean;
+  /** 実行先に無いので、同梱して送った Python ライブラリ */
+  pylibs?: PyLib[];
+}
+
+/**
+ * Python で sortedcontainers・atcoder を import していれば、ライブラリのソースを同梱したコードにする(pywrap.ts)。
+ * それ以外はコードをそのまま返す
+ */
+async function withPyLibs(lang: EditorLang, code: string): Promise<{ code: string; pylibs: PyLib[] }> {
+  if (lang.key !== "python" && lang.key !== "pypy") return { code, pylibs: [] };
+  const pylibs = usedPyLibs(code);
+  if (pylibs.length === 0) return { code, pylibs };
+  let files: Record<string, string>;
+  try {
+    // ソース(約170KB)は使うときだけ読み込む
+    ({ PYLIB_FILES: files } = await import("./pylibSources"));
+  } catch {
+    // 開いている間に新しい版が公開されると、古い版のファイルは読めなくなる
+    throw new Error("ライブラリ(sortedcontainers・atcoder)を読み込めませんでした。ページを再読み込みしてください");
+  }
+  return { code: await wrapPython(code, files, pylibs), pylibs };
 }
 
 /**
@@ -68,20 +91,23 @@ export function prefersGodbolt(lang: EditorLang): boolean {
 /**
  * コードを実行する。Compiler Explorer が実行できる言語はそちらを先に使い、接続できなければ
  * Wandbox で実行する(入力が送れる大きさなら)。エディターの実行とコーナーケースのまとめて実行で共通。
+ * Python で sortedcontainers・atcoder を import していれば、ライブラリを同梱して送る(保存・提出するコードは変えない)。
  * 中断(AbortError)はそのまま投げ直す。どちらでも実行できない場合は例外。
  */
 export async function runCode(
   lang: EditorLang,
-  code: string,
+  source: string,
   stdin: string,
   signal?: AbortSignal,
 ): Promise<RunOutcome> {
+  const { code, pylibs } = await withPyLibs(lang, source);
+  const extra = pylibs.length > 0 ? { pylibs } : {};
   const g = GODBOLT_LANGS[lang.key];
   let reason = "";
   if (g) {
     try {
       const r = await runCodeGodbolt(g, code, stdin, signal);
-      return { ...r, backend: "godbolt", backendVersion: g.version };
+      return { ...r, backend: "godbolt", backendVersion: g.version, ...extra };
     } catch (e) {
       if ((e as Error).name === "AbortError") throw e;
       reason = `Compiler Explorerに接続できませんでした (${(e as Error).message})。`;
@@ -102,5 +128,5 @@ export async function runCode(
   if (isSandboxFailure(r)) {
     throw new Error(`${reason}Wandboxの実行サンドボックスが停止しています。時間をおいて試してください。`);
   }
-  return { ...r, backend: "wandbox", backendVersion: lang.version, ...(g ? { fallback: true } : {}) };
+  return { ...r, backend: "wandbox", backendVersion: lang.version, ...(g ? { fallback: true } : {}), ...extra };
 }

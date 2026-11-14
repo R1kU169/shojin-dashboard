@@ -8,6 +8,7 @@ import { ProblemSearch } from "../components/ProblemSearch";
 import { GODBOLT_LANGS } from "../lib/godbolt";
 import { EDITOR_LANGS } from "../lib/wandbox";
 import { isWarningOnly, runCode } from "../lib/run";
+import { PY_LIBS } from "../lib/pywrap";
 import type { RunOutcome } from "../lib/run";
 import { readStore, removeStore, writeStore } from "../lib/storage";
 import type { LinkedProblem } from "../lib/types";
@@ -639,6 +640,12 @@ export function EditorPage() {
                     Wandbox
                   </a>{" "}
                   で実行しました({result.backendVersion})
+                </p>
+              )}
+              {result.pylibs && (
+                <p className="fallback-note">
+                  {result.pylibs.map((l) => PY_LIBS[l].label).join("・")}{" "}
+                  は実行先に無いため、精進ボードに入れてあるものを読み込んで実行しました(AtCoder にはこのまま提出できます)
                 </p>
               )}
               {result.truncated && (

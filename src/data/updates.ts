@@ -17,6 +17,16 @@ export interface Update {
 // 新しいものが先頭。追加するときは必ず配列の先頭に足すこと。
 export const UPDATES: Update[] = [
   {
+    id: "2026-11-15d",
+    date: "2026-11-15",
+    title: "エディター: Python で sortedcontainers と AtCoder Library が使えるように",
+    items: [
+      "from sortedcontainers import SortedSet や from atcoder.dsu import DSU と書いたコードが、エディターでも動くようになりました。これまでは実行先(Compiler Explorer・Wandbox)にライブラリが無く、ModuleNotFoundError になっていました",
+      "import しているときだけ、精進ボードに入れてあるライブラリ(sortedcontainers 2.4.0・ac-library-python)を一緒に送って読み込みます。Python 3 と PyPy 3 のどちらでも使えます",
+      "エラーの行番号は書いたコードのままです。AtCoder にはこのまま提出できます",
+    ],
+  },
+  {
     id: "2026-11-15c",
     date: "2026-11-15",
     title: "部員に Tentendesumasu さんを追加",
