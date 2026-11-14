@@ -10,6 +10,8 @@ on:
     - cron: "45 13 * * 6,0"
     - cron: "0,15 14 * * 6,0"
     - cron: "0 15 * * 6,0"
+  # GitHub の schedule は数時間遅れたり飛ばされたりするので、外部の cron サービス(cron-job.org)から
+  # API でこれを呼んで時刻どおりに更新する。設定は docs/auto-update.md
   workflow_dispatch:
 
 permissions:
@@ -31,9 +33,10 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      # 計算量解析のテスト。6時間ごとのデータ更新(schedule)はテストの結果に左右させない
+      # テストはコードを変えたとき(push)だけ。データの更新(schedule・外部の cron からの workflow_dispatch)は
+      # テストの結果に左右させず、早く終わらせる
       - run: npm test
-        if: github.event_name != 'schedule'
+        if: github.event_name == 'push'
       # 前回のスナップショットを復元し、各部員は差分だけ取得する(kenkoooo負荷軽減)
       - uses: actions/cache@v4
         with:
