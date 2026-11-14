@@ -17,11 +17,17 @@ GitHub の `schedule` は予備として残す(遅れて動いても同じデー
 リポジトリ `R1kU169/shojin-dashboard` は R1kU169 さんの個人アカウントのものなので、
 **リポジトリの持ち主(R1kU169 さん)が** Fine-grained token を作るのがいちばん安全(このリポジトリの Actions を動かす権限だけになる)。
 
-1. GitHub → Settings → Developer settings → Personal access tokens → **Fine-grained tokens** → Generate new token
-2. Token name: `shojin-dashboard cron`、Expiration: 1年(切れる前に作り直す)
-3. Repository access: **Only select repositories** → `shojin-dashboard`
-4. Permissions → Repository permissions → **Actions: Read and write**(ほかは付けない)
+1. 次のリンクを開く(名前・無期限・Actions の Read and write が入った状態で作成画面が開く)
+   <https://github.com/settings/personal-access-tokens/new?name=shojin-dashboard+cron&description=Trigger+snapshot+updates+from+cron-job.org&expires_in=none&actions=write>
+   (手で開くときは GitHub → Settings → Developer settings → Personal access tokens → **Fine-grained tokens** → Generate new token)
+2. Token name: `shojin-dashboard cron`、Expiration: **No expiration**(無期限)
+3. Repository access: **Only select repositories** → `shojin-dashboard`(ここはリンクでは選べないので手で選ぶ)
+4. Permissions → Repository permissions → **Actions: Read and write**(ほかは付けない。Metadata: Read-only は自動で付く)
 5. 作ったトークン(`github_pat_…`)を控える
+
+無期限にしているのは、期限が切れると更新が止まり、作り直しを頼むことになるため。トークンでできるのはこのリポジトリの Actions の操作
+(ワークフローの起動・取り消し・実行記録の削除)だけで、コードの変更やほかのリポジトリには触れない。漏れたと思ったら、持ち主が
+Settings → Developer settings → Fine-grained tokens から **Revoke** すればすぐ使えなくなる(作り直して cron-job.org のヘッダーを差し替える)。
 
 > コラボレーター(push 権限だけの人)は、他人の個人リポジトリに Fine-grained token を使えない。
 > 持ち主に頼めないときは Classic token(scope: `public_repo`)でも動くが、その人が書き込めるすべての公開リポジトリに効くので勧めない。
