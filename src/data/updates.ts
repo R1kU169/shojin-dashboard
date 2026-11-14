@@ -17,6 +17,11 @@ export interface Update {
 // 新しいものが先頭。追加するときは必ず配列の先頭に足すこと。
 export const UPDATES: Update[] = [
   {
+    id: "2026-11-15c",
+    date: "2026-11-15",
+    title: "部員に Tentendesumasu さんを追加",
+  },
+  {
     id: "2026-11-15b",
     date: "2026-11-15",
     title: "エディター: コードをタブで複数持てるように",
