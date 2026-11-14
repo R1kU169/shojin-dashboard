@@ -251,9 +251,9 @@ function ContestResults({ contest, list, now }: { contest: ClubContest; list: Cl
   const inRanking = new Set(ranked.map((r) => r.row.member.id));
   // 参加したかどうかまだ分からない人は、表の後ろに状態だけ出す。「参加していない」に入れるのは、
   // 終了から kenkoooo の遅れの見込みより後まで提出を取れている人だけ
-  // (提出を読めていない・最新の提出を確認中・取れずに古いデータのまま・終了の直後に取ってまだ載っていないかもしれない)
-  const pending = (s: (typeof scored)[number]) =>
-    s.row.status !== "done" || !!s.row.refreshing || !coversContest(s.row.at ?? 0, contest);
+  // (提出を読めていない・手元のデータが終了前のもので最新を確認中・取れずに古いデータのまま・終了の直後に取ってまだ載っていないかもしれない)。
+  // 手元のデータがそこまで届いていれば、取り直し中(終了後の解き直しを拾うため)でも参加していないと分かる
+  const pending = (s: (typeof scored)[number]) => s.row.status !== "done" || !coversContest(s.row.at ?? 0, contest);
   const waiting = scored.filter((s) => !inRanking.has(s.row.member.id) && pending(s));
   const absent = scored.filter((s) => !inRanking.has(s.row.member.id) && !pending(s));
   const loadedCount = rows.filter((r) => r.status === "done").length;
