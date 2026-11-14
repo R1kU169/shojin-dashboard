@@ -1264,24 +1264,120 @@ button.member-card {
   overflow: hidden;
   position: relative;
 }
-/* コードエリア右上に浮かせる操作(「計算量を調べる」「テンプレートに戻す」) */
+/* コードのタブの帯(EditorTabBar)。右端にコードへの操作(「計算量を調べる」「テンプレートに戻す」)を置く */
+.editor-tabs {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+  padding: 6px 12px 0;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--ink) 2%, transparent);
+}
+.editor-tab-list {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  min-width: 0;
+  /* タブが多いときは横にスクロールする(帯の高さを変えない) */
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+.editor-tab {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  padding: 0 4px 0 2px;
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: 8px 8px 0 0;
+  /* 帯の下線に重ねて、開いているタブがコード欄とつながって見えるようにする */
+  margin-bottom: -1px;
+}
+.editor-tab.on {
+  background: var(--surface);
+  border-color: var(--border);
+}
+.editor-tab-name {
+  font: inherit;
+  font-size: 13px;
+  max-width: 16em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 6px 8px;
+  color: var(--muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+.editor-tab.on .editor-tab-name {
+  color: var(--ink);
+  font-weight: 600;
+}
+.editor-tab-name:hover {
+  color: var(--ink);
+}
+.editor-tab-icon {
+  font: inherit;
+  font-size: 12px;
+  line-height: 1;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  color: var(--muted);
+  background: none;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  opacity: 0.6;
+}
+.editor-tab-icon:hover {
+  opacity: 1;
+  color: var(--ink);
+  background: color-mix(in srgb, var(--ink) 8%, transparent);
+}
+.editor-tab-input {
+  font: inherit;
+  font-size: 13px;
+  margin: 3px 4px;
+  padding: 2px 6px;
+  max-width: 16em;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  outline: none;
+}
+.editor-tab-add {
+  flex: none;
+  font: inherit;
+  font-size: 16px;
+  line-height: 1;
+  width: 26px;
+  height: 26px;
+  margin-bottom: 3px;
+  color: var(--muted);
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.editor-tab-add:hover:not(:disabled) {
+  color: var(--accent);
+  border-color: var(--border);
+}
+.editor-tab-add:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
 .editor-card-actions {
-  position: absolute;
-  top: 8px;
-  right: 12px;
-  z-index: 1;
+  margin-left: auto;
+  padding-bottom: 5px;
   display: flex;
   align-items: center;
   gap: 6px;
-}
-/* スマホ幅ではコードの1行目に重なるので、浮かせずにコード欄の上の帯に置く */
-@media (max-width: 560px) {
-  .editor-card-actions {
-    position: static;
-    justify-content: flex-end;
-    padding: 8px 12px;
-    border-bottom: 1px solid var(--border);
-  }
 }
 .tpl-reset {
   font: inherit;

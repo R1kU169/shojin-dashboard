@@ -16,6 +16,7 @@ import { EDITOR_LANGS } from "../lib/wandbox";
 import { formatBig, splitStatement, statementBounds } from "../lib/casegen";
 import type { NamedBound } from "../lib/casegen";
 import { loadCases, loadProblem } from "../lib/editorStore";
+import { EDITOR_LANG_KEY, loadEditorCode } from "../lib/editorTabs";
 import { katexHtmlToText, statementHtmlToText } from "../lib/katexPaste";
 import { readStore, writeStore } from "../lib/storage";
 import { analyzeCode, BASIC_LANGS, differentLanguage, evaluate, formatOps, guessLanguage, isSupported, LANG_NOTES, parseBoundValue, SPEED } from "../lib/complexity";
@@ -26,9 +27,7 @@ const CODE_KEY = (lang: string) => `shojin:complexity:code:${lang}`;
 const RANGES_KEY = "shojin:complexity:ranges";
 const TL_KEY = "shojin:complexity:tl";
 const HEIGHT_KEY = "shojin:complexity:height";
-// エディターの保存先(EditorPage と同じキー)
-const EDITOR_LANG_KEY = "shojin:editor:lang";
-const EDITOR_CODE_KEY = (lang: string) => `shojin:editor:code:${lang}`;
+// エディターの保存先(EditorPage と同じキー。コードはタブごとなので editorStore の loadEditorCode で読む)
 const EDITOR_INDENT_KEY = "shojin:editor:indent";
 
 const load = readStore;
@@ -226,9 +225,10 @@ export function ComplexityPage() {
 
   /** エディターで書いているコードと言語を読み込んで、そのまま解析する */
   const importFromEditor = () => {
-    const edLang = load(EDITOR_LANG_KEY);
-    const key = knownLang(edLang) ? edLang : langKey;
-    const edCode = load(EDITOR_CODE_KEY(key));
+    // エディターで開いているタブのコード
+    const ed = loadEditorCode(langKey);
+    const key = knownLang(ed.lang) ? ed.lang : langKey;
+    const edCode = knownLang(ed.lang) ? ed.code : null;
     if (!edCode || edCode.trim() === "") {
       setError("エディターに保存されたコードがありません");
       return;

@@ -528,25 +528,35 @@ export function CodeEditor({
   };
 
   // つまみのドラッグ。setPointerCaptureで、掴んだ指/カーソルがバーの外へ出ても
-  // 追従させる(はみ出した瞬間にリサイズが止まるのを防ぐ)
+  // 追従させる(はみ出した瞬間にリサイズが止まるのを防ぐ)。
+  // 位置はページの座標(clientY + scrollY)で比べ、ドラッグ中にページをスクロールしても
+  // つまみがポインタの下に残るようにする(画面の座標だと、スクロールした分だけつまみとポインタがずれる)
   const onGripDown = (e: ReactPointerEvent<HTMLDivElement>) => {
     const el = wrapRef.current;
     if (!el) return;
     e.preventDefault();
     const grip = e.currentTarget;
-    const startY = e.clientY;
+    const startY = e.clientY + window.scrollY;
     const startH = el.getBoundingClientRect().height;
+    let lastClientY = e.clientY;
     grip.setPointerCapture(e.pointerId);
-    const move = (ev: PointerEvent) => setEditorHeight(startH + ev.clientY - startY);
+    const resize = () => setEditorHeight(startH + lastClientY + window.scrollY - startY);
+    const move = (ev: PointerEvent) => {
+      lastClientY = ev.clientY;
+      resize();
+    };
     const up = () => {
       grip.releasePointerCapture(e.pointerId);
       grip.removeEventListener("pointermove", move);
       grip.removeEventListener("pointerup", up);
       grip.removeEventListener("pointercancel", up);
+      window.removeEventListener("scroll", resize);
     };
     grip.addEventListener("pointermove", move);
     grip.addEventListener("pointerup", up);
     grip.addEventListener("pointercancel", up);
+    // スクロールではポインタが動かないので pointermove が来ない。スクロールでも合わせ直す
+    window.addEventListener("scroll", resize, { passive: true });
   };
 
   // マウスが使えない場合の操作手段(role="separator"は矢印キーで動かせることが期待される)

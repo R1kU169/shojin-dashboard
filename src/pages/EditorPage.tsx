@@ -12,12 +12,19 @@ import type { RunOutcome } from "../lib/run";
 import { readStore, removeStore, writeStore } from "../lib/storage";
 import type { LinkedProblem } from "../lib/types";
 import { BOOT_HASH } from "../lib/boot";
-import { applyImport, loadImported, loadProblem, PROBLEM_KEY, saveProblem } from "../lib/editorStore";
+import {
+  applyImport,
+  loadImported,
+  loadProblem,
+  PROBLEM_KEY,
+  saveProblem,
+} from "../lib/editorStore";
+import { loadTabs, MAX_TABS, newTabId, newTabName, saveTabs, tabCodeKey } from "../lib/editorTabs";
+import type { EditorTabs } from "../lib/editorTabs";
+import { EditorTabBar } from "../components/EditorTabBar";
 import { MAX_TASKS, readImport, taskLetter } from "../lib/importPayload";
 
-const CODE_KEY = (lang: string) => `shojin:editor:code:${lang}`;
 const STDIN_KEY = "shojin:editor:stdin";
-const LANG_KEY = "shojin:editor:lang";
 
 // コード欄の入力支援・高さ変更は CodeEditor(計算量タブと共用)が持つ
 const INDENT_KEY = "shojin:editor:indent";
@@ -92,23 +99,30 @@ function reindent(code: string, oldW: number, newW: number): string {
 
 export function EditorPage() {
   const [params, setParams] = useSearchParams();
-  const [langKey, setLangKey] = useState(
-    () => readStore(LANG_KEY) ?? EDITOR_LANGS[0].key,
-  );
+  // コードのタブ(名前・言語)。コードは開いているタブの分だけ state に持ち、ほかのタブは localStorage にある
+  const [tabs, setTabsState] = useState<EditorTabs>(() => loadTabs(EDITOR_LANGS[0].key));
+  const activeTab = tabs.tabs.find((t) => t.id === tabs.active) ?? tabs.tabs[0];
+  const tabId = activeTab.id;
   const lang =
-    EDITOR_LANGS.find((l) => l.key === langKey) ?? EDITOR_LANGS[0];
+    EDITOR_LANGS.find((l) => l.key === activeTab.lang) ?? EDITOR_LANGS[0];
+  const langKey = lang.key;
+  const setTabs = (t: EditorTabs) => {
+    setTabsState(t);
+    saveTabs(t);
+  };
   // インデント幅(スペース数)。入力支援(Enter/Tab)とtab-size表示・テンプレ変換に効く
   const [indentWidth, setIndentWidth] = useState(() => {
     const n = Number(readStore(INDENT_KEY));
     return INDENT_WIDTHS.includes(n) ? n : 2;
   });
   // 保存済みコードを読む。全削除(空白のみ)された保存分はテンプレートに戻す
-  const loadCode = (key: string, template: string): string => {
-    const saved = readStore(CODE_KEY(key));
+  const loadCode = (tab: string, key: string): string => {
+    const saved = readStore(tabCodeKey(tab, key));
     if (saved != null && saved.trim() !== "") return saved;
-    return reindent(template, TEMPLATE_WIDTH, indentWidth);
+    const l = EDITOR_LANGS.find((x) => x.key === key) ?? EDITOR_LANGS[0];
+    return reindent(l.template, TEMPLATE_WIDTH, indentWidth);
   };
-  const [code, setCode] = useState(() => loadCode(langKey, lang.template));
+  const [code, setCode] = useState(() => loadCode(tabId, langKey));
   const [stdin, setStdin] = useState(
     () => readStore(STDIN_KEY) ?? "",
   );
@@ -255,13 +269,58 @@ export function EditorPage() {
     removeStore(PROBLEM_KEY);
   };
 
-  // 言語切替: 現在のコードを保存し、切替先の保存分(無ければ/空ならテンプレ)を読む
+  // 言語切替: 現在のコードを保存し、このタブの切替先の言語の保存分(無ければ/空ならテンプレ)を読む
   const switchLang = (key: string) => {
-    writeStore(CODE_KEY(langKey), code);
-    const next = EDITOR_LANGS.find((l) => l.key === key) ?? EDITOR_LANGS[0];
-    setLangKey(key);
-    setCode(loadCode(key, next.template));
-    writeStore(LANG_KEY, key);
+    writeStore(tabCodeKey(tabId, langKey), code);
+    setTabs({ ...tabs, tabs: tabs.tabs.map((t) => (t.id === tabId ? { ...t, lang: key } : t)) });
+    setCode(loadCode(tabId, key));
+  };
+
+  // タブの切り替え: 現在のコードを保存し、切り替え先のタブのコードを読む
+  const switchTab = (id: string) => {
+    if (id === tabId) return;
+    const next = tabs.tabs.find((t) => t.id === id);
+    if (!next) return;
+    writeStore(tabCodeKey(tabId, langKey), code);
+    setTabs({ ...tabs, active: id });
+    setCode(loadCode(id, next.lang));
+  };
+
+  // 新しいタブ: いまの言語のテンプレートで始める
+  const addTab = () => {
+    if (tabs.tabs.length >= MAX_TABS) return;
+    writeStore(tabCodeKey(tabId, langKey), code);
+    const id = newTabId(tabs);
+    setTabs({ active: id, tabs: [...tabs.tabs, { id, name: newTabName(tabs), lang: langKey }] });
+    setCode(loadCode(id, langKey));
+  };
+
+  const renameTab = (id: string, name: string) => {
+    setTabs({ ...tabs, tabs: tabs.tabs.map((t) => (t.id === id ? { ...t, name } : t)) });
+  };
+
+  // タブを閉じる: そのタブのコード(全言語)を消す。テンプレートのままでなければ確かめる
+  const closeTab = (id: string) => {
+    if (tabs.tabs.length <= 1) return;
+    const i = tabs.tabs.findIndex((t) => t.id === id);
+    const t = tabs.tabs[i];
+    if (!t) return;
+    const written = EDITOR_LANGS.some((l) => {
+      const c = id === tabId && l.key === langKey ? code : readStore(tabCodeKey(id, l.key));
+      return c != null && c.trim() !== "" && c !== reindent(l.template, TEMPLATE_WIDTH, indentWidth);
+    });
+    if (written && !confirm(`タブ「${t.name}」を閉じます。このタブのコードは消えます。よろしいですか?`)) return;
+    for (const l of EDITOR_LANGS) removeStore(tabCodeKey(id, l.key));
+    const rest = tabs.tabs.filter((x) => x.id !== id);
+    if (id !== tabId) {
+      setTabs({ ...tabs, tabs: rest });
+      return;
+    }
+    // 開いているタブを閉じたら、右隣(なければ左隣)を開く
+    const next = rest[Math.min(i, rest.length - 1)];
+    // 閉じたタブの保存待ち(400ms)は、タブが変わったことで下の effect の後片付けが取り消す
+    setTabs({ active: next.id, tabs: rest });
+    setCode(loadCode(next.id, next.lang));
   };
 
   // コードを現在の言語のテンプレートに戻す(確認つき・undoで復帰可能)
@@ -280,18 +339,20 @@ export function EditorPage() {
   };
 
   // インデント幅変更: 既存コードの先頭インデントも新しい幅に変換する。
-  // 表示中の言語だけでなく、他言語の保存済みコードも合わせて変換しないと
-  // 言語を切り替えたときに旧い幅のコードが出てきて混在する。
+  // 表示中のコードだけでなく、他言語・他のタブの保存済みコードも合わせて変換しないと
+  // 切り替えたときに旧い幅のコードが出てきて混在する。
   const changeIndent = (n: number) => {
     const newCode = reindent(code, indentWidth, n);
     setIndentWidth(n);
     writeStore(INDENT_KEY, String(n));
-    for (const l of EDITOR_LANGS) {
-      if (l.key === langKey) continue;
-      const saved = readStore(CODE_KEY(l.key));
-      if (saved == null) continue;
-      const conv = reindent(saved, indentWidth, n);
-      if (conv !== saved) writeStore(CODE_KEY(l.key), conv);
+    for (const t of tabs.tabs) {
+      for (const l of EDITOR_LANGS) {
+        if (t.id === tabId && l.key === langKey) continue;
+        const saved = readStore(tabCodeKey(t.id, l.key));
+        if (saved == null) continue;
+        const conv = reindent(saved, indentWidth, n);
+        if (conv !== saved) writeStore(tabCodeKey(t.id, l.key), conv);
+      }
     }
     if (newCode === code) return;
     // undo履歴を保って全置換(キャレット位置は保つ)
@@ -301,26 +362,26 @@ export function EditorPage() {
   };
 
   // コード/入力は自動保存(リロードしても消えない)
-  const saveCode = (key: string, c: string) => setSaveFailed(!writeStore(CODE_KEY(key), c));
+  const saveCode = (tab: string, key: string, c: string) => setSaveFailed(!writeStore(tabCodeKey(tab, key), c));
   const saveStdin = (s: string) => {
     // コーナーケースの大きい入力は保存しない(容量を使い切るとコードまで保存できなくなる)
     if (s.length > STDIN_SAVE_MAX || !writeStore(STDIN_KEY, s)) removeStore(STDIN_KEY);
   };
   useEffect(() => {
-    const t = setTimeout(() => saveCode(langKey, code), 400);
+    const t = setTimeout(() => saveCode(tabId, langKey, code), 400);
     return () => clearTimeout(t);
-  }, [code, langKey]);
+  }, [code, langKey, tabId]);
   useEffect(() => {
     const t = setTimeout(() => saveStdin(stdin), 400);
     return () => clearTimeout(t);
   }, [stdin]);
   // 保存待ち(400ms)のうちにページを離れても、最後のコードと入力を保存する
-  const latest = useRef({ code, langKey, stdin });
-  latest.current = { code, langKey, stdin };
+  const latest = useRef({ code, langKey, tabId, stdin });
+  latest.current = { code, langKey, tabId, stdin };
   useEffect(
     () => () => {
-      const { code: c, langKey: k, stdin: s } = latest.current;
-      writeStore(CODE_KEY(k), c);
+      const { code: c, langKey: k, tabId: tab, stdin: s } = latest.current;
+      writeStore(tabCodeKey(tab, k), c);
       saveStdin(s);
     },
     [],
@@ -485,7 +546,14 @@ export function EditorPage() {
       )}
 
       <section className="card editor-card">
-        {/* コード欄の右上に浮かせる操作。ツールバーに足すと問題連携が2行目に落ちるので、コードに対する操作はここに置く */}
+        <EditorTabBar
+          tabs={tabs}
+          onSwitch={switchTab}
+          onAdd={addTab}
+          onRename={renameTab}
+          onClose={closeTab}
+        >
+        {/* コードに対する操作はタブの帯の右端に置く(ツールバーに足すと問題連携が2行目に落ちる) */}
         <div className="editor-card-actions">
           {/* 計算量タブへ。入力の途中(400msの保存待ち)でも今のコードを渡せるよう、移動の前に保存する */}
           <Link
@@ -493,8 +561,8 @@ export function EditorPage() {
             to="/complexity?from=editor"
             onClick={() => {
               // 保存できなくても移動はする(計算量タブ側でエラーを出す)
-              writeStore(CODE_KEY(langKey), code);
-              writeStore(LANG_KEY, langKey);
+              writeStore(tabCodeKey(tabId, langKey), code);
+              saveTabs(tabs);
             }}
             title="このコードの計算量を計算量タブで調べます(コードは送信しません)"
           >
@@ -509,7 +577,10 @@ export function EditorPage() {
             ↺ テンプレートに戻す
           </button>
         </div>
+        </EditorTabBar>
         <CodeEditor
+          // タブごとに作り直す(スクロール位置・取り消しの履歴を別のタブに持ち越さない)
+          key={tabId}
           ref={editorRef}
           code={code}
           onChange={setCode}
